@@ -1,0 +1,385 @@
+import threading
+import concurrent.futures as fut
+from typing import Optional, Callable, Any
+from dataclasses import dataclass, field
+
+import numpy as np
+import torch
+
+try:
+    import zstandard as zstd
+    ZSTD_AVAILABLE = True
+except ImportError:
+    ZSTD_AVAILABLE = False
+
+
+# Thread-local storage for compressor/decompressor contexts
+_tls = threading.local()
+
+
+def get_compression_ctx(level: int = 18):
+    """Get thread-local zstd compression context."""
+    if not hasattr(_tls, "cctx") or _tls.cctx_level != level:
+        _tls.cctx = zstd.ZstdCompressor(level=level, write_checksum=False)
+        _tls.cctx_level = level
+    return _tls.cctx
+
+
+def get_decompression_ctx():
+    """Get thread-local zstd decompression context."""
+    if not hasattr(_tls, "dctx"):
+        _tls.dctx = zstd.ZstdDecompressor()
+    return _tls.dctx
+
+
+@dataclass
+class PlaceHolderToken:
+    """
+    Placeholder for compressed activation tensor.
+    
+    Used with torch.autograd.graph.saved_tensors_hooks to replace
+    large activation tensors with compressed representations.
+    """
+    dtype: torch.dtype
+    shape: torch.Size
+    stride: tuple
+    offset: int
+    
+    # Runtime fields (filled during compression/decompression)
+    sm_bits: Optional[torch.Tensor] = None
+    comped_cpu_exp: Optional[bytes] = None
+    numel: int = 0
+    decomped_data: Optional[torch.Tensor] = None
+    ready_evt: threading.Event = field(default_factory=threading.Event)
+    CtoD_copy_evt: Optional[torch.cuda.Event] = None
+    fut_id: int = -1
+    
+    def _clear_after_recover(self):
+        """Clean up after decompression is complete."""
+        if hasattr(self, "fut_id"):
+            del self.fut_id
+        self.ready_evt.clear()
+        if hasattr(self, "CtoD_copy_evt") and self.CtoD_copy_evt is not None:
+            del self.CtoD_copy_evt
+            self.CtoD_copy_evt = None
+
+
+class AsyncCompressor:
+    """
+    Async compression/decompression manager.
+    
+    Manages:
+    - Thread pools for CPU-side compression/decompression
+    - CUDA streams for D2H/H2D transfers
+    - Semaphore for concurrency control
+    
+    Usage:
+        compressor = AsyncCompressor(
+            compress_workers=8,
+            decode_workers=4,
+            concurrency_limit=4,
+            zstd_level=18
+        )
+        
+        # Async compression
+        fut = compressor.kickoff_async(token, tensor)
+        
+        # Async decompression
+        compressor.decompress_async(token, fut)
+    """
+    
+    def __init__(
+        self,
+        compress_workers: int = 8,
+        decode_workers: int = 4,
+        concurrency_limit: int = 4,
+        zstd_level: int = 18,
+        enable_async: bool = True,
+    ):
+        """
+        Initialize AsyncCompressor.
+        
+        Args:
+            compress_workers: Number of compression thread pool workers
+            decode_workers: Number of decompression thread pool workers
+            concurrency_limit: Max concurrent operations (semaphore limit)
+            zstd_level: Zstd compression level (1-22)
+            enable_async: If False, use synchronous operations
+        """
+        if not ZSTD_AVAILABLE:
+            raise RuntimeError("zstandard not available. Install with: pip install zstandard")
+        
+        self.zstd_level = zstd_level
+        self.enable_async = enable_async
+        
+        if enable_async:
+            self.compress_pool = fut.ThreadPoolExecutor(compress_workers)
+            self.decode_pool = fut.ThreadPoolExecutor(decode_workers)
+            self.decomp_semaphore = threading.Semaphore(value=concurrency_limit)
+        else:
+            self.cctx = zstd.ZstdCompressor(level=zstd_level, write_checksum=False)
+            self.dctx = zstd.ZstdDecompressor()
+        
+        # CUDA streams for data transfer
+        self.d2h_stream = torch.cuda.Stream()
+        self.h2d_stream = torch.cuda.Stream()
+        
+        # Try to import CUDA extension
+        try:
+            from flagscale.compress.float_split_stride_pin import float_split_stride_pin as fs_sp
+            self._fs_sp = fs_sp if fs_sp.is_available() else None
+        except ImportError:
+            self._fs_sp = None
+    
+    def _build(self):
+        """Rebuild pools (used after reset)."""
+        if self.enable_async:
+            self.compress_pool = fut.ThreadPoolExecutor(8)
+            self.decode_pool = fut.ThreadPoolExecutor(4)
+        self.d2h_stream = torch.cuda.Stream()
+        self.h2d_stream = torch.cuda.Stream()
+    
+    def reset(self):
+        """Reset pools and streams (call between training rounds)."""
+        if self.enable_async:
+            self.compress_pool.shutdown(wait=True)
+            self.decode_pool.shutdown(wait=True)
+            del self.compress_pool
+            del self.decode_pool
+        
+        self._build()
+        torch.cuda.reset_peak_memory_stats()
+    
+    def shutdown(self):
+        """Shutdown all pools."""
+        if self.enable_async:
+            self.compress_pool.shutdown(wait=True)
+            self.decode_pool.shutdown(wait=True)
+    
+    # -------------------------------------------------------------------------
+    #  Synchronous compression/decompression
+    # -------------------------------------------------------------------------
+    
+    def kickoff_sync(self, tok: PlaceHolderToken, t: torch.Tensor):
+        """Synchronous compression (blocking)."""
+        if self._fs_sp is None:
+            raise RuntimeError("CUDA extension not available for sync compression")
+        
+        self.d2h_stream.wait_stream(torch.cuda.current_stream())
+        with torch.cuda.stream(self.d2h_stream):
+            cpu_exp, sm_bits = self._fs_sp.split(t, self.d2h_stream.cuda_stream)
+            evt = self.d2h_stream.record_event()
+        evt.synchronize()
+        
+        tok.sm_bits = sm_bits
+        arr = cpu_exp.numpy()
+        cctx = get_compression_ctx(self.zstd_level) if not getattr(self, "cctx", None) else self.cctx
+        comped_bytes = cctx.compress(arr)
+        tok.comped_cpu_exp = comped_bytes
+        tok.numel = arr.size
+    
+    def decompress_sync(self, tok: PlaceHolderToken):
+        """Synchronous decompression (blocking)."""
+        if self._fs_sp is None:
+            raise RuntimeError("CUDA extension not available for sync decompression")
+        
+        dctx = get_decompression_ctx() if not getattr(self, "dctx", None) else self.dctx
+        # Decompress exponent
+        cpu_exp = torch.empty(tok.numel, dtype=torch.uint8, pin_memory=True)
+        with dctx.stream_reader(memoryview(tok.comped_cpu_exp)) as reader:
+            view = memoryview(cpu_exp.numpy())
+            nread = reader.readinto(view)
+            assert nread == tok.numel, "decompress size mismatch"
+        
+        # Merge on GPU
+        stream = self.h2d_stream
+        with torch.cuda.stream(stream):
+            rst = self._fs_sp.merge(
+                cpu_exp, tok.sm_bits,
+                list(tok.shape), list(tok.stride), tok.offset,
+                tok.dtype, stream.cuda_stream
+            )
+        evt = stream.record_event()
+        evt.synchronize()
+        
+        tok.decomped_data = rst
+    
+    # -------------------------------------------------------------------------
+    #  Asynchronous compression/decompression
+    # -------------------------------------------------------------------------
+    
+    def kickoff_async(self, tok: PlaceHolderToken, t: torch.Tensor):
+        """
+        Start async compression.
+        
+        Returns a Future that resolves to (compressed_bytes, numel).
+        """
+        if self._fs_sp is None:
+            raise RuntimeError("CUDA extension not available for async compression")
+        
+        self.d2h_stream.wait_stream(torch.cuda.current_stream())
+        with torch.cuda.stream(self.d2h_stream):
+            cpu_exp, sm_bits = self._fs_sp.split(t, self.d2h_stream.cuda_stream)
+            evt = self.d2h_stream.record_event()
+            t.record_stream(self.d2h_stream)
+        
+        tok.sm_bits = sm_bits
+        
+        def _encode(cpu_exp, evt):
+            arr = None
+            try:
+                evt.synchronize()
+                arr = cpu_exp.numpy()
+                cctx = get_compression_ctx(self.zstd_level)
+                comped_bytes = cctx.compress(arr)
+                numel = arr.size
+                return comped_bytes, numel
+            finally:
+                del cpu_exp
+                if arr is not None:
+                    del arr
+        
+        return self.compress_pool.submit(_encode, cpu_exp, evt)
+    
+    def decompress_async(self, tok: PlaceHolderToken, future: fut.Future):
+        """
+        Start async decompression.
+        
+        The token's ready_evt will be set when decompression is complete.
+        """
+        if self._fs_sp is None:
+            raise RuntimeError("CUDA extension not available for async decompression")
+        
+        fs_sp = self._fs_sp
+        h2d_stream = self.h2d_stream
+        semaphore = self.decomp_semaphore
+        
+        def _decode(tok, future):
+            semaphore.acquire()
+            comped_bytes, numel = None, None
+            cpu_exp = None
+            try:
+                comped_bytes, numel = future.result()
+                
+                cpu_exp = torch.empty(numel, dtype=torch.uint8, pin_memory=True)
+                dctx = get_decompression_ctx()
+                with dctx.stream_reader(memoryview(comped_bytes)) as reader:
+                    view = memoryview(cpu_exp.numpy())
+                    nread = reader.readinto(view)
+                    assert nread == numel, "decompress size mismatch"
+                
+                with torch.cuda.stream(h2d_stream):
+                    rst = fs_sp.merge(
+                        cpu_exp, tok.sm_bits,
+                        list(tok.shape), list(tok.stride), tok.offset,
+                        tok.dtype, h2d_stream.cuda_stream
+                    )
+                    tok.sm_bits.record_stream(h2d_stream)
+                
+                evt = h2d_stream.record_event()
+                evt.synchronize()
+                tok.CtoD_copy_evt = evt
+                tok.ready_evt.set()
+                tok.decomped_data = rst
+                
+            finally:
+                semaphore.release()
+                del future
+                if comped_bytes is not None:
+                    del comped_bytes
+                if tok.sm_bits is not None:
+                    fs_sp.release_cuda(tok.sm_bits)
+                if cpu_exp is not None:
+                    del cpu_exp
+        
+        self.decode_pool.submit(_decode, tok, future)
+    
+    def materialize_async(
+        self,
+        exp_mv: bytes,
+        sm_gpu: torch.Tensor,
+        orig_shape: tuple,
+        dtype: torch.dtype,
+        callback: Optional[Callable[[torch.Tensor], None]] = None,
+    ):
+        """
+        Async weight materialization (decompression + merge).
+        
+        Args:
+            exp_mv: Compressed exponent bytes
+            sm_gpu: Sign+mantissa tensor on GPU
+            orig_shape: Original tensor shape
+            dtype: Target dtype
+            callback: Optional callback with decompressed tensor
+        """
+        if self._fs_sp is None:
+            raise RuntimeError("CUDA extension not available")
+        
+        fs_sp = self._fs_sp
+        h2d_stream = self.h2d_stream
+        semaphore = self.decomp_semaphore
+        
+        def _c_contiguous_strides(shape):
+            strides = [1] * len(shape)
+            running = 1
+            for i in range(len(shape) - 2, -1, -1):
+                running *= shape[i + 1]
+                strides[i] = running
+            return tuple(strides)
+        
+        def _materialize():
+            semaphore.acquire()
+            cpu_exp = None
+            _sem_released = False
+            _success = False
+            try:
+                numel = int(np.prod(orig_shape))
+
+                # Decompress exponent into pinned CPU buffer
+                cpu_exp = torch.empty(numel, dtype=torch.uint8, pin_memory=True)
+                dctx = get_decompression_ctx()
+                with dctx.stream_reader(memoryview(exp_mv)) as reader:
+                    view = memoryview(cpu_exp.numpy())
+                    nread = reader.readinto(view)
+                    assert nread == numel, "decompress size mismatch"
+
+                # Submit merge kernel on dedicated h2d_stream (async)
+                strides = _c_contiguous_strides(orig_shape)
+                with torch.cuda.stream(h2d_stream):
+                    bf16 = fs_sp.merge(
+                        cpu_exp, sm_gpu,
+                        list(orig_shape), list(strides), 0,
+                        dtype, h2d_stream.cuda_stream
+                    )
+                evt = h2d_stream.record_event()
+
+                # Release semaphore immediately after submitting the GPU kernel
+                # so other workers can begin CPU decompression right away.
+                semaphore.release()
+                _sem_released = True
+                _success = True
+
+                if callback:
+                    # Callback path: synchronize in thread for backward compat.
+                    evt.synchronize()
+                    del cpu_exp
+                    _success = False  # prevent double-free in finally
+                    callback(bf16)
+                    return bf16
+
+                # Non-callback (prefetch) path: exit thread immediately without
+                # waiting for GPU.  Return a 3-tuple so the consumer can:
+                #   - synchronize evt on the GPU stream (stream.wait_event)  OR
+                #   - synchronize on CPU (evt.synchronize) before using bf16.
+                # cpu_exp is included in the tuple to keep it alive until the
+                # merge DMA completes; the consumer frees it after synchronization.
+                return (bf16, evt, cpu_exp)
+
+            finally:
+                if not _sem_released:
+                    semaphore.release()
+                # Only free cpu_exp on failure; on success it travels in the tuple.
+                if not _success and cpu_exp is not None:
+                    del cpu_exp
+        
+        return self.decode_pool.submit(_materialize)

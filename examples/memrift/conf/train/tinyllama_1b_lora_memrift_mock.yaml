@@ -1,0 +1,16 @@
+# TinyLlama 1.1B + MemRift 使用 mock 数据训练（无需准备真实 data_path）
+# 用于一键跑通 / 冒烟测试。与 tinyllama_1b_lora_memrift 相同，但使用 mock_data 且不设 data_path。
+
+defaults:
+  - tinyllama_1b_lora_memrift
+
+data:
+  data_path: null   # 使用 mock 时不提供 data_path
+  mock_data: true
+  split: 1,0,0      # mock 时 split 可简化
+  micro_batch_size: 1
+  global_batch_size: 8
+
+trainer:
+  train_iters: 50   # 冒烟可设小一些，正式训练可改为 1000+
+  lr_warmup_iters: 10   # 必须 < train_iters，否则 OptimizerParamScheduler 断言失败

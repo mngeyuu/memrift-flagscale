@@ -1,0 +1,16 @@
+# Llama-3.1-8B + MemRift 使用 mock 数据训练（无需准备真实 data_path）
+# 用于显存对比测试
+
+defaults:
+  - llama31_8b_lora_memrift
+
+data:
+  data_path: null
+  mock_data: true
+  split: 1,0,0
+  micro_batch_size: 1
+  global_batch_size: 8
+
+trainer:
+  train_iters: 50
+  lr_warmup_iters: 10

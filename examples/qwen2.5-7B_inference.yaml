@@ -1,0 +1,39 @@
+action: run  # 默认动作
+
+experiment:
+  exp_dir: "/share/project/mengyc/logs/inference_test"
+  task:
+    type: inference  # <--- 关键！必须是 inference，不能是 serve
+    backend: vllm    # 指定后端引擎
+    entrypoint: /share/project/mengyc/flagScale/FlagScale/examples/simple_inference.py
+  runner:
+    type: ssh        # 默认运行模式
+
+inference:
+  # 代码强行要求有这个 inference 块
+  # 这里可以留空，或者放一些推理特定的参数
+  logging: null
+# --------------------------------------------------------
+# 2. 推理数据与输出配置 (Inference 特有)
+# --------------------------------------------------------
+# 你需要指定输入文件在哪，输出文件存哪
+data:
+  # 假设你有一个 jsonl 文件，里面是一行行 prompt
+  input_path: "/share/project/mengyc/data/test_prompts.jsonl" 
+  output_path: "/share/project/mengyc/data/results/inference_result.jsonl"
+
+# --------------------------------------------------------
+# 3. 模型引擎参数
+# --------------------------------------------------------
+engine_args:
+  model: /share/project/mengyc/flagScale/FlagScale/checkpoints/Qwen2.5-7B-Instruct
+  tokenizer: /share/project/mengyc/flagScale/FlagScale/checkpoints/Qwen2.5-7B-Instruct
+  
+  # 显卡设置
+  tensor_parallel_size: 1
+  gpu_memory_utilization: 0.9
+  
+  # 模型参数
+  trust_remote_code: true
+  dtype: "bfloat16"
+  max_model_len: 32768

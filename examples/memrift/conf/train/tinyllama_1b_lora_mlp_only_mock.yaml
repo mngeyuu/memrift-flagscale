@@ -1,0 +1,16 @@
+# TinyLlama 1.1B LoRA MLP-only + mock 数据（用于显存对比等短跑）
+# 可与 run_lora_vs_memrift_peak_flagscale.sh 配合，通过 override memrift_enable 对比纯 LoRA / MemRift+LoRA
+
+defaults:
+  - tinyllama_1b_lora_mlp_only
+
+data:
+  data_path: null
+  mock_data: true
+  split: 1,0,0
+  micro_batch_size: 1
+  global_batch_size: 8
+
+trainer:
+  train_iters: 50
+  lr_warmup_iters: 10
