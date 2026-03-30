@@ -1,6 +1,6 @@
 # Nsight Systems MemRift Profile 检查清单
 
-用 Nsight Systems 打开 `memrift_llama11b_nsight.nsys-rep` 后，按下面三项在 timeline 里重点检查。
+用 Nsight Systems 打开 `benchmark_profile_artifacts/nsight/memrift_llama11b_nsight.nsys-rep` 后，按下面三项在 timeline 里重点检查。
 
 ---
 
@@ -65,7 +65,7 @@
 
 ```bash
 cd /share/project/mengyc/flagScale/FlagScale
-nsys stats memrift_llama11b_nsight.nsys-rep --report cuda_gpu_mem_size_sum
+nsys stats benchmark_profile_artifacts/nsight/memrift_llama11b_nsight.nsys-rep --report cuda_gpu_mem_size_sum
 ```
 
 看 **HtoD** 的 Count / Total / Max 是否与上表一致，以及是否新跑 profile 后变化。

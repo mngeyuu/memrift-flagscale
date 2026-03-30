@@ -54,6 +54,13 @@ from flagscale.compress.memrift.activation_compression import DecoderLayerWrappe
 
 MB = 1024.0 * 1024.0
 
+# prepare_weight schemes that use float-split + compressed exponent bytes
+_SPLIT_WEIGHT_SCHEMES = frozenset(
+    {"split_zstd", "split_nvcomp_lz4", "split_nvcomp_ans"}
+)
+NVCOMP_LZ4_MAGIC = b"NVL4"
+NVCOMP_ANS_MAGIC = b"NVAN"
+
 
 def get_layer_name_from_param(param_name: str):
     """e.g. model.layers.0.self_attn.q_proj.weight -> model.layers.0"""
@@ -114,7 +121,7 @@ def load_compressed_weights_into_model(model, comp_dir, device):
     peft_prefix = "base_model.model.model." if any(n.startswith("base_model.") for n in name_to_modules) else ""
 
     for it in index:
-        if it.get("scheme") != "split_zstd":
+        if it.get("scheme") not in _SPLIT_WEIGHT_SCHEMES:
             continue
         name = it["name"]
         # Match HF param name: index has "model.layers.0...", PEFT model has "base_model.model.model.layers.0..."
@@ -142,6 +149,18 @@ def load_compressed_weights_into_model(model, comp_dir, device):
         sm_gpu = torch.as_tensor(sm_bytes, dtype=torch.uint8, device=device)
         dtype = torch.bfloat16 if it["dtype"] == "bfloat16" else torch.float32
         cp = CompressedParam(it["shape"], sm_gpu, exp_bytes, dtype)
+        # nvCOMP: pinned payload + ANS alias (matches megatron_dynamic_loader)
+        if it.get("scheme") in ("split_nvcomp_lz4", "split_nvcomp_ans"):
+            if len(exp_bytes) >= 4:
+                head = bytes(exp_bytes[:4])
+                if head in (NVCOMP_LZ4_MAGIC, NVCOMP_ANS_MAGIC):
+                    comp_data = exp_bytes[4:]
+                    cp.comp_pinned = torch.empty(
+                        len(comp_data), dtype=torch.uint8, pin_memory=True
+                    )
+                    cp.comp_pinned.numpy()[:] = np.frombuffer(comp_data, dtype=np.uint8)
+                    if head == NVCOMP_ANS_MAGIC:
+                        cp.ans_pinned = cp.comp_pinned
         cp.target_module = mod
         cp.target_attr = attr
         cp.hf_name = name
@@ -171,7 +190,7 @@ def materialize_non_layer_compressed_params(model, comp_dir, device):
     peft_prefix = "base_model.model.model." if any(n.startswith("base_model.") for n in name_to_modules) else ""
 
     for it in index:
-        if it.get("scheme") != "split_zstd":
+        if it.get("scheme") not in _SPLIT_WEIGHT_SCHEMES:
             continue
         name = it["name"]
         mod_name = name.rsplit(".", 1)[0]

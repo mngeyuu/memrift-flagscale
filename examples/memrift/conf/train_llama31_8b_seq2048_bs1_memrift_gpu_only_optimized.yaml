@@ -1,0 +1,32 @@
+# MemRift GPU-Only 优化配置：Llama-3.1-8B, seq=2048, bs=1
+
+defaults:
+  - train/llama31_8b_seq2048_bs1_memrift_gpu_only_optimized
+
+experiment:
+  exp_name: llama31_8b_seq2048_bs1_memrift_gpu_only_optimized
+  exp_dir: ./outputs/${experiment.exp_name}
+  envs:
+    TORCH_DEVICE_BACKEND_AUTOLOAD: "0"
+    TOKENIZERS_PARALLELISM: "false"
+    MEMRIFT_DEEP_ASYNC: "1"
+    MEMRIFT_WEIGHT_RELAX_SYNC: "1"
+    MEMRIFT_BWD_EMPTY_STEP: "100000"
+    MEMRIFT_ACT_EMPTY_INTERVAL: "0"
+    # 与 setup_memrift_optimization.sh 一致：激活预取
+    MEMRIFT_ACT_LOOKAHEAD: "1"
+    MEMRIFT_ACT_LOOKAHEAD_LAYERS: "3"
+  task:
+    type: train
+    backend: megatron
+    entrypoint: flagscale/train/train_gpt.py
+  runner:
+    type: torchrun
+    nnodes: 1
+    nproc_per_node: 1
+
+action: run
+
+hydra:
+  run:
+    dir: ${experiment.exp_dir}/hydra

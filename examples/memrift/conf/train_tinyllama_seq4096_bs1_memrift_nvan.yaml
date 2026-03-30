@@ -1,0 +1,25 @@
+# TinyLlama 1.1B：seq=4096, bs=1，MemRift 仅权重 + NVAN（nvCOMP ANS）压缩权重
+# 勿设 MEMRIFT_ALLOW_CPU_WEIGHT_ZSTD（走 GPU nvCOMP 解码路径）
+
+defaults:
+  - train/tinyllama_1b_seq4096_bs1_memrift_nvan
+
+experiment:
+  exp_name: memrift_tinyllama_seq4096_bs1_nvan
+  exp_dir: ./outputs/${experiment.exp_name}
+  envs:
+    TORCH_DEVICE_BACKEND_AUTOLOAD: "0"
+  task:
+    type: train
+    backend: megatron
+    entrypoint: flagscale/train/train_gpt.py
+  runner:
+    type: torchrun
+    nnodes: 1
+    nproc_per_node: 1
+
+action: run
+
+hydra:
+  run:
+    dir: ${experiment.exp_dir}/hydra

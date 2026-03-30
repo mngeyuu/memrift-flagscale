@@ -11,6 +11,9 @@ log_file/*
 outputs
 *.log
 
+# Local profiling / benchmark dumps (can be huge)
+benchmark_profile_artifacts/
+
 # MemRift 压缩权重目录（不推送）
 memrift_weights/
 

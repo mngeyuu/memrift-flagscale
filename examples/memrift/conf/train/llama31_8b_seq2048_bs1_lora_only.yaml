@@ -1,0 +1,30 @@
+# 纯 LoRA 基线：Llama-3.1-8B, seq=2048, bs=1, mock（无 MemRift）
+
+defaults:
+  - llama31_8b_lora_memrift
+
+model:
+  seq_length: 2048
+  max_position_embeddings: 2048
+
+data:
+  data_path: null
+  mock_data: true
+  split: 1,0,0
+  micro_batch_size: 1
+  global_batch_size: 1
+  num_workers: 4
+
+system:
+  run_foreground: true
+  memrift_enable: false
+  memrift_weight_enable: false
+  memrift_activation_enable: false
+  memrift_act_async: false
+  memrift_profile_memory: false
+  logging:
+    log_interval: 1
+
+trainer:
+  train_iters: 30
+  lr_warmup_iters: 3

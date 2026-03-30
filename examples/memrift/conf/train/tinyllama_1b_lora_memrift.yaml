@@ -68,7 +68,8 @@ system:
   memrift_zstd_level: 6
   
   # Number of layers to prefetch (2+ helps GPU util when decompress is slow)
-  memrift_prefetch_layers: 4
+  # Default 6; async_prefetch config overrides to 8 for closer-to-LoRA timing
+  memrift_prefetch_layers: 6
   
   # Enable async decompression (recommended for better performance)
   memrift_weight_async: true

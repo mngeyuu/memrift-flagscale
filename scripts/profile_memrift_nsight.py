@@ -33,6 +33,14 @@ def main():
     parser.add_argument("--fast-profile", action="store_true",
                         help="profile 加速：global_batch_size=1, micro_batch_size=1，使 2 iters = 2 步（与 demo 可比），显著缩短耗时")
     parser.add_argument("--dry-run", action="store_true", help="只打印命令，不执行")
+    parser.add_argument(
+        "--hydra-override",
+        action="append",
+        default=[],
+        dest="hydra_overrides",
+        metavar="KEY=VALUE",
+        help="追加 Hydra override，可重复多次（如 train.model.tokenizer_path=/path）",
+    )
     args = parser.parse_args()
 
     # 用 Hydra 加载 MemRift 配置（train_mock 或 train_guanaco）
@@ -62,6 +70,9 @@ def main():
             "train.data.micro_batch_size=1",
         ])
         print("[profile] --fast-profile: global_batch_size=1, micro_batch_size=1 (2 iters = 2 steps)")
+
+    if args.hydra_overrides:
+        overrides.extend(args.hydra_overrides)
 
     with _hydra_init():
         config = compose(config_name=args.config_name, overrides=overrides)
@@ -98,6 +109,7 @@ def main():
         return
 
     env = os.environ.copy()
+    env.setdefault("TORCH_DEVICE_BACKEND_AUTOLOAD", "0")
     env["PYTHONPATH"] = (ROOT + os.pathsep + env.get("PYTHONPATH", "")).rstrip(os.pathsep)
     ret = subprocess.run(nsys_cmd, cwd=ROOT, env=env)
     if ret.returncode == 0:

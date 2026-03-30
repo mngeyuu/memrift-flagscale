@@ -2614,14 +2614,36 @@ def train(
         and torch.distributed.get_rank() in args.profile_ranks
         and args.use_pytorch_profiler
     ):
+        chrome_dir = getattr(args, 'profile_chrome_trace_dir', None)
+        tb_dir = args.tensorboard_dir
+        tb_handler = (
+            torch.profiler.tensorboard_trace_handler(tb_dir) if tb_dir is not None else None
+        )
+        _chrome_seq = [0]
+
+        def on_trace_ready(prof):
+            if chrome_dir:
+                os.makedirs(chrome_dir, exist_ok=True)
+                idx = _chrome_seq[0]
+                _chrome_seq[0] = idx + 1
+                path = os.path.join(chrome_dir, f'chrome_trace_{idx}.json')
+                prof.export_chrome_trace(path)
+                print_rank_0(f'>>> PyTorch Profiler Chrome trace written: {path}')
+            if tb_handler is not None:
+                tb_handler(prof)
+
         prof = torch.profiler.profile(
+            activities=[
+                torch.profiler.ProfilerActivity.CPU,
+                torch.profiler.ProfilerActivity.CUDA,
+            ],
             schedule=torch.profiler.schedule(
                 wait=max(args.profile_step_start - 1, 0),
                 warmup=1 if args.profile_step_start > 0 else 0,
                 active=args.profile_step_end - args.profile_step_start,
                 repeat=1,
             ),
-            on_trace_ready=torch.profiler.tensorboard_trace_handler(args.tensorboard_dir),
+            on_trace_ready=on_trace_ready,
             record_shapes=True,
             with_stack=True,
         )

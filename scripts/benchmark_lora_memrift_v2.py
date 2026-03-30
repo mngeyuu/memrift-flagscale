@@ -91,8 +91,13 @@ def reset_cuda():
     torch.cuda.reset_peak_memory_stats()
 
 
+# Global override set via --comp-dir CLI arg
+_COMP_DIR_OVERRIDE: Optional[str] = None
+
 def get_compressed_weight_dir(model_key: str) -> str:
     """Get compressed weight directory for a model."""
+    if _COMP_DIR_OVERRIDE:
+        return _COMP_DIR_OVERRIDE
     base_dir = "/share/project/mengyc/code/memrift_v1/weight_comp"
     if model_key == "tinyllama":
         return os.path.join(base_dir, "test")  # Existing TinyLlama weights
@@ -347,12 +352,24 @@ def run_memrift(model_key: str, model_spec: ModelSpec, batch_size: int, seq_len:
         model=model,
         comp_dir=comp_dir,
         device=device,
-        prefetch_layers=1,
+        prefetch_layers=2,
         print_debug=False,
     )
     loader.load_weights()
     loader.build_param_mapping()
-    loader.install_hooks()
+
+    # AsyncCompressor: decompresses layer N+1 in background thread pool
+    # while GPU computes layer N.  Without this, every layer decompress
+    # blocks the main thread (~4-40ms/layer → 10x slowdown).
+    from flagscale.compress.memrift.async_compressor import AsyncCompressor
+    async_comp = AsyncCompressor(
+        compress_workers=4,
+        decode_workers=8,
+        concurrency_limit=8,   # allow all 7 components per layer to decode concurrently
+        zstd_level=1,
+        enable_async=True,
+    )
+    loader.install_hooks(async_compressor=async_comp)
     loader.prefetch_initial_layers()
     
     mem_after = torch.cuda.memory_allocated(device)
@@ -410,6 +427,7 @@ def run_memrift(model_key: str, model_spec: ModelSpec, batch_size: int, seq_len:
     print(f"  Peak memory: {peak_mem / 1024**3:.2f} GB")
     print(f"  Avg step time: {avg_time*1000:.0f} ms")
     
+    async_comp.shutdown()
     del model, loader, optimizer
     reset_cuda()
     
@@ -433,8 +451,17 @@ def main():
     parser.add_argument("--prepare-weights", action="store_true")
     parser.add_argument("--lora-only", action="store_true")
     parser.add_argument("--memrift-only", action="store_true")
+    parser.add_argument("--comp-dir", type=str, default=None,
+                        help="Override compressed weight directory (for nvcomp_lz4 vs zstd comparison).")
+    parser.add_argument("--compression", choices=["zstd", "nvcomp_lz4", "compare"], default="zstd",
+                        help="Compression format for weights. 'compare' runs both zstd and nvcomp_lz4.")
     args = parser.parse_args()
     
+    global _COMP_DIR_OVERRIDE
+    if args.comp_dir:
+        _COMP_DIR_OVERRIDE = args.comp_dir
+        print(f"  [override] comp_dir = {args.comp_dir}")
+
     model_keys = list(MODELS.keys()) if "all" in args.models else args.models
     
     print("=" * 70)
@@ -471,14 +498,32 @@ def main():
         
         # MemRift
         if not args.lora_only:
-            try:
-                results[model_key]["memrift"] = run_memrift(
-                    model_key, spec, args.batch_size, args.seq_len, args.num_steps, args.lora_rank)
-            except Exception as e:
-                print(f"MemRift failed: {e}")
-                import traceback
-                traceback.print_exc()
-                results[model_key]["memrift"] = {"error": str(e)}
+            if args.compression == "compare":
+                # Run both compression formats and report separately
+                for comp_label, comp_dir_suffix in [("memrift_zstd", "test"),
+                                                     ("memrift_nvcomp_lz4", f"test_nvcomp_lz4")]:
+                    _COMP_DIR_OVERRIDE = os.path.join(
+                        "/share/project/mengyc/code/memrift_v1/weight_comp", comp_dir_suffix)
+                    if not os.path.exists(os.path.join(_COMP_DIR_OVERRIDE, "index.json")):
+                        print(f"  Skipping {comp_label}: no weights at {_COMP_DIR_OVERRIDE}")
+                        results[model_key][comp_label] = {"error": "weights not found"}
+                        continue
+                    try:
+                        results[model_key][comp_label] = run_memrift(
+                            model_key, spec, args.batch_size, args.seq_len, args.num_steps, args.lora_rank)
+                    except Exception as e:
+                        print(f"MemRift ({comp_label}) failed: {e}")
+                        results[model_key][comp_label] = {"error": str(e)}
+                _COMP_DIR_OVERRIDE = None
+            else:
+                try:
+                    results[model_key]["memrift"] = run_memrift(
+                        model_key, spec, args.batch_size, args.seq_len, args.num_steps, args.lora_rank)
+                except Exception as e:
+                    print(f"MemRift failed: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    results[model_key]["memrift"] = {"error": str(e)}
     
     # Summary
     print("\n" + "=" * 90)

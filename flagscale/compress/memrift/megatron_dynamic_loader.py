@@ -24,6 +24,19 @@ from collections import defaultdict
 import numpy as np
 import torch
 import torch.nn as nn
+from contextlib import nullcontext
+
+try:
+    _memrift_nvtx_range = torch.cuda.nvtx.range
+except AttributeError:
+
+    def _memrift_nvtx_range(_name: str):
+        return nullcontext()
+
+try:
+    from flagscale.compress.memrift import time_profiler as layer_time_profiler
+except ImportError:
+    layer_time_profiler = None
 
 try:
     import zstandard as zstd
@@ -31,6 +44,18 @@ try:
 except ImportError:
     ZSTD_AVAILABLE = False
 
+try:
+    import nvidia.nvcomp as _nvcomp_lib
+    NVCOMP_AVAILABLE = True
+except ImportError:
+    _nvcomp_lib = None
+    NVCOMP_AVAILABLE = False
+
+# Magic bytes to detect GPU nvCOMP-compressed exponent bytes.
+# LZ4: prepare_weight.py --compression nvcomp_lz4 (may be re-encoded to ANS at load).
+# ANS: prepare_weight.py --compression nvcomp_ans (preferred; smaller, no recompress).
+NVCOMP_LZ4_MAGIC = b"NVL4"
+NVCOMP_ANS_MAGIC = b"NVAN"
 
 # Thread-local decompressor
 _tls = threading.local()
@@ -99,6 +124,14 @@ class CompressedParam(nn.Parameter):
         self._ready_event = threading.Event()
         self._CtoD_evt = None
         self._exp_host = None
+
+        # For nvcomp_lz4: persistent pinned buffer holding the compressed data.
+        # Allocated once on the main thread at load time (pinned alloc from the
+        # main thread is ~0.02ms vs ~10ms from thread-pool threads whose per-thread
+        # pinned-memory caches are cold).  Reused every iteration; safe because
+        # all H2D ops on h2d_stream are serialized and the GPU reads the buffer
+        # before the next submission.
+        self.comp_pinned: Optional[torch.Tensor] = None
         
         # Param binding (set by loader)
         self.target_module: Optional[nn.Module] = None
@@ -125,7 +158,21 @@ class CompressedParam(nn.Parameter):
             try:
                 if not pref.done():
                     _trace(f"materialize: prefetch not ready (layer={self.layer_idx}), wait for async (demo-style)")
-                pref_out = pref.result()
+                # Nsight: 若此处耗时明显，说明预取未盖住计算（加深 prefetch / 增 workers）
+                with _memrift_nvtx_range(
+                    f"MemRift/wait_prefetch_future L{self.layer_idx}"
+                ):
+                    _t_wait0 = time.perf_counter()
+                    pref_out = pref.result()
+                    _wait_ms = (time.perf_counter() - _t_wait0) * 1000.0
+                if layer_time_profiler is not None and layer_time_profiler.is_enabled():
+                    layer_time_profiler.add_time(
+                        f"decoder.layers.{self.layer_idx}"
+                        if self.layer_idx >= 0
+                        else "__memrift_prefetch__",
+                        "prefetch_future_result_wait_ms",
+                        _wait_ms,
+                    )
                 if isinstance(pref_out, tuple) and len(pref_out) == 3:
                     # (bf16, evt, cpu_exp): thread exited without GPU sync.
                     # cpu_exp must stay alive until the merge DMA completes.
@@ -165,18 +212,121 @@ class CompressedParam(nn.Parameter):
             )
         
         numel = int(np.prod(self.orig_shape))
-        
-        # Decompress exponent to pinned memory
+        strides = _c_contiguous_strides(self.orig_shape)
+        stream = torch.cuda.current_stream()
+
+        # ── GPU path: nvCOMP LZ4 ──────────────────────────────────────────
+        # Activated when exp_mv is prefixed with NVCOMP_LZ4_MAGIC ("NVL4").
+        # Eliminates CPU zstd blocking: CPU only does a fast memcpy to pinned
+        # staging, then all H2D/decode/merge run asynchronously on GPU.
+        if (NVCOMP_AVAILABLE
+                and isinstance(self.exp_mv, (bytes, bytearray, memoryview))
+                and len(self.exp_mv) >= 4
+                and bytes(self.exp_mv[:4]) == NVCOMP_LZ4_MAGIC):
+
+            # 1. Use persistent pinned buffer (pre-allocated on main thread at load
+            #    time to avoid ~10ms cold-cache alloc from thread-pool threads).
+            #    comp_pinned is safe to reuse: H2D ops on the same stream are
+            #    serialized, so the GPU finishes reading before the next submission.
+            if self.comp_pinned is not None:
+                comp_pinned = self.comp_pinned  # reuse persistent buffer
+            else:
+                comp_data = self.exp_mv[4:]
+                comp_pinned = torch.empty(len(comp_data), dtype=torch.uint8, pin_memory=True)
+                comp_pinned.numpy()[:] = np.frombuffer(comp_data, dtype=np.uint8)
+
+            # 2. H2D DMA compressed bytes → GPU (async, on current stream)
+            with torch.cuda.stream(stream):
+                comp_gpu = comp_pinned.to(
+                    self.sm_gpu.device, non_blocking=True)
+
+            # 3. GPU nvCOMP LZ4 decode (queued on stream; runs after H2D)
+            nvcomp_codec = _nvcomp_lib.Codec(
+                algorithm='lz4', cuda_stream=stream.cuda_stream)
+            comp_arr = _nvcomp_lib.as_array(comp_gpu.view(torch.int8))
+            decomp = nvcomp_codec.decode(comp_arr)
+
+            # 4. Convert decoded output to a proper PyTorch-owned tensor.
+            #    .clone() runs after decode (same stream) and breaks the
+            #    DLPack lifetime dependency on decomp to avoid double-free.
+            decomp_raw = torch.from_dlpack(
+                decomp.to_dlpack()).view(torch.uint8)
+            with torch.cuda.stream(stream):
+                exp_gpu = decomp_raw[:numel].clone()
+            exp_gpu.record_stream(stream)
+
+            # 5. GPU merge: exp_gpu + sm_gpu → bf16
+            with torch.cuda.stream(stream):
+                self._bf16 = fs_sp.merge(
+                    exp_gpu, self.sm_gpu,
+                    list(self.orig_shape), list(strides), 0,
+                    self._dtype, stream.cuda_stream,
+                )
+            ev = stream.record_event()
+            self._CtoD_evt = ev
+            # Keep staging alive until caller syncs ev:
+            #   comp_pinned: persistent (not freed), GPU DMA source – included to
+            #     document the lifetime but NOT deleted in release().
+            #   comp_gpu: decode source; decomp_raw: DLPack ref; exp_gpu: merge input.
+            self._exp_host = (comp_gpu, nvcomp_codec, decomp, decomp_raw, exp_gpu)
+            self._ready_event.set()
+
+            if sync and not _DEEP_ASYNC:
+                ev.synchronize()
+                self._exp_host = None
+
+            return self._bf16
+
+        # ── GPU path: nvCOMP ANS ──────────────────────────────────────────
+        # prepare_weight.py --compression nvcomp_ans (magic "NVAN").
+        if (NVCOMP_AVAILABLE
+                and isinstance(self.exp_mv, (bytes, bytearray, memoryview))
+                and len(self.exp_mv) >= 4
+                and bytes(self.exp_mv[:4]) == NVCOMP_ANS_MAGIC):
+
+            if self.comp_pinned is not None:
+                comp_pinned = self.comp_pinned
+            else:
+                comp_data = self.exp_mv[4:]
+                comp_pinned = torch.empty(len(comp_data), dtype=torch.uint8, pin_memory=True)
+                comp_pinned.numpy()[:] = np.frombuffer(comp_data, dtype=np.uint8)
+
+            with torch.cuda.stream(stream):
+                comp_gpu = comp_pinned.to(
+                    self.sm_gpu.device, non_blocking=True)
+
+            nvcomp_codec = _nvcomp_lib.Codec(
+                algorithm='ans', cuda_stream=stream.cuda_stream)
+            comp_arr = _nvcomp_lib.as_array(comp_gpu.view(torch.int8))
+            decomp = nvcomp_codec.decode(comp_arr)
+
+            decomp_raw = torch.from_dlpack(decomp).view(torch.uint8)
+            decomp_raw.record_stream(stream)
+            with torch.cuda.stream(stream):
+                self._bf16 = fs_sp.merge(
+                    decomp_raw, self.sm_gpu,
+                    list(self.orig_shape), list(strides), 0,
+                    self._dtype, stream.cuda_stream,
+                )
+            ev = stream.record_event()
+            self._CtoD_evt = ev
+            self._exp_host = (comp_gpu, nvcomp_codec, decomp, decomp_raw)
+            self._ready_event.set()
+
+            if sync and not _DEEP_ASYNC:
+                ev.synchronize()
+                self._exp_host = None
+
+            return self._bf16
+
+        # ── CPU path: zstd (backward compat / old compressed files) ──────
         self._exp_host = torch.empty(numel, dtype=torch.uint8, pin_memory=True)
         dctx = _get_dctx()
         with dctx.stream_reader(memoryview(self.exp_mv)) as reader:
             view = memoryview(self._exp_host.numpy())
             nread = reader.readinto(view)
             assert nread == numel, f"decompress size mismatch: {nread} vs {numel}"
-        
-        # Merge on GPU
-        strides = _c_contiguous_strides(self.orig_shape)
-        stream = torch.cuda.current_stream()
+
         with torch.cuda.stream(stream):
             self._bf16 = fs_sp.merge(
                 self._exp_host, self.sm_gpu,
@@ -186,10 +336,10 @@ class CompressedParam(nn.Parameter):
         ev = stream.record_event()
         self._CtoD_evt = ev
         self._ready_event.set()
-        
+
         if sync and not _DEEP_ASYNC:
             ev.synchronize()
-        
+
         return self._bf16
     
     def wait_ready(self):
@@ -476,7 +626,9 @@ class MegatronDynamicLoader:
         self.device = device
         self.tp_rank = tp_rank
         self.tp_size = tp_size
-        self.prefetch_layers = prefetch_layers
+        # Respect the configured prefetch span so large models can trade a bit of
+        # overlap for lower steady-state memory.
+        self.prefetch_layers = max(prefetch_layers, 1)
         self.print_debug = print_debug
         self.allowed_targets = allowed_targets
         # Relax hook-side hard sync to reduce main-thread stalls.
@@ -517,6 +669,28 @@ class MegatronDynamicLoader:
         # Backward empty_cache counter (aligned with memrift_demo)
         self._bwd_counter = 0
         self._bwd_empty_step = int(_env_float("MEMRIFT_BWD_EMPTY_STEP", 5))
+        self._prefetch_submit_mode = os.environ.get(
+            "MEMRIFT_WEIGHT_PREFETCH_MODE", "on_stream"
+        )
+        self._prefetch_submit_mode_fwd = os.environ.get(
+            "MEMRIFT_WEIGHT_PREFETCH_MODE_FWD",
+            self._prefetch_submit_mode,
+        )
+        self._prefetch_submit_mode_bwd = os.environ.get(
+            "MEMRIFT_WEIGHT_PREFETCH_MODE_BWD",
+            self._prefetch_submit_mode,
+        )
+        self._windowed_prefetch = os.environ.get("MEMRIFT_WINDOWED_PREFETCH", "0") == "1"
+        self._windowed_prefetch_fwd = os.environ.get(
+            "MEMRIFT_WINDOWED_PREFETCH_FWD",
+            "1" if self._windowed_prefetch else "0",
+        ) == "1"
+        self._windowed_prefetch_bwd = os.environ.get(
+            "MEMRIFT_WINDOWED_PREFETCH_BWD",
+            "1" if self._windowed_prefetch else "0",
+        ) == "1"
+        self._fwd_prefetch_cursor = 0
+        self._bwd_prefetch_cursor = -1
 
     def _count_pending_prefetch(self, groups: List[MergedWeightGroup]) -> int:
         pending = 0
@@ -526,6 +700,93 @@ class MegatronDynamicLoader:
                 if fut_obj is not None and not fut_obj.done():
                     pending += 1
         return pending
+
+    def _submit_prefetch_layers(self, layer_names: List[str], async_comp, submit_mode: str) -> int:
+        if async_comp is None or not layer_names:
+            return 0
+        to_prefetch = []
+        for layer_name in layer_names:
+            for group in self.layer2groups.get(layer_name, []):
+                for cp in group.components.values():
+                    if cp._bf16 is None and cp._prefetch_future is None:
+                        to_prefetch.append(cp)
+        if not to_prefetch:
+            return 0
+        if submit_mode == "async_bg":
+            futures = async_comp.prefetch_batch_async(to_prefetch)
+        else:
+            futures = async_comp.prefetch_batch_on_stream(to_prefetch)
+        for cp, fut_obj in futures.items():
+            cp._prefetch_future = fut_obj
+        return len(to_prefetch)
+
+    def _schedule_forward_prefetch(self, cur_idx: int, span: int, async_comp) -> int:
+        """Schedule forward prefetch with batched submit."""
+        if async_comp is None or self._fwd_prefetch_cursor >= self.num_layers:
+            return 0
+        if cur_idx < self._fwd_prefetch_cursor - span:
+            return 0
+
+        end_idx = min(self.num_layers, self._fwd_prefetch_cursor + span)
+        layer_names = self.layer_names[self._fwd_prefetch_cursor:end_idx]
+
+        # Collect all components to prefetch from all layers in one go
+        to_prefetch = []
+        for layer_name in layer_names:
+            for group in self.layer2groups.get(layer_name, []):
+                for cp in group.components.values():
+                    if cp._bf16 is None and cp._prefetch_future is None:
+                        to_prefetch.append(cp)
+
+        if not to_prefetch:
+            self._fwd_prefetch_cursor = end_idx
+            return 0
+
+        # Submit ALL components in a single prefetch_batch_on_stream call
+        if self._prefetch_submit_mode_fwd == "async_bg":
+            futures = async_comp.prefetch_batch_async(to_prefetch)
+        else:
+            futures = async_comp.prefetch_batch_on_stream(to_prefetch)
+
+        for cp, fut_obj in futures.items():
+            cp._prefetch_future = fut_obj
+
+        self._fwd_prefetch_cursor = end_idx
+        return len(to_prefetch)
+
+    def _schedule_backward_prefetch(self, cur_idx: int, span: int, async_comp) -> int:
+        """Schedule backward prefetch with batched submit."""
+        if async_comp is None or self._bwd_prefetch_cursor < 0:
+            return 0
+        if cur_idx > self._bwd_prefetch_cursor + (span - 1):
+            return 0
+
+        start_idx = max(0, self._bwd_prefetch_cursor - span + 1)
+        layer_names = [self.layer_names[i] for i in range(self._bwd_prefetch_cursor, start_idx - 1, -1)]
+
+        # Collect all components to prefetch from all layers in one go
+        to_prefetch = []
+        for layer_name in layer_names:
+            for group in self.layer2groups.get(layer_name, []):
+                for cp in group.components.values():
+                    if cp._bf16 is None and cp._prefetch_future is None:
+                        to_prefetch.append(cp)
+
+        if not to_prefetch:
+            self._bwd_prefetch_cursor = start_idx - 1
+            return 0
+
+        # Submit ALL components in a single prefetch_batch_on_stream call
+        if self._prefetch_submit_mode_bwd == "async_bg":
+            futures = async_comp.prefetch_batch_async(to_prefetch)
+        else:
+            futures = async_comp.prefetch_batch_on_stream(to_prefetch)
+
+        for cp, fut_obj in futures.items():
+            cp._prefetch_future = fut_obj
+
+        self._bwd_prefetch_cursor = start_idx - 1
+        return len(to_prefetch)
     
     def _get_layer_idx(self, hf_name: str) -> Optional[int]:
         """Extract layer index from HF parameter name."""
@@ -570,9 +831,13 @@ class MegatronDynamicLoader:
         
         # Second pass: load weights and organize
         for entry in self.index:
-            if entry["scheme"] != "split_zstd":
+            if entry["scheme"] not in (
+                "split_zstd",
+                "split_nvcomp_lz4",
+                "split_nvcomp_ans",
+            ):
                 if self.print_debug:
-                    print(f"[MemRift] Skipping non-split_zstd: {entry['name']}")
+                    print(f"[MemRift] Skipping non-split: {entry['name']} ({entry['scheme']})")
                 continue
             
             hf_name = entry["name"]
@@ -599,6 +864,21 @@ class MegatronDynamicLoader:
             cp.megatron_target = megatron_target or ""
             cp.merge_key = merge_key
             cp.layer_idx = layer_idx if layer_idx is not None else -1
+
+            # Pre-allocate persistent pinned buffer on the main thread for nvcomp payloads.
+            # Thread-pool threads have cold per-thread caches → torch.empty(..., pin_memory=True)
+            # takes ~10ms there vs ~0.02ms on the (warm) main thread.  Reusing a main-thread-
+            # allocated buffer eliminates that 10ms × 308-calls bottleneck per training step.
+            if NVCOMP_AVAILABLE and len(exp_bytes) >= 4:
+                head = exp_bytes[:4]
+                if head == NVCOMP_LZ4_MAGIC or head == NVCOMP_ANS_MAGIC:
+                    comp_data = exp_bytes[4:]
+                    cp.comp_pinned = torch.empty(
+                        len(comp_data), dtype=torch.uint8, pin_memory=True)
+                    cp.comp_pinned.numpy()[:] = np.frombuffer(comp_data, dtype=np.uint8)
+                    # Offline ANS: same buffer is what batch decode reads (ANS codec).
+                    if head == NVCOMP_ANS_MAGIC:
+                        cp.ans_pinned = cp.comp_pinned
             
             self.all_cps.append(cp)
             
@@ -638,7 +918,93 @@ class MegatronDynamicLoader:
         
         if self.print_debug:
             print(f"[MemRift] Loaded {len(self.all_cps)} compressed params")
-    
+
+        # Re-compress LZ4 exponent bytes → ANS at startup for faster H2D + decode.
+        # ANS achieves ~2.8x compression on real bf16 exponent bytes (vs LZ4's 1.0x),
+        # reducing H2D time from ~4ms to ~1.7ms and decode from ~8.5ms to ~2.4ms.
+        # This one-time GPU operation takes ~100ms for a 1B model.
+        self._recompress_lz4_to_ans()
+
+    def _recompress_lz4_to_ans(self):
+
+        if not NVCOMP_AVAILABLE or _nvcomp_lib is None:
+            return
+
+        NVCOMP_ANS_MAGIC = b"NVAN"
+
+        lz4_cps = [
+            cp for cp in self.all_cps
+            if (cp.comp_pinned is not None
+                and getattr(cp, 'exp_mv', None) is not None
+                and isinstance(cp.exp_mv, (bytes, bytearray, memoryview))
+                and len(cp.exp_mv) >= 4
+                and bytes(cp.exp_mv[:4]) == NVCOMP_LZ4_MAGIC)
+        ]
+
+        if not lz4_cps:
+            return
+
+        try:
+            lz4_codec = _nvcomp_lib.Codec(algorithm='lz4')
+            ans_codec = _nvcomp_lib.Codec(algorithm='ans')
+        except Exception:
+            return
+
+        BATCH = 1  # process 1 weight at a time to avoid large GPU allocations
+        total_saved_mb = 0.0
+        n_converted = 0
+
+        for i in range(0, len(lz4_cps), BATCH):
+            batch = lz4_cps[i: i + BATCH]
+
+            # H2D compressed data (LZ4) to GPU
+            gpu_bufs = []
+            for cp in batch:
+                cg = cp.comp_pinned.to(self.device, non_blocking=True)
+                gpu_bufs.append(cg)
+            torch.cuda.synchronize(self.device)
+
+            # Decode with LZ4
+            lz4_arrs = [_nvcomp_lib.as_array(cg.view(torch.int8)) for cg in gpu_bufs]
+            decoded_list = lz4_codec.decode(lz4_arrs)
+            del lz4_arrs
+
+            # Re-encode each with ANS, then D2H to pinned memory
+            for cp, cg, decoded in zip(batch, gpu_bufs, decoded_list):
+                raw_tensor = torch.from_dlpack(decoded).view(torch.uint8).clone()
+                torch.cuda.synchronize(self.device)
+                del decoded
+
+                ans_arr = _nvcomp_lib.as_array(raw_tensor.view(torch.int8))
+                ans_comp = ans_codec.encode(ans_arr)
+                torch.cuda.synchronize(self.device)
+                del raw_tensor, ans_arr
+
+                # buffer_size = actual ANS bitstream bytes (not the full DLPack tensor
+                # which may include padding). Use only the valid prefix.
+                ans_valid_bytes = int(ans_comp.buffer_size)
+                ans_comp_tensor = torch.from_dlpack(ans_comp).view(torch.uint8)
+                ans_data = ans_comp_tensor[:ans_valid_bytes].clone()
+                torch.cuda.synchronize(self.device)
+                del ans_comp_tensor, ans_comp
+
+                lz4_size = cp.comp_pinned.numel()
+                total_saved_mb += (lz4_size - ans_valid_bytes) / 1e6
+
+                # D2H to pinned memory (only valid bytes)
+                ans_pinned = torch.empty(ans_valid_bytes, dtype=torch.uint8, pin_memory=True)
+                ans_pinned.copy_(ans_data)
+                torch.cuda.synchronize(self.device)
+                del ans_data, cg
+                cp.ans_pinned = ans_pinned
+                n_converted += 1
+
+            del gpu_bufs, decoded_list
+
+        if self.print_debug or True:
+            print(f"[MemRift] Re-compressed {n_converted} LZ4→ANS weights, "
+                  f"saved {total_saved_mb:.1f}MB CPU pinned memory.")
+
     def build_param_mapping(self):
         """
         Build mapping from MergedWeightGroup to actual model parameters.
@@ -793,7 +1159,7 @@ class MegatronDynamicLoader:
         """
         return _materialize_group_tensor(group, sync=sync)
     
-    def _set_param(self, group: MergedWeightGroup, weight: torch.Tensor):
+    def _set_param(self, group: MergedWeightGroup, weight: torch.Tensor, wait_metric: Optional[str] = None):
         """
         Write materialized weight back to the model parameter.
         
@@ -824,9 +1190,29 @@ class MegatronDynamicLoader:
         # This is a no-op when tensors are already ready, and preserves correctness
         # for relaxed-sync mode without forcing synchronize() on host.
         cur_stream = torch.cuda.current_stream(param.device)
+        wait_start_evt = wait_end_evt = None
+        if (
+            wait_metric
+            and layer_time_profiler is not None
+            and layer_time_profiler.is_enabled()
+        ):
+            wait_start_evt = torch.cuda.Event(enable_timing=True)
+            wait_end_evt = torch.cuda.Event(enable_timing=True)
+            wait_start_evt.record(cur_stream)
         for cp in group.components.values():
             if cp._CtoD_evt is not None:
                 cur_stream.wait_event(cp._CtoD_evt)
+        if wait_end_evt is not None and wait_start_evt is not None:
+            wait_end_evt.record(cur_stream)
+            wait_end_evt.synchronize()
+            try:
+                layer_time_profiler.add_time(
+                    self.layer_names[group.layer_idx] if group.layer_idx >= 0 else "unknown",
+                    wait_metric,
+                    float(wait_start_evt.elapsed_time(wait_end_evt)),
+                )
+            except Exception:
+                pass
         _PTR2GROUP[int(param.data_ptr())] = group
         if self.print_debug:
             print(f"[MemRift] set_param: layer {group.layer_idx} / {group.megatron_target} shape={weight.shape}")
@@ -876,7 +1262,14 @@ class MegatronDynamicLoader:
         for i in range(k):
             if i < len(self.layer_names):
                 layer_name = self.layer_names[i]
+                _t0 = time.perf_counter()
                 self._materialize_and_set_layer(layer_name)
+                if layer_time_profiler is not None and layer_time_profiler.is_enabled():
+                    layer_time_profiler.add_time(
+                        layer_name,
+                        "startup_weight_materialize_ms",
+                        1000.0 * (time.perf_counter() - _t0),
+                    )
         
         torch.cuda.synchronize(self.device)
         
@@ -935,6 +1328,17 @@ class MegatronDynamicLoader:
             found = [n for n in self.layer_names if n in name2layer]
             print(f"[MemRift] Found {len(found)}/{len(self.layer_names)} layer modules for hooks")
             print(f"[MemRift] Hook materialize sync={self._hook_materialize_sync}")
+            print(
+                f"[MemRift] Prefetch submit mode fwd={self._prefetch_submit_mode_fwd} "
+                f"bwd={self._prefetch_submit_mode_bwd}"
+            )
+            print(
+                f"[MemRift] Windowed prefetch fwd={self._windowed_prefetch_fwd} "
+                f"bwd={self._windowed_prefetch_bwd}"
+            )
+
+        self._fwd_prefetch_cursor = min(self.prefetch_layers + 1, self.num_layers)
+        self._bwd_prefetch_cursor = self.num_layers - 2
         
         # Forward hooks
         for i in range(len(self.layer_names)):
@@ -950,7 +1354,7 @@ class MegatronDynamicLoader:
             nxt_groups_list = [self.layer2groups.get(nm, []) for nm in nxt_names]
             
             # Capture variables
-            def make_fwd_pre(cur_groups, nxt_groups_list, cur_name, async_comp):
+            def make_fwd_pre(cur_groups, nxt_groups_list, cur_name, cur_idx, async_comp):
                 def _hook(mod, inp):
                     t0 = time.perf_counter()
                     _trace(f"fwd_pre: enter layer={cur_name}, groups={len(cur_groups)}")
@@ -961,31 +1365,64 @@ class MegatronDynamicLoader:
                     # 1) Submit prefetch for NEXT K layers FIRST so CPU decompression
                     #    can overlap with current layer materialize + forward compute.
                     #    K is controlled by prefetch_layers.
+                    _t_pref0 = time.perf_counter()
                     if async_comp and nxt_groups_list:
-                        for nxt_groups in nxt_groups_list:
-                            for group in nxt_groups:
-                                for cp in group.components.values():
-                                    if cp._bf16 is None and cp._prefetch_future is None:
-                                        cp._prefetch_future = async_comp.materialize_async(
-                                            cp.exp_mv, cp.sm_gpu, cp.orig_shape, cp._dtype
-                                        )
+                        if self._windowed_prefetch_fwd:
+                            n_prefetched = self._schedule_forward_prefetch(cur_idx, span, async_comp)
+                        else:
+                            # Collect all components that need prefetch, then batch-decode
+                            # in a single codec.decode([...]) call (2x faster than per-call).
+                            to_prefetch = []
+                            for nxt_groups in nxt_groups_list:
+                                for group in nxt_groups:
+                                    for cp in group.components.values():
+                                        if cp._bf16 is None and cp._prefetch_future is None:
+                                            to_prefetch.append(cp)
+                            n_prefetched = len(to_prefetch)
+                            if to_prefetch:
+                                if self._prefetch_submit_mode_fwd == "async_bg":
+                                    futures = async_comp.prefetch_batch_async(to_prefetch)
+                                else:
+                                    futures = async_comp.prefetch_batch_on_stream(to_prefetch)
+                                for cp, fut_obj in futures.items():
+                                    cp._prefetch_future = fut_obj
+                    else:
+                        n_prefetched = 0
+                    _t_pref1 = time.perf_counter()
+                    if layer_time_profiler is not None and layer_time_profiler.is_enabled():
+                        layer_time_profiler.add_time(
+                            cur_name,
+                            "forward_prefetch_submit_ms",
+                            1000.0 * (_t_pref1 - _t_pref0),
+                        )
+                    if os.environ.get("MEMRIFT_DBG2", "0") == "1":
+                        print(f"[H] {cur_name}: n_pref={n_prefetched} pref={1000*(_t_pref1-_t_pref0):.1f}ms", flush=True)
 
                     # 2) Materialize current layer and write back to model param.
                     #    If the layer was pre-fetched, cp.materialize() consumes the future.
                     #    Fast path in _materialize_group_tensor: if param.data is already
                     #    valid (from prefetch_initial_layers) it returns it directly.
+                    materialize_ms = 0.0
                     for group in cur_groups:
                         tg = time.perf_counter()
                         weight = self._materialize_group(
                             group, sync=self._hook_materialize_sync
                         )
-                        self._set_param(group, weight)
+                        self._set_param(group, weight, wait_metric="forward_current_wait_gpu_ms")
                         group_ms = (time.perf_counter() - tg) * 1000.0
+                        materialize_ms += group_ms
                         if group_ms > self._hook_warn_ms:
                             _trace(
                                 f"WARN fwd_pre: slow group materialize {group_ms:.1f} ms "
                                 f"(layer={cur_name}, target={group.megatron_target})"
                             )
+                    if layer_time_profiler is not None and layer_time_profiler.is_enabled():
+                        layer_time_profiler.add_time(
+                            cur_name,
+                            "forward_weight_materialize_ms",
+                            materialize_ms,
+                        )
+                        setattr(mod, "_memrift_fwd_compute_start", time.perf_counter())
 
                     hook_ms = (time.perf_counter() - t0) * 1000.0
                     if hook_ms > self._hook_warn_ms:
@@ -993,8 +1430,20 @@ class MegatronDynamicLoader:
                     _trace(f"fwd_pre: done layer={cur_name}")
                 return _hook
             
-            def make_fwd_post(cur_groups, is_last):
+            def make_fwd_post(cur_groups, is_last, cur_name):
                 def _hook(mod, inp, out):
+                    if layer_time_profiler is not None and layer_time_profiler.is_enabled():
+                        t_start = getattr(mod, "_memrift_fwd_compute_start", None)
+                        if t_start is not None:
+                            layer_time_profiler.add_time(
+                                cur_name,
+                                "forward_compute_ms",
+                                1000.0 * (time.perf_counter() - t_start),
+                            )
+                            try:
+                                delattr(mod, "_memrift_fwd_compute_start")
+                            except Exception:
+                                setattr(mod, "_memrift_fwd_compute_start", None)
                     # Release current layer (but not on last layer in forward)
                     if not is_last:
                         for group in cur_groups:
@@ -1003,10 +1452,10 @@ class MegatronDynamicLoader:
             
             is_last_layer = (i == len(self.layer_names) - 1)
             layer_module.register_forward_pre_hook(
-                make_fwd_pre(cur_groups, nxt_groups_list, cur, async_compressor)
+                make_fwd_pre(cur_groups, nxt_groups_list, cur, i, async_compressor)
             )
             layer_module.register_forward_hook(
-                make_fwd_post(cur_groups, is_last_layer)
+                make_fwd_post(cur_groups, is_last_layer, cur)
             )
         
         # Backward hooks (reverse order)
@@ -1022,7 +1471,7 @@ class MegatronDynamicLoader:
             cur_groups = self.layer2groups.get(cur, [])
             prv_groups_list = [self.layer2groups.get(nm, []) for nm in prv_names]
             
-            def make_bwd_pre(cur_groups, prv_groups_list, cur_name, async_comp):
+            def make_bwd_pre(cur_groups, prv_groups_list, cur_name, cur_idx, async_comp):
                 def _hook(mod, grad_out):
                     t0 = time.perf_counter()
                     _trace(f"bwd_pre: enter layer={cur_name}, groups={len(cur_groups)}")
@@ -1033,28 +1482,58 @@ class MegatronDynamicLoader:
                     # 1) Submit prefetch for PREVIOUS K layers FIRST so CPU decompression
                     #    can overlap with current layer materialize + backward compute.
                     #    K is controlled by prefetch_layers.
+                    prefetch_ms = 0.0
                     if async_comp and prv_groups_list:
-                        for prv_groups in prv_groups_list:
-                            for group in prv_groups:
-                                for cp in group.components.values():
-                                    if cp._bf16 is None and cp._prefetch_future is None:
-                                        cp._prefetch_future = async_comp.materialize_async(
-                                            cp.exp_mv, cp.sm_gpu, cp.orig_shape, cp._dtype
-                                        )
+                        if self._windowed_prefetch_bwd:
+                            _tp0 = time.perf_counter()
+                            self._schedule_backward_prefetch(cur_idx, span, async_comp)
+                            prefetch_ms = 1000.0 * (time.perf_counter() - _tp0)
+                        else:
+                            # Batch-decode all components for previous layers at once.
+                            to_prefetch = []
+                            for prv_groups in prv_groups_list:
+                                for group in prv_groups:
+                                    for cp in group.components.values():
+                                        if cp._bf16 is None and cp._prefetch_future is None:
+                                            to_prefetch.append(cp)
+                            if to_prefetch:
+                                _tp0 = time.perf_counter()
+                                if self._prefetch_submit_mode_bwd == "async_bg":
+                                    futures = async_comp.prefetch_batch_async(to_prefetch)
+                                else:
+                                    futures = async_comp.prefetch_batch_on_stream(to_prefetch)
+                                for cp, fut_obj in futures.items():
+                                    cp._prefetch_future = fut_obj
+                                prefetch_ms = 1000.0 * (time.perf_counter() - _tp0)
+                    if layer_time_profiler is not None and layer_time_profiler.is_enabled():
+                        layer_time_profiler.add_time(
+                            cur_name,
+                            "backward_prefetch_submit_ms",
+                            prefetch_ms,
+                        )
 
                     # 2) Materialize current layer and write back to param (backward uses it).
+                    materialize_ms = 0.0
                     for group in cur_groups:
                         tg = time.perf_counter()
                         weight = self._materialize_group(
                             group, sync=self._hook_materialize_sync
                         )
-                        self._set_param(group, weight)
+                        self._set_param(group, weight, wait_metric="backward_current_wait_gpu_ms")
                         group_ms = (time.perf_counter() - tg) * 1000.0
+                        materialize_ms += group_ms
                         if group_ms > self._hook_warn_ms:
                             _trace(
                                 f"WARN bwd_pre: slow group materialize {group_ms:.1f} ms "
                                 f"(layer={cur_name}, target={group.megatron_target})"
                             )
+                    if layer_time_profiler is not None and layer_time_profiler.is_enabled():
+                        layer_time_profiler.add_time(
+                            cur_name,
+                            "backward_weight_materialize_ms",
+                            materialize_ms,
+                        )
+                        setattr(mod, "_memrift_bwd_compute_start", time.perf_counter())
 
                     hook_ms = (time.perf_counter() - t0) * 1000.0
                     if hook_ms > self._hook_warn_ms:
@@ -1062,8 +1541,20 @@ class MegatronDynamicLoader:
                     _trace(f"bwd_pre: done layer={cur_name}")
                 return _hook
             
-            def make_bwd_post(cur_groups):
+            def make_bwd_post(cur_groups, cur_name):
                 def _hook(mod, grad_in, grad_out):
+                    if layer_time_profiler is not None and layer_time_profiler.is_enabled():
+                        t_start = getattr(mod, "_memrift_bwd_compute_start", None)
+                        if t_start is not None:
+                            layer_time_profiler.add_time(
+                                cur_name,
+                                "backward_compute_ms",
+                                1000.0 * (time.perf_counter() - t_start),
+                            )
+                            try:
+                                delattr(mod, "_memrift_bwd_compute_start")
+                            except Exception:
+                                setattr(mod, "_memrift_bwd_compute_start", None)
                     for group in cur_groups:
                         self._clear_param(group)
                     self._bwd_counter += 1
@@ -1072,10 +1563,10 @@ class MegatronDynamicLoader:
                 return _hook
             
             layer_module.register_full_backward_pre_hook(
-                make_bwd_pre(cur_groups, prv_groups_list, cur, async_compressor)
+                make_bwd_pre(cur_groups, prv_groups_list, cur, i, async_compressor)
             )
             layer_module.register_full_backward_hook(
-                make_bwd_post(cur_groups)
+                make_bwd_post(cur_groups, cur)
             )
 
             # TE safety: some linear backward paths run before layer-level backward_pre
@@ -1105,7 +1596,7 @@ class MegatronDynamicLoader:
                         weight = self._materialize_group(
                             group, sync=self._hook_materialize_sync
                         )
-                        self._set_param(group, weight)
+                        self._set_param(group, weight, wait_metric="backward_current_wait_gpu_ms")
                 return _hook
 
             linear_bwd_pre = make_linear_bwd_pre(cur_groups)

@@ -23,6 +23,31 @@ import torch
 import torch.nn as nn
 
 
+def _parse_weight_allowed_targets_env() -> Optional[Set[str]]:
+    raw = os.environ.get("MEMRIFT_WEIGHT_ALLOWED_TARGETS", "").strip()
+    if not raw:
+        return None
+    alias_map = {
+        "linear_qkv": "self_attention.linear_qkv",
+        "self_attention.linear_qkv": "self_attention.linear_qkv",
+        "linear_proj": "self_attention.linear_proj",
+        "self_attention.linear_proj": "self_attention.linear_proj",
+        "linear_fc1": "mlp.linear_fc1",
+        "mlp.linear_fc1": "mlp.linear_fc1",
+        "linear_fc2": "mlp.linear_fc2",
+        "mlp.linear_fc2": "mlp.linear_fc2",
+    }
+    parsed: Set[str] = set()
+    for item in raw.split(","):
+        key = item.strip()
+        if not key:
+            continue
+        mapped = alias_map.get(key)
+        if mapped is not None:
+            parsed.add(mapped)
+    return parsed or None
+
+
 def _check_cuda_extension():
     """Check if CUDA extension is available and raise clear error if not."""
     try:
@@ -96,16 +121,19 @@ def inject_memrift_if_configured(
     if not memrift_enable:
         return
     
-    # Get configuration
+    # Get configuration - optimized for GPU-only path
     weight_enable = getattr(args, "memrift_weight_enable", False)
     activation_enable = getattr(args, "memrift_activation_enable", False)
     compressed_weight_dir = getattr(args, "memrift_compressed_weight_dir", None)
-    zstd_level = getattr(args, "memrift_zstd_level", 6)
-    prefetch_layers = getattr(args, "memrift_prefetch_layers", 4)
-    weight_async = getattr(args, "memrift_weight_async", False)
+    zstd_level = getattr(args, "memrift_zstd_level", 3)
+    # 优化：提高预取层数，更好地重叠计算和解压
+    prefetch_layers = getattr(args, "memrift_prefetch_layers", 12)
+    weight_async = getattr(args, "memrift_weight_async", True)
     act_async = getattr(args, "memrift_act_async", True)
-    decode_workers = getattr(args, "memrift_decode_pool_workers", 16)
-    compress_workers = getattr(args, "memrift_compress_pool_workers", 8)
+    # 优化：提高线程池大小，充分利用多核CPU
+    # 根据 Nsight 分析结果，进一步增加线程数以提高并发度
+    decode_workers = getattr(args, "memrift_decode_pool_workers", 32)
+    compress_workers = getattr(args, "memrift_compress_pool_workers", 32)
     print_debug = getattr(args, "memrift_print_debug", False)
     
     # Check dependencies first
@@ -134,12 +162,31 @@ def inject_memrift_if_configured(
     tp_rank = 0
     tp_size = 1
     try:
-        from megatron.core import mpu
-        tp_rank = mpu.get_tensor_model_parallel_rank()
-        tp_size = mpu.get_tensor_model_parallel_world_size()
-    except:
-        pass
-    
+        # 修复：更安全地尝试导入和使用 megatron.core
+        # 首先检查是否有 flagscale 自己的 mpu 实现
+        try:
+            from flagscale import mpu
+            tp_rank = mpu.get_tensor_model_parallel_rank()
+            tp_size = mpu.get_tensor_model_parallel_world_size()
+        except ImportError:
+            # 如果 flagscale 没有 mpu，再尝试 megatron.core
+            try:
+                from megatron.core import mpu
+                tp_rank = mpu.get_tensor_model_parallel_rank()
+                tp_size = mpu.get_tensor_model_parallel_world_size()
+            except ImportError:
+                # 如果都没有，使用默认值（TP=1）
+                if print_debug and rank == 0:
+                    print("[MemRift] No mpu module found, assuming TP=1")
+                tp_rank = getattr(args, "rank", 0)
+                tp_size = 1
+    except Exception as e:
+        # 捕获任何其他异常，确保即使出错也能继续
+        if print_debug and rank == 0:
+            print(f"[MemRift] Warning: Failed to get TP info: {e}, assuming TP=1")
+        tp_rank = getattr(args, "rank", 0)
+        tp_size = 1
+
     if tp_size != 1:
         raise ValueError(
             f"MemRift v1 only supports TP=1, but tensor_model_parallel_size={tp_size}.\n"
@@ -168,10 +215,13 @@ def inject_memrift_if_configured(
     if weight_async or act_async:
         try:
             from flagscale.compress.memrift.async_compressor import AsyncCompressor
+            # 优化：提高并发度，充分利用 GPU 和 CPU 资源
+            # 对于现代 GPU，提高并发限制可以更好地重叠计算和通信
+            concurrency_limit = getattr(args, "memrift_concurrency_limit", 16)
             async_compressor = AsyncCompressor(
                 compress_workers=compress_workers,
                 decode_workers=decode_workers,
-                concurrency_limit=4,
+                concurrency_limit=concurrency_limit,
                 zstd_level=zstd_level,
                 enable_async=True,
             )
@@ -272,6 +322,15 @@ def _inject_weight_compression(
         allowed_targets = {mg for k, mg in mapping.items() if k in lora_targets}
         if print_debug and rank == 0:
             print(f"[MemRift] LoRA target filter enabled: {sorted(allowed_targets)}")
+
+    env_allowed_targets = _parse_weight_allowed_targets_env()
+    if env_allowed_targets is not None:
+        if allowed_targets is None:
+            allowed_targets = set(env_allowed_targets)
+        else:
+            allowed_targets = allowed_targets & env_allowed_targets
+        if rank == 0:
+            print(f"[MemRift] Env weight target filter enabled: {sorted(allowed_targets)}")
 
     for chunk_idx, chunk in enumerate(model_chunks):
         if print_debug and rank == 0:
@@ -401,6 +460,7 @@ def _inject_activation_compression(
                 print("[MemRift] Activation: no decoder.layers found in chunk, skipping")
             continue
         empty_cache_interval = int(os.environ.get("MEMRIFT_ACT_EMPTY_INTERVAL", "10"))
+        enable_empty_cache = empty_cache_interval > 0
         for i in range(len(decoder_layers)):
             layer = decoder_layers[i]
             if isinstance(layer, DecoderLayerWrapper):
@@ -411,7 +471,8 @@ def _inject_activation_compression(
                 use_async=act_async,
                 release_after_unpack=True,
                 skip_storage_ptrs=skip_storage_ptrs if skip_storage_ptrs else None,
-                do_empty=(i % empty_cache_interval == 1),
+                do_empty=(enable_empty_cache and i % empty_cache_interval == 1),
+                layer_name=f"decoder.layers.{i}",
             )
             decoder_layers[i] = wrapper
             wrapped_count += 1

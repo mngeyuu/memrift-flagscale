@@ -254,12 +254,13 @@ class SshLauncher(LauncherBase):
             logging_config = self.config.system.logging
         # todo: unify logging configs of all tasks
         if self.task_type == "train":
+            run_foreground = getattr(self.config.train.system, "run_foreground", False)
             host_run_script_file = self.backend.generate_run_script(
                 self.config,
                 host,
                 node_rank,
                 cmd,
-                background=True,
+                background=not run_foreground,
                 with_test=with_test,
                 root_dir=node_specific_config.get("build_dir", None),
                 enable_monitoring=enable_monitoring,

@@ -1,0 +1,30 @@
+# MemRift GPU-Only 优化配置：TinyLlama 1.1B, seq=4096, bs=1
+# - 权重压缩 + 激活压缩，完全走 GPU 路径
+# - 异步压缩/解压优化
+# - 目标：训练时长接近纯 LoRA
+
+defaults:
+  - train/tinyllama_1b_seq4096_bs1_memrift_gpu_only_optimized
+
+experiment:
+  exp_name: tinyllama_seq4096_bs1_memrift_gpu_only_optimized
+  exp_dir: ./outputs/${experiment.exp_name}
+  envs:
+    TORCH_DEVICE_BACKEND_AUTOLOAD: "0"
+    # 确保完全 GPU-only 路径
+    MEMRIFT_DEEP_ASYNC: "1"        # 深度异步，减少 CPU 同步
+    MEMRIFT_WEIGHT_RELAX_SYNC: "1" # 松弛权重同步
+  task:
+    type: train
+    backend: megatron
+    entrypoint: flagscale/train/train_gpt.py
+  runner:
+    type: torchrun
+    nnodes: 1
+    nproc_per_node: 1
+
+action: run
+
+hydra:
+  run:
+    dir: ${experiment.exp_dir}/hydra

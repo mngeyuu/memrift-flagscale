@@ -12,13 +12,14 @@ from importlib import import_module
 import os
 import sys
 
-# Try multiple import methods
-_ext = None
+# Try multiple import methods.  Do not name the handle `_ext`: that shadows the
+# `_ext` submodule in this package, so `from . import _ext` resolves to None.
+_cuda_ext = None
 _AVAILABLE = False
 
 # Method 1: Try direct import (when package is installed)
 try:
-    _ext = import_module("float_split_stride_pin._ext")
+    _cuda_ext = import_module("float_split_stride_pin._ext")
     _AVAILABLE = True
 except ImportError:
     pass
@@ -27,7 +28,7 @@ except ImportError:
 if not _AVAILABLE:
     try:
         from . import _ext as _ext_module
-        _ext = _ext_module
+        _cuda_ext = _ext_module
         _AVAILABLE = True
     except ImportError:
         pass
@@ -39,7 +40,7 @@ if not _AVAILABLE:
         if pkg_dir not in sys.path:
             sys.path.insert(0, pkg_dir)
         import _ext as _ext_module
-        _ext = _ext_module
+        _cuda_ext = _ext_module
         _AVAILABLE = True
     except ImportError:
         pass
@@ -47,7 +48,7 @@ if not _AVAILABLE:
 
 def is_available():
     """Check if the CUDA extension is available."""
-    return _AVAILABLE
+    return _AVAILABLE and _cuda_ext is not None
 
 
 def split(t, stream_ptr):
@@ -65,7 +66,7 @@ def split(t, stream_ptr):
     """
     if not _AVAILABLE:
         raise RuntimeError("float_split_stride_pin CUDA extension not available")
-    return _ext.split(t, stream_ptr)
+    return _cuda_ext.split(t, stream_ptr)
 
 
 def merge(exp, sm, size, stride, offset, dtype, stream_ptr):
@@ -86,7 +87,7 @@ def merge(exp, sm, size, stride, offset, dtype, stream_ptr):
     """
     if not _AVAILABLE:
         raise RuntimeError("float_split_stride_pin CUDA extension not available")
-    return _ext.merge(exp, sm, size, stride, offset, dtype, stream_ptr)
+    return _cuda_ext.merge(exp, sm, size, stride, offset, dtype, stream_ptr)
 
 
 def acquire_pin(numel, dtype):
@@ -102,7 +103,7 @@ def acquire_pin(numel, dtype):
     """
     if not _AVAILABLE:
         raise RuntimeError("float_split_stride_pin CUDA extension not available")
-    return _ext.acquire_pin(numel, dtype)
+    return _cuda_ext.acquire_pin(numel, dtype)
 
 
 def release_pin(t):
@@ -114,7 +115,7 @@ def release_pin(t):
     """
     if not _AVAILABLE:
         raise RuntimeError("float_split_stride_pin CUDA extension not available")
-    return _ext.release_pin(t)
+    return _cuda_ext.release_pin(t)
 
 
 def release_cuda(t):
@@ -126,4 +127,4 @@ def release_cuda(t):
     """
     if not _AVAILABLE:
         raise RuntimeError("float_split_stride_pin CUDA extension not available")
-    return _ext.release_cuda(t)
+    return _cuda_ext.release_cuda(t)
