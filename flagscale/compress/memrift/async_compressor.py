@@ -123,6 +123,15 @@ def memrift_allow_cpu_weight_zstd() -> bool:
     return os.environ.get("MEMRIFT_ALLOW_CPU_WEIGHT_ZSTD", "0") == "1"
 
 
+def memrift_act_store_compressed_on_cpu() -> bool:
+    """After GPU ANS encode, copy compressed activation to pinned CPU and free GPU blob (default on).
+
+    Set ``MEMRIFT_ACT_STORE_CPU=0`` to keep compressed tensors on GPU (old behavior, higher VRAM).
+    """
+    import os
+    return os.environ.get("MEMRIFT_ACT_STORE_CPU", "1") == "1"
+
+
 def memrift_require_nvcomp_weight_payload(exp_mv: Any) -> None:
     """When nvCOMP is installed, reject raw zstd exponent blobs unless opt-in."""
     if not NVCOMP_AVAILABLE or memrift_allow_cpu_weight_zstd():
@@ -342,10 +351,14 @@ class AsyncCompressor:
         except ImportError:
             self._fs_sp = None
 
-        # Background decode thread (started lazily on first use).
-        # Uses dedicated CUDA streams / nvcomp codec so no stream races with main thread.
+        # Background decode threads (started lazily on first use).
+        # Uses dedicated CUDA streams / nvcomp codec per thread so no stream races.
+        # Controlled by MEMRIFT_BG_DECODE_THREADS (default=1).
+        self._bg_num_threads: int = max(1, int(
+            __import__('os').environ.get("MEMRIFT_BG_DECODE_THREADS", "1")
+        ))
         self._bg_queue: Optional[Any] = None
-        self._bg_thread: Optional[threading.Thread] = None
+        self._bg_threads: list = []
 
         # Registry for DecoderLayerWrapper instances (look-ahead decode submit in bwd_pre_hook).
         self._layer_wrappers: list = []
@@ -394,18 +407,24 @@ class AsyncCompressor:
                 pass
         # Reset bg thread fields (will be re-created lazily if needed)
         self._bg_queue = None
-        self._bg_thread = None
+        self._bg_threads = []
 
     def reset(self):
         """Reset pools and streams (call between training rounds)."""
         if self.enable_async:
             self.compress_pool.shutdown(wait=True)
             self.decode_pool.shutdown(wait=True)
-            self.zstd_pool.shutdown(wait=True)
+            if getattr(self, "zstd_pool", None) is not None:
+                self.zstd_pool.shutdown(wait=True)
             del self.compress_pool
             del self.decode_pool
             del self.zstd_pool
-        
+        # Gracefully stop existing bg decode threads before rebuilding.
+        if self._bg_queue is not None:
+            for _ in self._bg_threads:
+                self._bg_queue.put(None)
+        for t in self._bg_threads:
+            t.join(timeout=5.0)
         self._build()
         torch.cuda.reset_peak_memory_stats()
     
@@ -414,28 +433,49 @@ class AsyncCompressor:
         if self.enable_async:
             self.compress_pool.shutdown(wait=True)
             self.decode_pool.shutdown(wait=True)
-        # Stop background decode thread
+            if getattr(self, "zstd_pool", None) is not None:
+                self.zstd_pool.shutdown(wait=True)
+        # Stop background decode threads (one sentinel per thread)
         if self._bg_queue is not None:
-            self._bg_queue.put(None)
-        if self._bg_thread is not None:
-            self._bg_thread.join(timeout=5.0)
+            for _ in self._bg_threads:
+                self._bg_queue.put(None)
+        for t in self._bg_threads:
+            t.join(timeout=5.0)
+        self._bg_threads = []
 
     # -------------------------------------------------------------------------
     #  Background decode thread (non-blocking prefetch)
     # -------------------------------------------------------------------------
 
-    def _ensure_bg_thread(self):
-        """Lazily start the background decode thread on first use."""
-        if self._bg_thread is not None and self._bg_thread.is_alive():
+    def _ensure_bg_threads(self):
+        """Lazily start N background decode threads on first use.
+
+        All threads share one SimpleQueue.  SimpleQueue.get() is thread-safe for
+        multiple concurrent consumers so work is distributed automatically.
+        Each thread owns its private CUDA streams and nvcomp codec to avoid races.
+
+        NOTE on N > 1: GPU ANS decode is bottlenecked by HBM bandwidth.  Concurrent
+        decode streams from multiple threads DO NOT achieve proportional speedup —
+        empirically 4 threads yield only 0.22–0.49× the throughput of a single
+        thread because the GPU serialises the decode kernels.  Keep
+        MEMRIFT_BG_DECODE_THREADS=1 unless experimenting with non-ANS codecs or
+        future GPU hardware with improved concurrency.  The per-layer queue-split
+        path (enabled when N > 1) is still correct and useful if that changes.
+        """
+        # Fast-path: all threads already running.
+        if self._bg_threads and all(t.is_alive() for t in self._bg_threads):
             return
         import queue as _queue
         self._bg_queue = _queue.SimpleQueue()
-        self._bg_thread = threading.Thread(
-            target=self._bg_decode_worker,
-            daemon=True,
-            name="memrift-prefetch",
-        )
-        self._bg_thread.start()
+        self._bg_threads = []
+        for i in range(self._bg_num_threads):
+            t = threading.Thread(
+                target=self._bg_decode_worker,
+                daemon=True,
+                name=f"memrift-prefetch-{i}",
+            )
+            t.start()
+            self._bg_threads.append(t)
 
     def _bg_decode_worker(self):
         """Background thread: process decode requests sequentially.
@@ -632,18 +672,20 @@ class AsyncCompressor:
                 pf_dict[cp].set_result(bf16)
 
     def prefetch_batch_async(self, cp_list) -> dict:
-        """Non-blocking prefetch: submit to background thread, return immediately.
+        """Non-blocking prefetch: submit to background threads, return immediately.
 
-        Returns a dict mapping each ``cp`` → ``PrefetchFuture``.  The futures
-        share a single ``merge_evt``; consuming any future inserts a GPU-side
-        ``training_stream.wait_event(merge_evt)`` and returns the bf16 tensor.
+        When multiple bg threads are configured (MEMRIFT_BG_DECODE_THREADS > 1),
+        components are grouped by layer_idx and each layer is submitted as a
+        *separate* queue item so that N threads can decode N layers concurrently.
+        With a single thread the old "one item for all cps" path is kept to avoid
+        any per-layer overhead.
 
-        Zstd-compressed components fall back to ``materialize_on_stream()``
-        (inline, same as ``prefetch_batch_on_stream``).
+        Returns a dict mapping each ``cp`` → ``PrefetchFuture``.
+        Zstd-compressed components fall back to ``materialize_on_stream()``.
         """
         import time as _time
         _t0 = _time.perf_counter()
-        self._ensure_bg_thread()
+        self._ensure_bg_threads()
 
         nvcomp_cps = []
         result = {}
@@ -665,20 +707,39 @@ class AsyncCompressor:
         if not nvcomp_cps:
             return result
 
-        # Pre-create a single shared CUDA event for this batch's merge completion.
-        merge_evt = torch.cuda.Event()
+        if self._bg_num_threads > 1:
+            # ── Multi-thread path: one queue item per layer for max parallelism ──
+            # Group cps by layer_idx so each group is decoded by a separate thread.
+            from collections import defaultdict as _defaultdict
+            by_layer: dict = _defaultdict(list)
+            for cp in nvcomp_cps:
+                by_layer[getattr(cp, "layer_idx", -1)].append(cp)
 
-        # Create PrefetchFutures (one per cp, all share the same merge_evt).
-        pf_dict = {
-            cp: PrefetchFuture(
-                merge_evt,
-                prof_name=(f"decoder.layers.{cp.layer_idx}" if getattr(cp, "layer_idx", -1) >= 0 else "__unknown_weight_layer__"),
-            )
-            for cp in nvcomp_cps
-        }
+            pf_dict: dict = {}
+            for layer_idx, layer_cps in sorted(by_layer.items()):
+                layer_merge_evt = torch.cuda.Event()
+                layer_prof = (f"decoder.layers.{layer_idx}"
+                              if layer_idx >= 0 else "__unknown_weight_layer__")
+                layer_pf = {
+                    cp: PrefetchFuture(layer_merge_evt, prof_name=layer_prof)
+                    for cp in layer_cps
+                }
+                self._bg_queue.put((layer_cps, layer_pf, layer_merge_evt))
+                pf_dict.update(layer_pf)
+        else:
+            # ── Single-thread path: one item for the whole batch (original logic) ──
+            merge_evt = torch.cuda.Event()
+            pf_dict = {
+                cp: PrefetchFuture(
+                    merge_evt,
+                    prof_name=(f"decoder.layers.{cp.layer_idx}"
+                               if getattr(cp, "layer_idx", -1) >= 0
+                               else "__unknown_weight_layer__"),
+                )
+                for cp in nvcomp_cps
+            }
+            self._bg_queue.put((nvcomp_cps, pf_dict, merge_evt))
 
-        # Enqueue to background thread (non-blocking).
-        self._bg_queue.put((nvcomp_cps, pf_dict, merge_evt))
         _lt_add("__weight_prefetch_async_bg__", "enqueue_total_ms", 1000.0 * (_time.perf_counter() - _t0))
 
         result.update(pf_dict)
@@ -732,24 +793,16 @@ class AsyncCompressor:
         
         tok.decomped_data = rst
     
-    # -------------------------------------------------------------------------
-    #  Asynchronous compression/decompression
-    # -------------------------------------------------------------------------
+    # 异步编解码
 
-    # -------------------------------------------------------------------------
-    #  GPU activation compression/decompression (nvCOMP ANS)
-    # -------------------------------------------------------------------------
+    # 设计说明：ANS 激活压缩默认在 GPU 上 encode，再将压缩体 **异步 D2H 到 pinned CPU** 释放显存；
+    # 反向按需 **H2D + GPU decode**（见 ``nvcomp_ans_cpu_pinned``）。``MEMRIFT_ACT_STORE_CPU=0`` 时
+    # 压缩体留在 GPU（``nvcomp_ans_gpu_only``），省 PCIe 但占 VRAM。
 
     def _kickoff_async_gpu(self, tok: PlaceHolderToken, t: torch.Tensor) -> fut.Future:
-        """GPU-only activation compression (NO D2H/H2D), background thread encodes on GPU.
+        """GPU ANS encode + optional D2H of compressed blob (default: store on CPU).
 
-        Flow (non-blocking for training stream, ALL GPU):
-          1. Main thread: record training_evt; protect t via record_stream
-          2. Background thread: GPU ordering via stream.wait_event
-          3. GPU nvCOMP ANS encode (kept on GPU)
-          4. Returns Future((gpu_compressed_tensor, numel_bytes_original))
-
-        Fully GPU-only: compressed data stays on GPU, no D2H/H2D overhead.
+        Main thread 只提交 Future；encode/D2H 在 compress_pool 线程中完成，不阻塞训练流。
         """
         tok.dtype = t.dtype
         tok.shape = t.shape
@@ -757,7 +810,9 @@ class AsyncCompressor:
         tok.numel = t.numel()
         tok.offset = 0
         tok.sm_bits = None   # not used in GPU-ANS path
-        tok.comp_format = 'nvcomp_ans_gpu_only'  # GPU-only marker
+        store_cpu = memrift_act_store_compressed_on_cpu()
+        tok.comp_format = "nvcomp_ans_cpu_pinned" if store_cpu else "nvcomp_ans_gpu_only"
+        tok._memrift_act_cuda_device_index = int(t.device.index) if t.is_cuda else 0
 
         numel_bytes = t.numel() * t.element_size()
 
@@ -774,7 +829,8 @@ class AsyncCompressor:
         # 可以更早释放原始张量的引用
         is_contiguous = t.is_contiguous()
 
-        def _encode_worker(t_ref, training_evt, numel_bytes, is_contiguous):
+        def _encode_worker(t_ref, training_evt, numel_bytes, is_contiguous, device_index, store_cpu):
+            torch.cuda.set_device(device_index)
             # Lazily create a CUDA stream + codec for this encode worker thread.
             if not hasattr(_act_enc_tls, 'stream'):
                 _act_enc_tls.stream = torch.cuda.Stream()
@@ -809,33 +865,52 @@ class AsyncCompressor:
             comp_output = tl_codec.encode(comp_arr)
             _t2 = _time.perf_counter()
             n = int(comp_output.buffer_size)
-            # Keep compressed data on GPU - NO D2H!
             with torch.cuda.stream(tl_stream):
                 comp_tensor = torch.from_dlpack(comp_output).view(torch.uint8)
                 # Clone to keep only the valid portion and break DLPack dependency
                 comp_tensor_gpu = comp_tensor[:n].clone()
                 comp_tensor_gpu.record_stream(tl_stream)
 
-            # 优化：避免不必要的同步，让 GPU 操作继续执行
-            # tl_stream.synchronize()  # 移除不必要的同步
-
             _t3 = _time.perf_counter()
             _ap_add("gpu_act_enc_setup_cpu_ms", 1000.0 * (_t1 - _t0))
             _ap_add("gpu_act_enc_encode_cpu_ms", 1000.0 * (_t2 - _t1))
             _ap_add("gpu_act_enc_gpu_only_ms", 1000.0 * (_t3 - _t2))
             if _dbg_act:
-                print(f"[ACT_ENC_GPU] mb={numel_bytes//1024}KB setup={1000*(_t1-_t0):.1f}ms encode={1000*(_t2-_t1):.1f}ms gpu_clone={1000*(_t3-_t2):.1f}ms total={1000*(_t3-_t0):.1f}ms", flush=True)
+                print(
+                    f"[ACT_ENC_GPU] mb={numel_bytes//1024}KB setup={1000*(_t1-_t0):.1f}ms "
+                    f"encode={1000*(_t2-_t1):.1f}ms gpu_clone={1000*(_t3-_t2):.1f}ms "
+                    f"store_cpu={store_cpu}",
+                    flush=True,
+                )
 
-            # Release intermediate tensors ASAP
             if t_cont is not None:
                 del t_cont
             del act_int8, comp_arr, comp_output, comp_tensor
 
-            # Return GPU tensor instead of CPU bytes
-            return comp_tensor_gpu, numel_bytes
+            if store_cpu:
+                # 按需：GPU 压缩完成后 D2H 到 pinned CPU，释放压缩体占用的显存
+                cpu_pin = torch.empty(n, dtype=torch.uint8, pin_memory=True)
+                _td2h0 = _time.perf_counter()
+                with torch.cuda.stream(tl_stream):
+                    cpu_pin.copy_(comp_tensor_gpu, non_blocking=True)
+                d2h_evt = tl_stream.record_event()
+                d2h_evt.synchronize()
+                _td2h1 = _time.perf_counter()
+                _ap_add("gpu_act_enc_d2h_compressed_ms", 1000.0 * (_td2h1 - _td2h0))
+                del comp_tensor_gpu
+                if _dbg_act:
+                    print(
+                        f"[ACT_ENC_D2H] n={n}B wall={1000*(_td2h1-_td2h0):.2f}ms",
+                        flush=True,
+                    )
+                return (cpu_pin, numel_bytes)
 
-        # 传递 is_contiguous 标志，这样后台线程不需要访问 t_ref 来获取
-        return self.compress_pool.submit(_encode_worker, t, training_evt, numel_bytes, is_contiguous)
+            return (comp_tensor_gpu, numel_bytes)
+
+        device_index = int(tok._memrift_act_cuda_device_index)
+        return self.compress_pool.submit(
+            _encode_worker, t, training_evt, numel_bytes, is_contiguous, device_index, store_cpu
+        )
 
     def _decompress_async_gpu(self, tok: PlaceHolderToken, future: fut.Future) -> None:
         """GPU-only ANS activation decompression (NO H2D), fully on GPU.
@@ -943,6 +1018,106 @@ class AsyncCompressor:
 
         self.decode_pool.submit(_decode, tok, future)
 
+    def _decompress_async_from_cpu_pinned(self, tok: PlaceHolderToken, future: fut.Future) -> None:
+        """Backward: H2D pinned CPU compressed blob, then GPU ANS decode (decode_pool thread, ordered on tl_stream)."""
+        _act_dec_tls = self._act_dec_tls
+        import os as _os2, time as _time2
+        _dbg_act2 = _os2.environ.get("MEMRIFT_ACT_DBG", "0") == "1"
+
+        def _decode(tok, future):
+            tok.ready_evt.clear()
+            try:
+                if not hasattr(_act_dec_tls, 'stream'):
+                    _act_dec_tls.stream = torch.cuda.Stream()
+                    _act_dec_tls.codec = _nvcomp_lib.Codec(
+                        algorithm='ans', cuda_stream=_act_dec_tls.stream.cuda_stream)
+                tl_stream = _act_dec_tls.stream
+                tl_codec = _act_dec_tls.codec
+
+                di = int(getattr(tok, "_memrift_act_cuda_device_index", 0))
+                torch.cuda.set_device(di)
+
+                _td0 = _time2.perf_counter()
+                cpu_pin, numel_bytes = future.result()
+                _td1 = _time2.perf_counter()
+
+                n = int(cpu_pin.numel())
+                gpu_comp = torch.empty(n, dtype=torch.uint8, device=f"cuda:{di}")
+                with torch.cuda.stream(tl_stream):
+                    gpu_comp.copy_(cpu_pin, non_blocking=True)
+                _td2 = _time2.perf_counter()
+
+                gpu_comp.record_stream(tl_stream)
+                comp_arr = _nvcomp_lib.as_array(gpu_comp.view(torch.int8))
+                _td3 = _time2.perf_counter()
+                with _memrift_nvtx_range("memrift_act_decode_tl_stream"):
+                    decomp_out = tl_codec.decode(comp_arr)
+                _td4 = _time2.perf_counter()
+                with _memrift_nvtx_range("memrift_act_dlpack_clone_tl_stream"):
+                    with torch.cuda.stream(tl_stream):
+                        decomp_raw = torch.from_dlpack(decomp_out).view(torch.uint8)
+                        decomp_raw.record_stream(tl_stream)
+                        result = decomp_raw[:numel_bytes].view(tok.dtype).reshape(tok.shape)
+                        result = result.clone()
+                        copy_evt = tl_stream.record_event()
+                _td5 = _time2.perf_counter()
+
+                _ap_add("gpu_act_dec_wait_future_cpu_ms", 1000.0 * (_td1 - _td0))
+                _ap_add("gpu_act_dec_h2d_compressed_ms", 1000.0 * (_td2 - _td1))
+                _ap_add("gpu_act_dec_decode_cpu_ms", 1000.0 * (_td4 - _td3))
+                _ap_add("gpu_act_dec_clone_sync_cpu_ms", 1000.0 * (_td5 - _td4))
+                if _layer_time_profiler is not None and _layer_time_profiler.is_enabled():
+                    try:
+                        layer_name = getattr(tok, "layer_name", "unknown")
+                        _layer_time_profiler.add_time(
+                            layer_name,
+                            "activation_decode_thread_ms",
+                            1000.0 * (_td5 - _td0),
+                        )
+                        _layer_time_profiler.add_time(
+                            layer_name,
+                            "activation_decode_only_ms",
+                            1000.0 * (_td4 - _td3),
+                        )
+                    except Exception:
+                        pass
+                hook_ev = getattr(tok, "_prof_hook_evt", None)
+                if hook_ev is not None:
+                    _ap_gpu_elapsed(hook_ev, copy_evt, "gpu_ms_hook_to_act_decode_done")
+                    if _layer_time_profiler is not None and _layer_time_profiler.is_enabled():
+                        try:
+                            _layer_time_profiler.add_time(
+                                getattr(tok, "layer_name", "unknown"),
+                                "activation_decode_gpu_ms",
+                                float(hook_ev.elapsed_time(copy_evt)),
+                            )
+                        except Exception:
+                            pass
+                    try:
+                        delattr(tok, "_prof_hook_evt")
+                    except Exception:
+                        tok._prof_hook_evt = None  # type: ignore[attr-defined]
+
+                if _dbg_act2:
+                    print(
+                        f"[ACT_DEC_CPU_PIN] wait_fut={1000*(_td1-_td0):.1f}ms h2d={1000*(_td2-_td1):.1f}ms "
+                        f"decode={1000*(_td4-_td3):.1f}ms clone={1000*(_td5-_td4):.1f}ms",
+                        flush=True,
+                    )
+
+                tok.decomped_data = result
+                tok.CtoD_copy_evt = copy_evt
+                del gpu_comp, comp_arr, decomp_out, decomp_raw
+            except Exception:
+                import traceback
+                traceback.print_exc()
+                tok.decomped_data = None
+                tok.CtoD_copy_evt = None
+            finally:
+                tok.ready_evt.set()
+
+        self.decode_pool.submit(_decode, tok, future)
+
     # -------------------------------------------------------------------------
     #  Asynchronous compression/decompression
     # -------------------------------------------------------------------------
@@ -951,7 +1126,8 @@ class AsyncCompressor:
         """
         Start async activation compression for saved-tensors hooks.
 
-        Uses GPU nvCOMP ANS encode (``nvcomp_ans_full``); matching decode in ``decompress_async``.
+        GPU nvCOMP ANS encode; by default compressed bytes are copied to pinned CPU (``nvcomp_ans_cpu_pinned``).
+        Matching decode in ``decompress_async``. Set ``MEMRIFT_ACT_STORE_CPU=0`` to keep blobs on GPU.
 
         Raises:
             RuntimeError: if the float_split extension or nvCOMP ANS activation codecs are unavailable.
@@ -972,8 +1148,9 @@ class AsyncCompressor:
         Start async activation restore (GPU-only path preferred).
 
         Routes by ``tok.comp_format``:
-        - ``nvcomp_ans_gpu_only``: GPU-only nvCOMP ANS decode (NO H2D/D2H)
-        - ``nvcomp_ans_full``: GPU nvCOMP ANS decode (async activation path)
+        - ``nvcomp_ans_cpu_pinned`` (default): H2D compressed blob then GPU ANS decode
+        - ``nvcomp_ans_gpu_only``: compressed tensor already on GPU → ANS decode only
+        - ``nvcomp_ans_full``: same as GPU-only decode path
         - Legacy zstd + float_split if activations used ``kickoff_sync`` (CPU decompress).
 
         The token's ready_evt will be set when the tensor is ready on GPU.
@@ -981,8 +1158,12 @@ class AsyncCompressor:
         if self._fs_sp is None:
             raise RuntimeError("CUDA extension not available for async decompression")
 
-        # GPU-only path (preferred, no H2D/D2H)
         comp_format = getattr(tok, 'comp_format', 'zstd')
+        if comp_format == 'nvcomp_ans_cpu_pinned' and self._nvcomp_act_dec_codec is not None:
+            self._decompress_async_from_cpu_pinned(tok, future)
+            return
+
+        # GPU-resident compressed blob
         if (comp_format == 'nvcomp_ans_gpu_only' or comp_format == 'nvcomp_ans_full') \
                 and self._nvcomp_act_dec_codec is not None:
             self._decompress_async_gpu(tok, future)
@@ -1135,6 +1316,7 @@ class AsyncCompressor:
                     #    (~0.12ms) and the GPU ops are still serialized by h2d_stream.
                     task_codec = _nvcomp_lib.Codec(algorithm='lz4', cuda_stream=h2d_stream.cuda_stream)
                     comp_arr = _nvcomp_lib.as_array(comp_gpu.view(torch.int8))
+                    # nvcomp返回自有缓冲对象
                     decomp = task_codec.decode(comp_arr)
 
                     # 4. Convert decoded output to a proper PyTorch-owned tensor.
@@ -1275,7 +1457,28 @@ class AsyncCompressor:
                 if not _success and keepalive is not None:
                     del keepalive
 
-        return self.decode_pool.submit(_materialize)
+        submit_pool = self.decode_pool
+        if self.enable_async and self._materialize_path_is_cpu_zstd(
+            exp_mv, nvcomp_codec, nvcomp_ans
+        ):
+            submit_pool = self.zstd_pool
+        return submit_pool.submit(_materialize)
+
+    @staticmethod
+    def _materialize_path_is_cpu_zstd(
+        exp_mv: Any,
+        nvcomp_codec: Any,
+        nvcomp_ans: Any,
+    ) -> bool:
+        """True if ``materialize_async`` will take the CPU zstd branch (not nvCOMP GPU)."""
+        if not isinstance(exp_mv, (bytes, bytearray, memoryview)) or len(exp_mv) < 4:
+            return True
+        m = bytes(exp_mv[:4])
+        if nvcomp_codec is not None and m == NVCOMP_LZ4_MAGIC:
+            return False
+        if nvcomp_ans is not None and m == NVCOMP_ANS_MAGIC:
+            return False
+        return True
 
     def prefetch_batch_on_stream(self, cp_list) -> dict:
         """
@@ -1433,9 +1636,11 @@ class AsyncCompressor:
 
         _td = _time.perf_counter()
 
-        # ── Step 4: from_dlpack + clone + merge ──────────────────────────────
+        # ── Step 4: from_dlpack + merge ───────────────────────────────────────
+        # 长期：用「按 Shape 预分配 CUDA uint8 缓冲 + nvCOMP C API 直写 data_ptr」
+        # 替换 DLPack，见文件头部设计说明。
         # from_dlpack() syncs decode_stream (current decode only: ~0.87ms ANS).
-        # clone+merge are submitted to merge_stream without CPU blocking.
+        # merge are submitted to merge_stream without extra CPU blocking beyond dlpack.
         # ANS decode produces output with exactly numel(orig_shape) elements,
         # contiguous – no intermediate clone needed; pass decomp_raw directly to merge.
         bf16_list = []
@@ -1696,7 +1901,8 @@ class StreamFuture:
         """Insert GPU-side wait and return (bf16, event, keepalive)."""
         import time as _time
         _t0 = _time.perf_counter()
-        torch.cuda.current_stream().wait_event(self._event)
+        with _memrift_nvtx_range("MemRift/StreamFuture.wait_event"):
+            torch.cuda.current_stream().wait_event(self._event)
         _t1 = _time.perf_counter()
         if self._prof_name:
             _lt_add(self._prof_name, "prefetch_future_consume_ms", 1000.0 * (_t1 - _t0))
@@ -1746,11 +1952,18 @@ class PrefetchFuture:
 
     def result(self):
         """Wait for bg submission (CPU), insert GPU-side wait, return (bf16, evt, ())."""
-        import time as _time
+        import time as _time, os as _os
         _t0 = _time.perf_counter()
-        self._ready.wait()  # CPU wait – typically ~0 ms when prefetch is deep enough
+        _pf_dbg = _os.environ.get("MEMRIFT_MAT_DBG19", "0") == "1" and "L19" in self._prof_name
+        if _pf_dbg:
+            print(f"[PF_DBG L19] result() enter: _ready.is_set()={self._ready.is_set()}", flush=True)
+        with _memrift_nvtx_range("MemRift/PrefetchFuture.ready_wait"):
+            self._ready.wait()  # CPU wait – >0 说明 bg decode 慢于消费，考虑加深 prefetch
         _t1 = _time.perf_counter()
-        torch.cuda.current_stream().wait_event(self._merge_evt)
+        if _pf_dbg:
+            print(f"[PF_DBG L19] _ready.wait() took {(_t1-_t0)*1000:.1f}ms", flush=True)
+        with _memrift_nvtx_range("MemRift/PrefetchFuture.wait_merge_evt"):
+            torch.cuda.current_stream().wait_event(self._merge_evt)
         _t2 = _time.perf_counter()
         if self._prof_name:
             _lt_add(self._prof_name, "prefetch_future_consume_ms", 1000.0 * (_t2 - _t0))

@@ -12,6 +12,9 @@ experiment:
     MEMRIFT_DEEP_ASYNC: "1"
     MEMRIFT_WEIGHT_RELAX_SYNC: "1"
     MEMRIFT_ALLOW_CPU_WEIGHT_ZSTD: "1"
+    MEMRIFT_ITER_LOG: "1"
+    MEMRIFT_ITER_LOG_ITERS: "5"
+    MEMRIFT_MAT_DBG19: "1"
   task:
     type: train
     backend: megatron

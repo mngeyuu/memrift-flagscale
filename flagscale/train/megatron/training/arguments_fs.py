@@ -976,10 +976,25 @@ def _add_memrift_args(parser):
         help='Enable async activation compression/decompression in MemRift.',
     )
     group.add_argument(
+        '--memrift-act-store-cpu',
+        type=int,
+        default=None,
+        choices=[0, 1],
+        help='1: after GPU ANS encode, copy compressed activation to pinned CPU (saves VRAM). '
+        '0: keep compressed tensor on GPU. If omitted, use env MEMRIFT_ACT_STORE_CPU (default 1).',
+    )
+    group.add_argument(
         '--memrift-decode-pool-workers',
         type=int,
         default=16,
         help='Number of decode thread pool workers for MemRift async operations.',
+    )
+    group.add_argument(
+        '--memrift-zstd-pool-workers',
+        type=int,
+        default=-1,
+        help='Dedicated thread pool for CPU zstd weight decompression only; '
+        '-1 means same as --memrift-decode-pool-workers (nvCOMP uses decode pool).',
     )
     group.add_argument(
         '--memrift-compress-pool-workers',

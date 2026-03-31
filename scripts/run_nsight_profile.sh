@@ -6,6 +6,8 @@
 #   ./scripts/run_nsight_profile.sh
 #   ./scripts/run_nsight_profile.sh --iters 10 --output my_profile
 #
+# Llama-3.1-8B + MemRift 仅权重 + CPU/GPU/显存：见 run_nsight_llama31_8b_memrift_weight_only.sh
+#
 # 可选环境变量:
 #   MEMRIFT_WEIGHT_DIR - 压缩权重目录，默认 ./memrift_weights/tinyllama_1b_level18
 #   NSIGHT_ITERS       - profile 训练步数，默认 1（够看时间线，省时）

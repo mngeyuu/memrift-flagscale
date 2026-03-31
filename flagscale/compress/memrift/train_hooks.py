@@ -108,7 +108,9 @@ def inject_memrift_if_configured(
         memrift_prefetch_layers: int - Number of layers to prefetch
         memrift_weight_async: bool - Enable async weight decompression
         memrift_act_async: bool - Enable async activation compression
+        memrift_act_store_cpu: int | None - If 0/1, sets MEMRIFT_ACT_STORE_CPU (GPU compress then D2H to CPU)
         memrift_decode_pool_workers: int - Decode thread pool size
+        memrift_zstd_pool_workers: int - CPU zstd-only pool (-1 = same as decode pool)
         memrift_compress_pool_workers: int - Compress thread pool size
         memrift_print_debug: bool - Print debug messages
     
@@ -120,6 +122,10 @@ def inject_memrift_if_configured(
     memrift_enable = getattr(args, "memrift_enable", False)
     if not memrift_enable:
         return
+
+    _mas = getattr(args, "memrift_act_store_cpu", None)
+    if _mas is not None:
+        os.environ["MEMRIFT_ACT_STORE_CPU"] = "1" if int(_mas) else "0"
     
     # Get configuration - optimized for GPU-only path
     weight_enable = getattr(args, "memrift_weight_enable", False)
@@ -133,6 +139,7 @@ def inject_memrift_if_configured(
     # 优化：提高线程池大小，充分利用多核CPU
     # 根据 Nsight 分析结果，进一步增加线程数以提高并发度
     decode_workers = getattr(args, "memrift_decode_pool_workers", 32)
+    zstd_pool_workers = getattr(args, "memrift_zstd_pool_workers", -1)
     compress_workers = getattr(args, "memrift_compress_pool_workers", 32)
     print_debug = getattr(args, "memrift_print_debug", False)
     
@@ -221,6 +228,7 @@ def inject_memrift_if_configured(
             async_compressor = AsyncCompressor(
                 compress_workers=compress_workers,
                 decode_workers=decode_workers,
+                zstd_workers=zstd_pool_workers,
                 concurrency_limit=concurrency_limit,
                 zstd_level=zstd_level,
                 enable_async=True,
@@ -508,4 +516,6 @@ def get_memrift_status(args: Any) -> dict:
         "memrift_prefetch_layers": getattr(args, "memrift_prefetch_layers", 4),
         "memrift_weight_async": getattr(args, "memrift_weight_async", False),
         "memrift_act_async": getattr(args, "memrift_act_async", True),
+        "memrift_act_store_cpu_effective": os.environ.get("MEMRIFT_ACT_STORE_CPU", "1"),
+        "memrift_zstd_pool_workers": getattr(args, "memrift_zstd_pool_workers", -1),
     }

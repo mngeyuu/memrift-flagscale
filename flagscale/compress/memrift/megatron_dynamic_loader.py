@@ -145,8 +145,19 @@ class CompressedParam(nn.Parameter):
         self._prefetch_future = None
     
     def materialize(self, sync: bool = True):
-        """Decompress and materialize the full tensor."""
+        """Decompress and matieralize the full tensor."""
+        import os as _os2
+        _mat_dbg = _os2.environ.get("MEMRIFT_MAT_DBG19", "0") == "1" and self.layer_idx == 19
+        if _mat_dbg:
+            _pf_state = "NONE" if self._prefetch_future is None else (
+                "DONE" if self._prefetch_future.done() else "PENDING"
+            )
+            print(f"[MAT_DBG L19] enter: _bf16={'SET' if self._bf16 is not None else 'NONE'}"
+                  f" _prefetch_future={_pf_state}", flush=True)
+
         if self._bf16 is not None:
+            if _mat_dbg:
+                print(f"[MAT_DBG L19] fast-path: _bf16 already set, returning", flush=True)
             return self._bf16
         
         # Consume async prefetch if present (demo-style: wait for async, never decompress on main thread).
@@ -283,6 +294,10 @@ class CompressedParam(nn.Parameter):
                 and isinstance(self.exp_mv, (bytes, bytearray, memoryview))
                 and len(self.exp_mv) >= 4
                 and bytes(self.exp_mv[:4]) == NVCOMP_ANS_MAGIC):
+
+            if _mat_dbg:
+                import threading as _thr
+                print(f"[MAT_DBG L19] SYNC-ANS-decode path (no prefetch future!) thread={_thr.current_thread().name}", flush=True)
 
             if self.comp_pinned is not None:
                 comp_pinned = self.comp_pinned
@@ -440,6 +455,9 @@ def _materialize_group_tensor(group: MergedWeightGroup, sync: bool = True) -> to
     if group.target_module is not None:
         _param = getattr(group.target_module, group.target_attr, None)
         if _param is not None and _param.data.numel() > 0:
+            import os as _os3
+            if _os3.environ.get("MEMRIFT_MAT_DBG19", "0") == "1" and group.layer_idx == 19:
+                print(f"[MAT_DBG L19] _materialize_group_tensor fast-path: param.data already set, numel={_param.data.numel()}", flush=True)
             return _param.data
 
     if "linear_qkv" in group.megatron_target:
@@ -1001,7 +1019,7 @@ class MegatronDynamicLoader:
 
             del gpu_bufs, decoded_list
 
-        if self.print_debug or True:
+        if self.print_debug:
             print(f"[MemRift] Re-compressed {n_converted} LZ4→ANS weights, "
                   f"saved {total_saved_mb:.1f}MB CPU pinned memory.")
 
@@ -1307,7 +1325,22 @@ class MegatronDynamicLoader:
             async_compressor: Optional AsyncCompressor for async prefetch
         """
         self.async_compressor = async_compressor
-        
+
+        # Per-iteration timing log (controlled by MEMRIFT_ITER_LOG env var).
+        # Prints one line per layer per iteration so fast/slow iterations can be
+        # compared side by side.  Only rank 0, only the first N iters
+        # (MEMRIFT_ITER_LOG_ITERS, default 8).
+        self._iter_log_enabled = os.environ.get("MEMRIFT_ITER_LOG", "0") == "1"
+        self._iter_log_max_iters = int(os.environ.get("MEMRIFT_ITER_LOG_ITERS", "8"))
+        # Diagnostic: always print env var values so we can verify propagation.
+        print(f"[MemRift] install_hooks: MEMRIFT_ITER_LOG={os.environ.get('MEMRIFT_ITER_LOG','<unset>')} "
+              f"_iter_log_enabled={self._iter_log_enabled} num_layers={len(self.layer_names)}", flush=True)
+        self._fwd_iter_count = 0   # incremented when layer-0 fwd_pre fires
+        self._bwd_iter_count = 0   # incremented when last-layer bwd_pre fires
+        self._fwd_iter_wall_t0: float = 0.0   # wall-clock start of current fwd
+        self._bwd_iter_wall_t0: float = 0.0   # wall-clock start of current bwd
+        self._bwd_l0_abs_end: float = 0.0     # abs wall-clock when bwd_pre layer-0 ends
+
         # Find layer modules
         name2layer = {}
         for name, module in self.model.named_modules():
@@ -1355,8 +1388,12 @@ class MegatronDynamicLoader:
             
             # Capture variables
             def make_fwd_pre(cur_groups, nxt_groups_list, cur_name, cur_idx, async_comp):
+                _fwd_hook_fired_once = [False]
                 def _hook(mod, inp):
                     t0 = time.perf_counter()
+                    if not _fwd_hook_fired_once[0]:
+                        _fwd_hook_fired_once[0] = True
+                        print(f"[MemRift] fwd_pre FIRST FIRE layer={cur_name} iter_log={self._iter_log_enabled}", flush=True)
                     _trace(f"fwd_pre: enter layer={cur_name}, groups={len(cur_groups)}")
                     pending_cur = self._count_pending_prefetch(cur_groups)
                     if pending_cur > 0:
@@ -1372,9 +1409,16 @@ class MegatronDynamicLoader:
                         else:
                             # Collect all components that need prefetch, then batch-decode
                             # in a single codec.decode([...]) call (2x faster than per-call).
+                            # Skip groups whose param.data is already resident (pre-materialized
+                            # by prefetch_initial_layers) to avoid clogging the bg queue with
+                            # wasted work that delays truly needed prefetches.
                             to_prefetch = []
                             for nxt_groups in nxt_groups_list:
                                 for group in nxt_groups:
+                                    if group.target_module is not None:
+                                        _nxt_param = getattr(group.target_module, group.target_attr, None)
+                                        if _nxt_param is not None and _nxt_param.data.numel() > 0:
+                                            continue  # already resident, skip to avoid bg queue waste
                                     for cp in group.components.values():
                                         if cp._bf16 is None and cp._prefetch_future is None:
                                             to_prefetch.append(cp)
@@ -1428,6 +1472,32 @@ class MegatronDynamicLoader:
                     if hook_ms > self._hook_warn_ms:
                         _trace(f"WARN fwd_pre: slow hook {hook_ms:.1f} ms (layer={cur_name})")
                     _trace(f"fwd_pre: done layer={cur_name}")
+                    # ── Iteration timing log (MEMRIFT_ITER_LOG=1) ──────────────
+                    if self._iter_log_enabled:
+                        if cur_idx == 0:
+                            self._fwd_iter_count += 1
+                            self._fwd_iter_wall_t0 = t0
+                            # Print gap from previous bwd_pre_L0 end to this fwd_pre_L0 start
+                            if self._bwd_l0_abs_end > 0.0:
+                                inter_iter_ms = (t0 - self._bwd_l0_abs_end) * 1000.0
+                                print(
+                                    f"[ITER_LOG] <<< inter_iter gap to iter={self._fwd_iter_count:3d}:"
+                                    f"  {inter_iter_ms:8.1f}ms  (bwd_L0_end → fwd_L0_start)",
+                                    flush=True,
+                                )
+                        last_fwd_idx = len(self.layer_names) - 1
+                        if cur_idx == last_fwd_idx:
+                            # Record when the last fwd hook finishes so we can compute
+                            # the "silence" between fwd hooks end and bwd hooks start.
+                            self._fwd_hooks_duration_ms = (time.perf_counter() - self._fwd_iter_wall_t0) * 1000.0
+                        if self._fwd_iter_count <= self._iter_log_max_iters:
+                            elapsed = (time.perf_counter() - self._fwd_iter_wall_t0) * 1000.0
+                            print(
+                                f"[ITER_LOG] fwd iter={self._fwd_iter_count:3d}"
+                                f" layer={cur_idx:3d} mat={materialize_ms:7.1f}ms"
+                                f" hook={hook_ms:7.1f}ms  t_since_fwd0={elapsed:8.1f}ms",
+                                flush=True,
+                            )
                 return _hook
             
             def make_fwd_post(cur_groups, is_last, cur_name):
@@ -1490,12 +1560,33 @@ class MegatronDynamicLoader:
                             prefetch_ms = 1000.0 * (time.perf_counter() - _tp0)
                         else:
                             # Batch-decode all components for previous layers at once.
+                            # Skip groups whose param.data is already resident to avoid
+                            # clogging the bg queue with wasted work.
                             to_prefetch = []
+                            _bwd_pref_dbg = os.environ.get("MEMRIFT_MAT_DBG19", "0") == "1"
                             for prv_groups in prv_groups_list:
                                 for group in prv_groups:
+                                    _skip_reason = None
+                                    if group.target_module is not None:
+                                        _prv_param = getattr(group.target_module, group.target_attr, None)
+                                        if _prv_param is not None and _prv_param.data.numel() > 0:
+                                            _skip_reason = f"param_resident(numel={_prv_param.data.numel()})"
+                                            if _bwd_pref_dbg and group.layer_idx == 19:
+                                                print(f"[BWD_PREF_DBG] cur_idx={cur_idx} L19 group={group.megatron_target} SKIP: {_skip_reason}", flush=True)
+                                            continue  # already resident, skip
                                     for cp in group.components.values():
-                                        if cp._bf16 is None and cp._prefetch_future is None:
+                                        _cp_skip = None
+                                        if cp._bf16 is not None:
+                                            _cp_skip = f"_bf16=SET"
+                                        elif cp._prefetch_future is not None:
+                                            _cp_skip = f"_prefetch_future={'DONE' if cp._prefetch_future.done() else 'PENDING'}"
+                                        if _cp_skip:
+                                            if _bwd_pref_dbg and group.layer_idx == 19:
+                                                print(f"[BWD_PREF_DBG] cur_idx={cur_idx} L19 group={group.megatron_target} cp={cp.merge_key} SKIP: {_cp_skip}", flush=True)
+                                        else:
                                             to_prefetch.append(cp)
+                                            if _bwd_pref_dbg and group.layer_idx == 19:
+                                                print(f"[BWD_PREF_DBG] cur_idx={cur_idx} L19 group={group.megatron_target} cp={cp.merge_key} ADDED to prefetch", flush=True)
                             if to_prefetch:
                                 _tp0 = time.perf_counter()
                                 if self._prefetch_submit_mode_bwd == "async_bg":
@@ -1539,6 +1630,31 @@ class MegatronDynamicLoader:
                     if hook_ms > self._hook_warn_ms:
                         _trace(f"WARN bwd_pre: slow hook {hook_ms:.1f} ms (layer={cur_name})")
                     _trace(f"bwd_pre: done layer={cur_name}")
+                    # ── Iteration timing log (MEMRIFT_ITER_LOG=1) ──────────────
+                    if self._iter_log_enabled:
+                        last_bwd_idx = len(self.layer_names) - 1
+                        if cur_idx == last_bwd_idx:  # first bwd hook = last layer
+                            self._bwd_iter_count += 1
+                            self._bwd_iter_wall_t0 = t0
+                            fwd_to_bwd_ms = (t0 - self._fwd_iter_wall_t0) * 1000.0
+                            fwd_hooks_to_bwd_ms = fwd_to_bwd_ms - getattr(self, "_fwd_hooks_duration_ms", 0.0)
+                            print(
+                                f"[ITER_LOG] >>> bwd_start iter={self._bwd_iter_count:3d}"
+                                f"  fwd→bwd_gap={fwd_to_bwd_ms:8.1f}ms"
+                                f"  (after_fwd_hooks+{fwd_hooks_to_bwd_ms:6.1f}ms)",
+                                flush=True,
+                            )
+                        if self._bwd_iter_count <= self._iter_log_max_iters:
+                            elapsed = (time.perf_counter() - self._bwd_iter_wall_t0) * 1000.0
+                            print(
+                                f"[ITER_LOG] bwd iter={self._bwd_iter_count:3d}"
+                                f" layer={cur_idx:3d} mat={materialize_ms:7.1f}ms"
+                                f" hook={hook_ms:7.1f}ms  t_since_bwd0={elapsed:8.1f}ms",
+                                flush=True,
+                            )
+                            if cur_idx == 0:
+                                # record abs time when last bwd hook ends
+                                self._bwd_l0_abs_end = time.perf_counter()
                 return _hook
             
             def make_bwd_post(cur_groups, cur_name):
