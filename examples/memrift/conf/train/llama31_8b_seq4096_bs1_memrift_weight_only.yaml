@@ -30,6 +30,7 @@ system:
   memrift_weight_enable: true
   memrift_weight_async: true
   memrift_prefetch_layers: 12  # 增加预取层数，最大化与计算重叠
+  memrift_gpu_weight_cache_layers: 0
   memrift_compressed_weight_dir: ./memrift_weights/llama31_8b_nvcomp_ans
 
   # 激活压缩（关闭）

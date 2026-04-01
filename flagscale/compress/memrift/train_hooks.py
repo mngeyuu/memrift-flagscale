@@ -109,6 +109,7 @@ def inject_memrift_if_configured(
         memrift_weight_async: bool - Enable async weight decompression
         memrift_act_async: bool - Enable async activation compression
         memrift_act_store_cpu: int | None - If 0/1, sets MEMRIFT_ACT_STORE_CPU (GPU compress then D2H to CPU)
+        memrift_gpu_weight_cache_layers: int - GPU LRU cache capacity (0=disabled)
         memrift_decode_pool_workers: int - Decode thread pool size
         memrift_zstd_pool_workers: int - CPU zstd-only pool (-1 = same as decode pool)
         memrift_compress_pool_workers: int - Compress thread pool size
@@ -340,6 +341,8 @@ def _inject_weight_compression(
         if rank == 0:
             print(f"[MemRift] Env weight target filter enabled: {sorted(allowed_targets)}")
 
+    gpu_weight_cache_layers = getattr(args, "memrift_gpu_weight_cache_layers", 0)
+
     for chunk_idx, chunk in enumerate(model_chunks):
         if print_debug and rank == 0:
             print(f"[MemRift] Processing chunk {chunk_idx}")
@@ -360,6 +363,7 @@ def _inject_weight_compression(
                 prefetch_layers=prefetch_layers,
                 print_debug=print_debug,
                 allowed_targets=allowed_targets,
+                gpu_weight_cache_layers=gpu_weight_cache_layers,
             )
             
             # Step 1: Load compressed weights
@@ -507,7 +511,7 @@ def get_memrift_status(args: Any) -> dict:
     Returns:
         Dictionary with MemRift configuration
     """
-    return {
+    status = {
         "memrift_enable": getattr(args, "memrift_enable", False),
         "memrift_weight_enable": getattr(args, "memrift_weight_enable", False),
         "memrift_activation_enable": getattr(args, "memrift_activation_enable", False),
@@ -518,4 +522,11 @@ def get_memrift_status(args: Any) -> dict:
         "memrift_act_async": getattr(args, "memrift_act_async", True),
         "memrift_act_store_cpu_effective": os.environ.get("MEMRIFT_ACT_STORE_CPU", "1"),
         "memrift_zstd_pool_workers": getattr(args, "memrift_zstd_pool_workers", -1),
+        "memrift_gpu_weight_cache_layers": getattr(args, "memrift_gpu_weight_cache_layers", 0),
     }
+    try:
+        from flagscale.compress.memrift.megatron_dynamic_loader import _gpu_weight_cache
+        status["gpu_weight_cache_stats"] = _gpu_weight_cache.stats_str()
+    except Exception:
+        pass
+    return status

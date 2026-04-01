@@ -64,6 +64,151 @@ _PTR2GROUP: Dict[int, "MergedWeightGroup"] = {}
 # Set MEMRIFT_DEEP_ASYNC=0 to fall back to host-side synchronize behavior.
 _DEEP_ASYNC = os.environ.get("MEMRIFT_DEEP_ASYNC", "1") == "1"
 
+# When True, profiling timing calls use blocking evt.synchronize() to read
+# elapsed_time immediately.  When False (default), timing events are deferred
+# and flushed once per iteration boundary to avoid per-call CPU stalls.
+_PROF_GPU_TIMING_SYNC = os.environ.get("MEMRIFT_PROF_GPU_TIMING_SYNC", "0") == "1"
+
+# Deferred GPU timing events: list of (start_evt, end_evt, layer_name, metric)
+_deferred_gpu_timings: list = []
+
+
+def _defer_gpu_timing(start_evt, end_evt, layer_name: str, metric: str):
+    """Record a pair of events for deferred GPU timing measurement."""
+    _deferred_gpu_timings.append((start_evt, end_evt, layer_name, metric))
+
+
+def flush_deferred_gpu_timings():
+    """Synchronize once and flush all pending GPU timing measurements.
+
+    Call at iteration boundaries (e.g. after backward pass completes) to
+    collect accurate GPU timings without per-call CPU blocking.
+    """
+    if not _deferred_gpu_timings:
+        return
+    if layer_time_profiler is None or not layer_time_profiler.is_enabled():
+        _deferred_gpu_timings.clear()
+        return
+    # One sync to ensure all recorded events are complete.
+    torch.cuda.synchronize()
+    for start_evt, end_evt, layer_name, metric in _deferred_gpu_timings:
+        try:
+            layer_time_profiler.add_time(
+                layer_name, metric, float(start_evt.elapsed_time(end_evt))
+            )
+        except Exception:
+            pass
+    _deferred_gpu_timings.clear()
+
+
+class GPUWeightCache:
+    """Bounded LRU cache for GPU bf16 weight tensors.
+
+    Keeps up to ``capacity`` *layers* of materialized weights on GPU.
+    When a layer is evicted, all its component tensors are explicitly deleted
+    so the CUDA caching allocator can reclaim the memory.
+
+    **Key design**: ``(layer_idx, param_name)`` uniquely identifies a cached
+    weight.  ``put()`` is called from ``_clear_param`` instead of immediately
+    freeing.  ``get()`` is called from ``CompressedParam.materialize()`` to
+    skip the entire decode pipeline when a cache hit occurs.
+
+    The cache is **disabled** when ``capacity == 0`` (default).  Enable via
+    ``MEMRIFT_GPU_WEIGHT_CACHE_LAYERS`` env var or
+    ``--memrift-gpu-weight-cache-layers`` CLI arg.
+    """
+
+    def __init__(self, capacity: int = 0):
+        self.capacity = capacity
+        # _order: list of layer_idx in LRU order (most-recently-used at end)
+        self._order: List[int] = []
+        # _store: layer_idx -> {param_name: (merged_weight_tensor, group)}
+        self._store: Dict[int, Dict[str, Tuple[torch.Tensor, Any]]] = {}
+        # Statistics
+        self.hits = 0
+        self.misses = 0
+        self.evictions = 0
+
+    @property
+    def enabled(self) -> bool:
+        return self.capacity > 0
+
+    def get(self, layer_idx: int, param_name: str) -> Optional[torch.Tensor]:
+        """Look up a cached weight.  Returns the tensor or ``None``."""
+        if not self.enabled:
+            self.misses += 1
+            return None
+        layer_data = self._store.get(layer_idx)
+        if layer_data is None or param_name not in layer_data:
+            self.misses += 1
+            return None
+        # Cache hit: promote layer to MRU
+        self.hits += 1
+        if layer_idx in self._order:
+            self._order.remove(layer_idx)
+        self._order.append(layer_idx)
+        return layer_data[param_name][0]
+
+    def put(self, layer_idx: int, param_name: str, tensor: torch.Tensor, group) -> None:
+        """Insert or update a cached weight.  Evicts LRU layer if over capacity."""
+        if not self.enabled:
+            return
+        # Add entry
+        if layer_idx not in self._store:
+            self._store[layer_idx] = {}
+        self._store[layer_idx][param_name] = (tensor, group)
+        # Promote to MRU
+        if layer_idx in self._order:
+            self._order.remove(layer_idx)
+        self._order.append(layer_idx)
+        # Evict if over capacity
+        while len(self._order) > self.capacity:
+            victim = self._order.pop(0)
+            self._evict(victim)
+
+    def invalidate(self, layer_idx: int, param_name: Optional[str] = None) -> None:
+        """Remove specific entry or all entries for a layer."""
+        if layer_idx not in self._store:
+            return
+        if param_name is not None:
+            self._store[layer_idx].pop(param_name, None)
+            if not self._store[layer_idx]:
+                del self._store[layer_idx]
+                if layer_idx in self._order:
+                    self._order.remove(layer_idx)
+        else:
+            self._evict(layer_idx)
+
+    def _evict(self, layer_idx: int) -> None:
+        """Evict all cached tensors for a layer."""
+        layer_data = self._store.pop(layer_idx, None)
+        if layer_data is not None:
+            for _pname, (tensor, _group) in layer_data.items():
+                del tensor
+            self.evictions += 1
+        if layer_idx in self._order:
+            self._order.remove(layer_idx)
+
+    def clear(self) -> None:
+        """Drop all cached tensors."""
+        for layer_idx in list(self._store.keys()):
+            self._evict(layer_idx)
+        self._order.clear()
+
+    def stats_str(self) -> str:
+        total = self.hits + self.misses
+        hit_rate = (self.hits / total * 100) if total > 0 else 0.0
+        return (
+            f"GPUWeightCache(K={self.capacity}, "
+            f"hits={self.hits}, misses={self.misses}, "
+            f"hit_rate={hit_rate:.1f}%, evictions={self.evictions}, "
+            f"resident_layers={len(self._order)})"
+        )
+
+
+# Module-level cache instance (shared by all loaders; overwritten by MegatronDynamicLoader).
+_gpu_weight_cache = GPUWeightCache(0)
+
 
 def _trace(msg: str):
     if os.environ.get("MEMRIFT_TRACE", "0") != "1":
@@ -145,7 +290,7 @@ class CompressedParam(nn.Parameter):
         self._prefetch_future = None
     
     def materialize(self, sync: bool = True):
-        """Decompress and matieralize the full tensor."""
+        """Decompress and materialize the full tensor."""
         import os as _os2
         _mat_dbg = _os2.environ.get("MEMRIFT_MAT_DBG19", "0") == "1" and self.layer_idx == 19
         if _mat_dbg:
@@ -192,16 +337,26 @@ class CompressedParam(nn.Parameter):
                     self._bf16, self._CtoD_evt = pref_out
                 else:
                     self._bf16 = pref_out
-                self._ready_event.set()
-                _trace(f"materialize: consumed prefetched tensor (layer={self.layer_idx})")
-                if sync and self._CtoD_evt is not None and not _DEEP_ASYNC:
-                    # Non-deep-async: CPU-side sync; safe to free cpu_exp after this.
-                    self._CtoD_evt.synchronize()
-                    if self._exp_host is not None:
-                        del self._exp_host
-                        self._exp_host = None
-                # _DEEP_ASYNC path: _exp_host freed in cp.release() after use.
-                return self._bf16
+                if self._bf16 is None:
+                    # Background prefetch failed (e.g. decode error path calls
+                    # set_result(None)).  Do not return None — fall through to
+                    # synchronous decompression on the current stream.
+                    self._CtoD_evt = None
+                    self._exp_host = None
+                    self._ready_event.clear()
+                    _trace(
+                        f"materialize: prefetch returned None (layer={self.layer_idx}), "
+                        "sync decompress fallback"
+                    )
+                else:
+                    self._ready_event.set()
+                    _trace(f"materialize: consumed prefetched tensor (layer={self.layer_idx})")
+                    if sync and self._CtoD_evt is not None and not _DEEP_ASYNC:
+                        self._CtoD_evt.synchronize()
+                        if self._exp_host is not None:
+                            del self._exp_host
+                            self._exp_host = None
+                    return self._bf16
             except fut.CancelledError:
                 pass  # fall through to sync path below
             except Exception as e:
@@ -372,7 +527,7 @@ class CompressedParam(nn.Parameter):
             from flagscale.compress.float_split_stride_pin import float_split_stride_pin as fs_sp
             if fs_sp.is_available():
                 fs_sp.release_cuda(self._bf16)
-        except:
+        except Exception:
             pass
         
         self._bf16 = None
@@ -460,6 +615,14 @@ def _materialize_group_tensor(group: MergedWeightGroup, sync: bool = True) -> to
                 print(f"[MAT_DBG L19] _materialize_group_tensor fast-path: param.data already set, numel={_param.data.numel()}", flush=True)
             return _param.data
 
+    # GPU weight cache: check if merged weight for this group is cached.
+    if _gpu_weight_cache.enabled:
+        _cache_key = f"{group.layer_idx}:{group.megatron_target}"
+        cached = _gpu_weight_cache.get(group.layer_idx, _cache_key)
+        if cached is not None:
+            _trace(f"_materialize_group: cache HIT layer={group.layer_idx} target={group.megatron_target}")
+            return cached
+
     if "linear_qkv" in group.megatron_target:
         q_cp = group.components.get("q")
         k_cp = group.components.get("k")
@@ -469,6 +632,12 @@ def _materialize_group_tensor(group: MergedWeightGroup, sync: bool = True) -> to
         q = q_cp.materialize(sync=sync)
         k = k_cp.materialize(sync=sync)
         v = v_cp.materialize(sync=sync)
+        if q is None or k is None or v is None:
+            raise RuntimeError(
+                f"MemRift: materialize returned None for QKV at layer {group.layer_idx} "
+                f"(q={q is not None}, k={k is not None}, v={v is not None}). "
+                "Prefetch may have failed repeatedly; try MEMRIFT_WEIGHT_PREFETCH_MODE=on_stream."
+            )
         if sync and not _DEEP_ASYNC:
             q_cp.wait_ready()
             k_cp.wait_ready()
@@ -523,6 +692,10 @@ def _materialize_group_tensor(group: MergedWeightGroup, sync: bool = True) -> to
             raise RuntimeError(f"Incomplete FC1 group: {list(group.components.keys())}")
         gate = gate_cp.materialize(sync=sync)
         up = up_cp.materialize(sync=sync)
+        if gate is None or up is None:
+            raise RuntimeError(
+                f"MemRift: materialize returned None for FC1 at layer {group.layer_idx}."
+            )
         if sync and not _DEEP_ASYNC:
             gate_cp.wait_ready()
             up_cp.wait_ready()
@@ -540,6 +713,10 @@ def _materialize_group_tensor(group: MergedWeightGroup, sync: bool = True) -> to
     if cp is None:
         cp = list(group.components.values())[0]
     weight = cp.materialize(sync=sync)
+    if weight is None:
+        raise RuntimeError(
+            f"MemRift: materialize returned None for single weight at layer {group.layer_idx}."
+        )
     if sync and not _DEEP_ASYNC:
         cp.wait_ready()
     return weight
@@ -617,6 +794,7 @@ class MegatronDynamicLoader:
         prefetch_layers: int = 1,
         print_debug: bool = False,
         allowed_targets: Optional[Set[str]] = None,
+        gpu_weight_cache_layers: int = 0,
     ):
         """
         Initialize the loader.
@@ -698,6 +876,19 @@ class MegatronDynamicLoader:
             "MEMRIFT_WEIGHT_PREFETCH_MODE_BWD",
             self._prefetch_submit_mode,
         )
+        # GPU weight cache: reuse recently materialized merged weights to skip
+        # the full decode/H2D/merge pipeline.  K=0 disables (default); K>0
+        # keeps K layers' worth of merged bf16 tensors in an LRU cache.
+        # Also honour the env var for easy tuning without config changes.
+        _cache_k = int(os.environ.get(
+            "MEMRIFT_GPU_WEIGHT_CACHE_LAYERS",
+            str(gpu_weight_cache_layers),
+        ))
+        global _gpu_weight_cache
+        _gpu_weight_cache = GPUWeightCache(_cache_k)
+        if print_debug and _cache_k > 0:
+            print(f"[MemRift] GPU weight cache enabled: K={_cache_k} layers")
+
         self._windowed_prefetch = os.environ.get("MEMRIFT_WINDOWED_PREFETCH", "0") == "1"
         self._windowed_prefetch_fwd = os.environ.get(
             "MEMRIFT_WINDOWED_PREFETCH_FWD",
@@ -1222,25 +1413,51 @@ class MegatronDynamicLoader:
                 cur_stream.wait_event(cp._CtoD_evt)
         if wait_end_evt is not None and wait_start_evt is not None:
             wait_end_evt.record(cur_stream)
-            wait_end_evt.synchronize()
-            try:
-                layer_time_profiler.add_time(
-                    self.layer_names[group.layer_idx] if group.layer_idx >= 0 else "unknown",
-                    wait_metric,
-                    float(wait_start_evt.elapsed_time(wait_end_evt)),
-                )
-            except Exception:
-                pass
+            _lname = self.layer_names[group.layer_idx] if group.layer_idx >= 0 else "unknown"
+            if _PROF_GPU_TIMING_SYNC:
+                wait_end_evt.synchronize()
+                try:
+                    layer_time_profiler.add_time(
+                        _lname, wait_metric,
+                        float(wait_start_evt.elapsed_time(wait_end_evt)),
+                    )
+                except Exception:
+                    pass
+            else:
+                _defer_gpu_timing(wait_start_evt, wait_end_evt, _lname, wait_metric)
         _PTR2GROUP[int(param.data_ptr())] = group
         if self.print_debug:
             print(f"[MemRift] set_param: layer {group.layer_idx} / {group.megatron_target} shape={weight.shape}")
     
     def _clear_param(self, group: MergedWeightGroup):
-        """Clear parameter data to free memory."""
+        """Clear parameter data to free memory.
+
+        When the GPU weight cache is enabled, the merged weight is saved in the
+        cache before the param is cleared.  On the next iteration,
+        ``_materialize_group_tensor`` will find it via ``_gpu_weight_cache.get``
+        and skip the entire decode/H2D/merge pipeline.
+        """
         if group.target_module is not None:
             param = getattr(group.target_module, group.target_attr, None)
             if param is not None:
                 old_ptr = int(param.data_ptr()) if param.data.numel() > 0 else -1
+                # Cache the merged weight before clearing (when cache enabled).
+                # We keep a reference to param.data (no clone needed); replacing
+                # param.data with empty doesn't free the underlying storage as
+                # long as the cache holds its reference.
+                if (
+                    _gpu_weight_cache.enabled
+                    and param.data.numel() > 0
+                    and group.layer_idx >= 0
+                ):
+                    _cache_key = f"{group.layer_idx}:{group.megatron_target}"
+                    _gpu_weight_cache.put(
+                        group.layer_idx, _cache_key, param.data, group
+                    )
+                    _trace(
+                        f"clear_param: cached layer={group.layer_idx} "
+                        f"target={group.megatron_target}"
+                    )
                 dtype = param.dtype
                 device = param.device
                 with torch.no_grad():
@@ -1543,6 +1760,7 @@ class MegatronDynamicLoader:
             
             def make_bwd_pre(cur_groups, prv_groups_list, cur_name, cur_idx, async_comp):
                 def _hook(mod, grad_out):
+                    setattr(mod, "_memrift_bwd_weights_ready", False)
                     t0 = time.perf_counter()
                     _trace(f"bwd_pre: enter layer={cur_name}, groups={len(cur_groups)}")
                     pending_cur = self._count_pending_prefetch(cur_groups)
@@ -1618,6 +1836,7 @@ class MegatronDynamicLoader:
                                 f"WARN bwd_pre: slow group materialize {group_ms:.1f} ms "
                                 f"(layer={cur_name}, target={group.megatron_target})"
                             )
+                    setattr(mod, "_memrift_bwd_weights_ready", True)
                     if layer_time_profiler is not None and layer_time_profiler.is_enabled():
                         layer_time_profiler.add_time(
                             cur_name,
@@ -1657,8 +1876,9 @@ class MegatronDynamicLoader:
                                 self._bwd_l0_abs_end = time.perf_counter()
                 return _hook
             
-            def make_bwd_post(cur_groups, cur_name):
+            def make_bwd_post(cur_groups, cur_name, cur_idx):
                 def _hook(mod, grad_in, grad_out):
+                    setattr(mod, "_memrift_bwd_weights_ready", False)
                     if layer_time_profiler is not None and layer_time_profiler.is_enabled():
                         t_start = getattr(mod, "_memrift_bwd_compute_start", None)
                         if t_start is not None:
@@ -1676,13 +1896,29 @@ class MegatronDynamicLoader:
                     self._bwd_counter += 1
                     if self._bwd_counter % self._bwd_empty_step == 0:
                         torch.cuda.empty_cache()
+                    if cur_idx == 0:
+                        flush_deferred_gpu_timings()
+                        if (
+                            _gpu_weight_cache.enabled
+                            and self._iter_log_enabled
+                            and self._bwd_counter <= self._iter_log_max_iters * self.num_layers
+                        ):
+                            print(
+                                f"[ITER_LOG] {_gpu_weight_cache.stats_str()}",
+                                flush=True,
+                            )
                 return _hook
             
+            # Per-layer flag: layer bwd_pre sets True after all groups are materialized;
+            # linear_bwd_pre skips redundant materialize when True (avoids TE ordering
+            # duplicate ANS decode). bwd_post clears for the next step.
+            setattr(layer_module, "_memrift_bwd_weights_ready", False)
+
             layer_module.register_full_backward_pre_hook(
                 make_bwd_pre(cur_groups, prv_groups_list, cur, i, async_compressor)
             )
             layer_module.register_full_backward_hook(
-                make_bwd_post(cur_groups, cur)
+                make_bwd_post(cur_groups, cur, i)
             )
 
             # TE safety: some linear backward paths run before layer-level backward_pre
@@ -1700,11 +1936,17 @@ class MegatronDynamicLoader:
                 seen_modules.add(mid)
                 linear_modules.append(tm)
 
-            def make_linear_bwd_pre(cur_groups):
+            def make_linear_bwd_pre(cur_groups, layer_mod):
                 def _hook(mod, grad_out):
+                    if getattr(layer_mod, "_memrift_bwd_weights_ready", False):
+                        return
                     try:
                         w = getattr(mod, "weight", None)
                         if w is not None and w.data.numel() > 0:
+                            # Same step: other linears may still fire with flag False; mark
+                            # ready so we do not run a second full-layer materialize (duplicate
+                            # ANS/nvCOMP decode corrupts GPU state → SIGABRT under TE ordering).
+                            setattr(layer_mod, "_memrift_bwd_weights_ready", True)
                             return
                     except Exception:
                         pass
@@ -1713,9 +1955,10 @@ class MegatronDynamicLoader:
                             group, sync=self._hook_materialize_sync
                         )
                         self._set_param(group, weight, wait_metric="backward_current_wait_gpu_ms")
+                    setattr(layer_mod, "_memrift_bwd_weights_ready", True)
                 return _hook
 
-            linear_bwd_pre = make_linear_bwd_pre(cur_groups)
+            linear_bwd_pre = make_linear_bwd_pre(cur_groups, layer_module)
             for tm in linear_modules:
                 tm.register_full_backward_pre_hook(linear_bwd_pre)
         
@@ -1733,7 +1976,7 @@ class MegatronDynamicLoader:
         sm_gpu_bytes = sum(cp.sm_gpu.numel() for cp in self.all_cps if cp.sm_gpu is not None)
         exp_bytes = sum(len(cp.exp_mv) for cp in self.all_cps if cp.exp_mv is not None)
         
-        return {
+        stats = {
             "sm_gpu_bytes": sm_gpu_bytes,
             "sm_gpu_mb": sm_gpu_bytes / 1024**2,
             "exp_cpu_bytes": exp_bytes,
@@ -1742,3 +1985,6 @@ class MegatronDynamicLoader:
             "num_weight_groups": sum(len(g) for g in self.layer2groups.values()),
             "cuda_allocated_mb": torch.cuda.memory_allocated(self.device) / 1024**2,
         }
+        if _gpu_weight_cache.enabled:
+            stats["gpu_weight_cache"] = _gpu_weight_cache.stats_str()
+        return stats

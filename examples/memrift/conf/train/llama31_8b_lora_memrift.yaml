@@ -55,6 +55,8 @@ system:
   memrift_compressed_weight_dir: ./memrift_weights/llama31_8b_level18
   memrift_zstd_level: 3
   memrift_prefetch_layers: 12
+  # GPU LRU cache for merged layer weights (0 = off).  Must exist for Hydra struct overrides.
+  memrift_gpu_weight_cache_layers: 0
   memrift_weight_async: true
   memrift_activation_enable: true
   memrift_act_async: true

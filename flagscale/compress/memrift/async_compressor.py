@@ -1,7 +1,7 @@
 import threading
 import concurrent.futures as fut
 from contextlib import nullcontext
-from typing import Optional, Callable, Any
+from typing import Optional, Callable, Any, Dict
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -363,6 +363,37 @@ class AsyncCompressor:
         # Registry for DecoderLayerWrapper instances (look-ahead decode submit in bwd_pre_hook).
         self._layer_wrappers: list = []
 
+        # GPU staging buffer pool: reuse GPU uint8 tensors for H2D copies to
+        # avoid repeated cudaMallocAsync.  Keyed by exact byte size.
+        # Thread-safe via _gpu_pool_lock.
+        self._gpu_pool: Dict[tuple, list] = {}
+        self._gpu_pool_lock = threading.Lock()
+        self._gpu_pool_enabled = __import__('os').environ.get(
+            "MEMRIFT_GPU_STAGING_POOL", "1") == "1"
+
+    # -- GPU staging buffer pool helpers --
+
+    def _acquire_gpu_staging(self, size: int, device: torch.device) -> torch.Tensor:
+        """Get a GPU uint8 tensor from the pool (or allocate a new one)."""
+        if not self._gpu_pool_enabled:
+            return torch.empty(size, dtype=torch.uint8, device=device)
+        key = (device.index, size)
+        with self._gpu_pool_lock:
+            pool = self._gpu_pool.get(key)
+            if pool:
+                return pool.pop()
+        return torch.empty(size, dtype=torch.uint8, device=device)
+
+    def _return_gpu_staging(self, buf: torch.Tensor) -> None:
+        """Return a buffer to the pool for future reuse."""
+        if not self._gpu_pool_enabled:
+            return
+        key = (buf.device.index, buf.numel())
+        with self._gpu_pool_lock:
+            pool = self._gpu_pool.setdefault(key, [])
+            if len(pool) < 64:
+                pool.append(buf)
+
     def _build(self):
         """Rebuild pools and streams (used after reset)."""
         if self.enable_async:
@@ -530,7 +561,7 @@ class AsyncCompressor:
         Mirror of ``prefetch_batch_on_stream`` logic but uses bg-thread
         streams and calls ``PrefetchFuture.set_result()`` when done.
         """
-        import time as _time
+        import time as _time, os as _os2
         _ta = _time.perf_counter()
 
         prof_enabled = _lt_enabled()
@@ -555,8 +586,10 @@ class AsyncCompressor:
                 buf = torch.empty(len(raw), dtype=torch.uint8, pin_memory=True)
                 buf.numpy()[:] = np.frombuffer(raw, dtype=np.uint8)
             _th1 = _time.perf_counter()
+            _n = buf.numel()
+            cg = self._acquire_gpu_staging(_n, cp.sm_gpu.device)
             with torch.cuda.stream(h2d_stream):
-                cg = buf.to(cp.sm_gpu.device, non_blocking=True)
+                cg.copy_(buf, non_blocking=True)
             _th2 = _time.perf_counter()
             comp_gpu_list.append(cg)
             _t_h2d_prepare += _th1 - _th0
@@ -657,16 +690,18 @@ class AsyncCompressor:
         _lt_add("__weight_prefetch_async_bg__", "submit_record_event_ms", 1000.0 * (_tf - _te))
         _lt_add("__weight_prefetch_async_bg__", "submit_total_ms", 1000.0 * (_tf - _ta))
         if prof_enabled and merge_end_evt is not None:
-            try:
-                merge_end_evt.synchronize()
-                if h2d_start_evt is not None and h2d_end_evt is not None:
-                    _lt_add("__weight_prefetch_async_bg__", "gpu_h2d_ms", float(h2d_start_evt.elapsed_time(h2d_end_evt)))
-                if decode_start_evt is not None and decode_end_evt is not None:
-                    _lt_add("__weight_prefetch_async_bg__", "gpu_decode_ms", float(decode_start_evt.elapsed_time(decode_end_evt)))
-                if merge_start_evt is not None:
-                    _lt_add("__weight_prefetch_async_bg__", "gpu_merge_ms", float(merge_start_evt.elapsed_time(merge_end_evt)))
-            except Exception:
-                pass
+            _prof_sync = _os2.environ.get("MEMRIFT_PROF_GPU_TIMING_SYNC", "0") == "1"
+            if _prof_sync:
+                try:
+                    merge_end_evt.synchronize()
+                    if h2d_start_evt is not None and h2d_end_evt is not None:
+                        _lt_add("__weight_prefetch_async_bg__", "gpu_h2d_ms", float(h2d_start_evt.elapsed_time(h2d_end_evt)))
+                    if decode_start_evt is not None and decode_end_evt is not None:
+                        _lt_add("__weight_prefetch_async_bg__", "gpu_decode_ms", float(decode_start_evt.elapsed_time(decode_end_evt)))
+                    if merge_start_evt is not None:
+                        _lt_add("__weight_prefetch_async_bg__", "gpu_merge_ms", float(merge_start_evt.elapsed_time(merge_end_evt)))
+                except Exception:
+                    pass
         for cp, bf16 in zip(nvcomp_cps, bf16_list):
             if cp in pf_dict:
                 pf_dict[cp].set_result(bf16)
@@ -1301,11 +1336,10 @@ class AsyncCompressor:
                             comp_data, dtype=np.uint8)
 
                     # 2. H2D DMA: compressed bytes → GPU (async, h2d_stream)
+                    _n = comp_pinned_buf.numel()
+                    comp_gpu = self._acquire_gpu_staging(_n, sm_gpu.device)
                     with torch.cuda.stream(h2d_stream):
-                        comp_gpu = comp_pinned_buf.to(
-                            sm_gpu.device, non_blocking=True)
-                    # Tell the caching allocator not to recycle comp_gpu
-                    # until h2d_stream work completes (decode kernel reads it).
+                        comp_gpu.copy_(comp_pinned_buf, non_blocking=True)
                     comp_gpu.record_stream(h2d_stream)
 
                     # 3. GPU nvCOMP LZ4 decode (queued on h2d_stream via codec)
@@ -1379,9 +1413,10 @@ class AsyncCompressor:
                         comp_pinned_buf.numpy()[:] = np.frombuffer(
                             comp_data, dtype=np.uint8)
 
+                    _n = comp_pinned_buf.numel()
+                    comp_gpu = self._acquire_gpu_staging(_n, sm_gpu.device)
                     with torch.cuda.stream(h2d_stream):
-                        comp_gpu = comp_pinned_buf.to(
-                            sm_gpu.device, non_blocking=True)
+                        comp_gpu.copy_(comp_pinned_buf, non_blocking=True)
                     comp_gpu.record_stream(h2d_stream)
 
                     task_codec = _nvcomp_lib.Codec(
@@ -1584,8 +1619,11 @@ class AsyncCompressor:
                 pinned_extras.append(comp_pinned_buf)
 
             _th1 = _time.perf_counter()
+            # Use GPU staging pool to avoid repeated cudaMallocAsync.
+            _n = comp_pinned_buf.numel()
+            cg = self._acquire_gpu_staging(_n, cp.sm_gpu.device)
             with torch.cuda.stream(h2d_stream):
-                cg = comp_pinned_buf.to(cp.sm_gpu.device, non_blocking=True)
+                cg.copy_(comp_pinned_buf, non_blocking=True)
             _th2 = _time.perf_counter()
             comp_gpu_list.append(cg)
             _t_h2d_prepare += _th1 - _th0
@@ -1699,16 +1737,18 @@ class AsyncCompressor:
         _lt_add("__weight_prefetch_batch__", "submit_record_event_ms", 1000.0 * (_tf - _te))
         _lt_add("__weight_prefetch_batch__", "submit_total_ms", 1000.0 * (_tf - _ta))
         if prof_enabled and merge_end_evt is not None:
-            try:
-                merge_end_evt.synchronize()
-                if h2d_start_evt is not None and h2d_end_evt is not None:
-                    _lt_add("__weight_prefetch_batch__", "gpu_h2d_ms", float(h2d_start_evt.elapsed_time(h2d_end_evt)))
-                if decode_start_evt is not None and decode_end_evt is not None:
-                    _lt_add("__weight_prefetch_batch__", "gpu_decode_ms", float(decode_start_evt.elapsed_time(decode_end_evt)))
-                if merge_start_evt is not None:
-                    _lt_add("__weight_prefetch_batch__", "gpu_merge_ms", float(merge_start_evt.elapsed_time(merge_end_evt)))
-            except Exception:
-                pass
+            _prof_sync = _os.environ.get("MEMRIFT_PROF_GPU_TIMING_SYNC", "0") == "1"
+            if _prof_sync:
+                try:
+                    merge_end_evt.synchronize()
+                    if h2d_start_evt is not None and h2d_end_evt is not None:
+                        _lt_add("__weight_prefetch_batch__", "gpu_h2d_ms", float(h2d_start_evt.elapsed_time(h2d_end_evt)))
+                    if decode_start_evt is not None and decode_end_evt is not None:
+                        _lt_add("__weight_prefetch_batch__", "gpu_decode_ms", float(decode_start_evt.elapsed_time(decode_end_evt)))
+                    if merge_start_evt is not None:
+                        _lt_add("__weight_prefetch_batch__", "gpu_merge_ms", float(merge_start_evt.elapsed_time(merge_end_evt)))
+                except Exception:
+                    pass
         if _dbg:
             print(f"[BatchDec] n={len(nvcomp_cps)} h2d={1000*(_tb-_ta):.1f}ms as_arr={1000*(_tc-_tb):.1f}ms dec={1000*(_td-_tc):.1f}ms dlpack={1000*_t_dlpack:.1f}ms merge={1000*_t_merge:.1f}ms evt={1000*(_tf-_te):.1f}ms total={1000*(_tf-_ta):.1f}ms", flush=True)
 
@@ -1786,13 +1826,14 @@ class AsyncCompressor:
                 ka_extra = (comp_pinned_buf,)
 
             # 2. H2D DMA: compressed bytes → GPU (async on h2d_stream)
+            _n = comp_pinned_buf.numel()
+            comp_gpu = self._acquire_gpu_staging(_n, sm_gpu.device)
             with torch.cuda.stream(h2d_stream):
-                comp_gpu = comp_pinned_buf.to(sm_gpu.device, non_blocking=True)
+                comp_gpu.copy_(comp_pinned_buf, non_blocking=True)
 
             # 3. GPU nvCOMP LZ4 decode (queued on h2d_stream via codec)
             comp_arr = _nvcomp_lib.as_array(comp_gpu.view(torch.int8))
             decomp = self._nvcomp_codec.decode(comp_arr)
-            # record_stream after decode submission so allocator defers comp_gpu free.
             comp_gpu.record_stream(h2d_stream)
             del comp_gpu, comp_arr
 
@@ -1834,8 +1875,10 @@ class AsyncCompressor:
                 comp_pinned_buf.numpy()[:] = np.frombuffer(comp_data, dtype=np.uint8)
                 ka_extra = (comp_pinned_buf,)
 
+            _n = comp_pinned_buf.numel()
+            comp_gpu = self._acquire_gpu_staging(_n, sm_gpu.device)
             with torch.cuda.stream(h2d_stream):
-                comp_gpu = comp_pinned_buf.to(sm_gpu.device, non_blocking=True)
+                comp_gpu.copy_(comp_pinned_buf, non_blocking=True)
 
             comp_arr = _nvcomp_lib.as_array(comp_gpu.view(torch.int8))
             decomp = self._nvcomp_ans_codec.decode(comp_arr)

@@ -1003,6 +1003,15 @@ def _add_memrift_args(parser):
         help='Number of compress thread pool workers for MemRift async operations.',
     )
     group.add_argument(
+        '--memrift-gpu-weight-cache-layers',
+        type=int,
+        default=0,
+        help='Number of decoder layers whose merged bf16 weights are kept '
+        'in a GPU LRU cache across iterations to skip repeated decode/H2D. '
+        '0 (default) disables the cache. Each cached layer costs roughly '
+        '(model_params / num_layers) * 2 bytes of GPU memory.',
+    )
+    group.add_argument(
         '--memrift-print-debug',
         action='store_true',
         default=False,

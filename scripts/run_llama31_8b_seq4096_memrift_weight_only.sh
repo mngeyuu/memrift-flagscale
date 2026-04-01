@@ -14,6 +14,12 @@ TRAIN_ITERS="${TRAIN_ITERS:-30}"
 PREFETCH_LAYERS="${PREFETCH_LAYERS:-1}"
 MICRO_BS="${MICRO_BS:-1}"
 PROFILE_OUT="${PROFILE_OUT:-}"
+# GPU weight LRU cache: number of layers to keep decoded on GPU across iterations.
+# 0 = disabled (default); 2 = cache 2 layers → skip ~6.25% of decode work per iter.
+GPU_WEIGHT_CACHE_LAYERS="${GPU_WEIGHT_CACHE_LAYERS:-0}"
+# Megatron OptimizerParamScheduler requires lr_warmup_steps < lr_decay_steps.
+# Short runs (train_iters <= lr_warmup from YAML) need a smaller warmup.
+LR_WARMUP_ITERS="${LR_WARMUP_ITERS:-}"
 
 echo "============================================================"
 echo " Llama-3.1-8B MemRift 仅权重压缩优化版"
@@ -51,6 +57,12 @@ export MEMRIFT_WEIGHT_PREFETCH_MODE=async_bg
 export MEMRIFT_BG_DECODE_THREADS=1
 # 禁用 backward 中的 empty_cache（默认每 5 步调用一次，造成 GPU 停顿）
 export MEMRIFT_BWD_EMPTY_STEP=100000
+# GPU staging buffer pool (1=enabled, 0=disabled): reuse GPU H2D staging tensors
+# to reduce cudaMallocAsync calls (~30% of CUDA API time in Nsight profiles).
+export MEMRIFT_GPU_STAGING_POOL=1
+# Deferred GPU timing: avoid per-call evt.synchronize() in profiling paths.
+# Set to 1 only when you need immediate per-call GPU elapsed_time accuracy.
+export MEMRIFT_PROF_GPU_TIMING_SYNC=0
 
 # 分层时间 profiling（若设置了 PROFILE_OUT 则启用，每 30s 写一次中间结果）
 if [ -n "$PROFILE_OUT" ]; then
@@ -58,6 +70,14 @@ if [ -n "$PROFILE_OUT" ]; then
     export MEMRIFT_LAYER_TIME_PROFILE_PATH="$PROFILE_OUT"
     export MEMRIFT_LAYER_TIME_PROFILE_LIVE_SEC=30
     echo ">> Profiling 已启用，输出: $PROFILE_OUT"
+fi
+
+# Optional lr warmup override (empty = auto: 0 when train_iters < 4)
+_extra_warmup=()
+if [ -n "$LR_WARMUP_ITERS" ]; then
+  _extra_warmup+=(train.trainer.lr_warmup_iters="$LR_WARMUP_ITERS")
+elif [ "$TRAIN_ITERS" -lt 4 ] 2>/dev/null; then
+  _extra_warmup+=(train.trainer.lr_warmup_iters=0)
 fi
 
 # 运行训练
@@ -71,8 +91,10 @@ python run.py \
   train.model.tokenizer_model="$LLAMA31_MODEL" \
   train.trainer.train_iters="$TRAIN_ITERS" \
   train.system.memrift_prefetch_layers="$PREFETCH_LAYERS" \
+  train.system.memrift_gpu_weight_cache_layers="$GPU_WEIGHT_CACHE_LAYERS" \
   train.data.micro_batch_size="$MICRO_BS" \
   train.data.global_batch_size="$MICRO_BS" \
+  "${_extra_warmup[@]}" \
   2>&1 | tee "$LOG_FILE"
 
 echo ""
