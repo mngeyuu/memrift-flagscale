@@ -9,12 +9,13 @@ logs
 .vscode
 log_file/*
 outputs
+output/
 *.log
 
-# MemRift 压缩权重目录（不推送）
+# MemRift 鍘嬬缉鏉冮噸鐩綍锛堜笉鎺ㄩ€侊級
 memrift_weights/
 
-# 训练/模型大文件（不推送）
+# 璁粌/妯″瀷澶ф枃浠讹紙涓嶆帹閫侊級
 checkpoints/
 **/checkpoints/
 *.safetensors

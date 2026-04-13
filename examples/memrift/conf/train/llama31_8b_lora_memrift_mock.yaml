@@ -1,8 +1,12 @@
-# Llama-3.1-8B + MemRift 使用 mock 数据训练（无需准备真实 data_path）
-# 用于显存对比测试
+# Llama-3.1-8B + MemRift with mock data (no real data_path).
+# For smoke tests and memory comparison.
 
 defaults:
   - llama31_8b_lora_memrift
+
+# Foreground run so compare script can parse peak VRAM / iter time from host logs.
+system:
+  run_foreground: true
 
 data:
   data_path: null

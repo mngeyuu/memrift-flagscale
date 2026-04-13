@@ -1,9 +1,5 @@
-# Llama-3.1-8B LoRA + MemRift Training Configuration
-#
-# Demonstrates MemRift memory-efficient training on a large model:
-# - Frozen base weights loaded from compressed format
-# - LoRA adapters for fine-tuning
-# - On-demand weight materialization to save GPU memory
+# Mistral-7B LoRA + MemRift Training Configuration
+# Default tokenizer/model id targets Mistral-7B-Instruct-v0.3 (swap for v0.1 if needed).
 #
 # IMPORTANT: MemRift v1 only supports TP=1 (tensor_model_parallel_size: 1)
 #
@@ -12,18 +8,16 @@
 #    cd flagscale/compress/float_split_stride_pin
 #    pip install -e .
 #
-# 2. Prepare compressed weights:
+# 2. Prepare compressed weights (HF id must match the base you train):
 #    python -m flagscale.compress.memrift.offline_comp.prepare_weight \
-#        --model meta-llama/Llama-3.1-8B \
-#        --outdir ./memrift_weights/llama31_8b_level18 \
+#        --model mistralai/Mistral-7B-Instruct-v0.3 \
+#        --outdir ./memrift_weights/mistral_7b_level18 \
 #        --level 18
 #
-# 3. Update paths below
+# Note: HF Mistral may use sliding-window attention; Megatron path may differ for
+# very long sequences. Mock training with moderate seq_length is usually fine.
 
 system:
-  # ============================================
-  # CRITICAL: TP=1 constraint for MemRift v1
-  # ============================================
   tensor_model_parallel_size: 1
   pipeline_model_parallel_size: 1
   context_parallel_size: 1
@@ -31,7 +25,6 @@ system:
   disable_bias_linear: true
   use_flash_attn: true
   sequence_parallel: false
-  # LoRA+MemRift: keep false to avoid DistributedOptimizer gradient buffering overhead / VRAM
   use_distributed_optimizer: false
 
   precision:
@@ -47,12 +40,9 @@ system:
     save_interval: 500
   ckpt_format: torch
 
-  # ============================================
-  # MemRift Configuration
-  # ============================================
   memrift_enable: true
   memrift_weight_enable: true
-  memrift_compressed_weight_dir: ./memrift_weights/llama31_8b_level18
+  memrift_compressed_weight_dir: ./memrift_weights/mistral_7b_level18
   memrift_zstd_level: 3
   memrift_prefetch_layers: 12
   memrift_weight_async: true
@@ -63,7 +53,7 @@ system:
   memrift_print_debug: false
 
 model:
-  # Llama-3.1-8B architecture
+  # Mistral-7B-class architecture (align HF config for Instruct-v0.3 / v0.1)
   num_layers: 32
   hidden_size: 4096
   ffn_hidden_size: 14336
@@ -73,27 +63,25 @@ model:
   max_position_embeddings: 131072
 
   tokenizer_type: HuggingFaceTokenizer
-  tokenizer_path: meta-llama/Llama-3.1-8B
-  tokenizer_model: meta-llama/Llama-3.1-8B
+  tokenizer_path: mistralai/Mistral-7B-Instruct-v0.3
+  tokenizer_model: mistralai/Mistral-7B-Instruct-v0.3
   make_vocab_size_divisible_by: 64
 
   norm_init_weight: 1.0
   use_rotary_position_embeddings: true
-  rotary_base: 500000
+  rotary_base: 1000000
   no_position_embedding: true
   normalization: RMSNorm
   norm_epsilon: 1e-5
   swiglu: true
   untie_embeddings_and_output_weights: true
+
   attention_dropout: 0.0
   hidden_dropout: 0.0
   init_method_std: 0.02
 
   transformer_impl: transformer_engine
 
-  # ============================================
-  # PEFT/LoRA Configuration
-  # ============================================
   peft_type: lora
   lora_target_modules:
     - linear_qkv

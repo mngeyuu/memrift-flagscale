@@ -1,10 +1,15 @@
-# Llama-3.1-8B MemRift 训练入口：使用 mock 数据
-# 用于显存对比测试
+# Llama-3.1-8B MemRift train entry (mock data, memory compare).
+# See scripts/run_llama31_8b_memrift_vs_lora_output.sh
 
 defaults:
   - train/llama31_8b_lora_memrift_mock
 
 experiment:
+  # Disable torch third-party CUDA backend autoload (flagcx ABI mismatch on some nodes).
+  envs:
+    TORCH_DEVICE_BACKEND_AUTOLOAD: "0"
+  cmds:
+    before_start: export TORCH_DEVICE_BACKEND_AUTOLOAD=0
   exp_name: memrift_llama31_8b
   exp_dir: ./outputs/${experiment.exp_name}
   task:

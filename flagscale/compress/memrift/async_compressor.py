@@ -119,7 +119,7 @@ class AsyncCompressor:
         else:
             self.cctx = zstd.ZstdCompressor(level=zstd_level, write_checksum=False)
             self.dctx = zstd.ZstdDecompressor()
-        
+
         # CUDA streams for data transfer
         self.d2h_stream = torch.cuda.Stream()
         self.h2d_stream = torch.cuda.Stream()
@@ -304,21 +304,21 @@ class AsyncCompressor:
     ):
         """
         Async weight materialization (decompression + merge).
-        
+
         Args:
             exp_mv: Compressed exponent bytes
-            sm_gpu: Sign+mantissa tensor on GPU
+            sm_gpu: Sign+mantissa tensor already on GPU (transferred by caller before submission)
             orig_shape: Original tensor shape
             dtype: Target dtype
             callback: Optional callback with decompressed tensor
         """
         if self._fs_sp is None:
             raise RuntimeError("CUDA extension not available")
-        
+
         fs_sp = self._fs_sp
         h2d_stream = self.h2d_stream
         semaphore = self.decomp_semaphore
-        
+
         def _c_contiguous_strides(shape):
             strides = [1] * len(shape)
             running = 1
@@ -326,7 +326,7 @@ class AsyncCompressor:
                 running *= shape[i + 1]
                 strides[i] = running
             return tuple(strides)
-        
+
         def _materialize():
             semaphore.acquire()
             cpu_exp = None
@@ -343,7 +343,8 @@ class AsyncCompressor:
                     nread = reader.readinto(view)
                     assert nread == numel, "decompress size mismatch"
 
-                # Submit merge kernel on dedicated h2d_stream (async)
+                # Submit merge kernel on dedicated h2d_stream (async).
+                # sm_gpu is already on GPU (transferred by caller on main thread).
                 strides = _c_contiguous_strides(orig_shape)
                 with torch.cuda.stream(h2d_stream):
                     bf16 = fs_sp.merge(
@@ -351,6 +352,7 @@ class AsyncCompressor:
                         list(orig_shape), list(strides), 0,
                         dtype, h2d_stream.cuda_stream
                     )
+                    sm_gpu.record_stream(h2d_stream)  # keep sm_gpu alive until stream completes
                 evt = h2d_stream.record_event()
 
                 # Release semaphore immediately after submitting the GPU kernel

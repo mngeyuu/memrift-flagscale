@@ -1,9 +1,4 @@
-# Llama-3.1-8B LoRA + MemRift Training Configuration
-#
-# Demonstrates MemRift memory-efficient training on a large model:
-# - Frozen base weights loaded from compressed format
-# - LoRA adapters for fine-tuning
-# - On-demand weight materialization to save GPU memory
+# Llama-3.2-3B-Instruct LoRA + MemRift Training Configuration
 #
 # IMPORTANT: MemRift v1 only supports TP=1 (tensor_model_parallel_size: 1)
 #
@@ -14,16 +9,13 @@
 #
 # 2. Prepare compressed weights:
 #    python -m flagscale.compress.memrift.offline_comp.prepare_weight \
-#        --model meta-llama/Llama-3.1-8B \
-#        --outdir ./memrift_weights/llama31_8b_level18 \
+#        --model meta-llama/Llama-3.2-3B-Instruct \
+#        --outdir ./memrift_weights/llama32_3b_level18 \
 #        --level 18
 #
-# 3. Update paths below
+# 3. Update memrift_compressed_weight_dir / tokenizer paths below if needed
 
 system:
-  # ============================================
-  # CRITICAL: TP=1 constraint for MemRift v1
-  # ============================================
   tensor_model_parallel_size: 1
   pipeline_model_parallel_size: 1
   context_parallel_size: 1
@@ -31,7 +23,6 @@ system:
   disable_bias_linear: true
   use_flash_attn: true
   sequence_parallel: false
-  # LoRA+MemRift: keep false to avoid DistributedOptimizer gradient buffering overhead / VRAM
   use_distributed_optimizer: false
 
   precision:
@@ -47,14 +38,11 @@ system:
     save_interval: 500
   ckpt_format: torch
 
-  # ============================================
-  # MemRift Configuration
-  # ============================================
   memrift_enable: true
   memrift_weight_enable: true
-  memrift_compressed_weight_dir: ./memrift_weights/llama31_8b_level18
+  memrift_compressed_weight_dir: ./memrift_weights/llama32_3b_level18
   memrift_zstd_level: 3
-  memrift_prefetch_layers: 12
+  memrift_prefetch_layers: 10
   memrift_weight_async: true
   memrift_activation_enable: true
   memrift_act_async: true
@@ -63,18 +51,18 @@ system:
   memrift_print_debug: false
 
 model:
-  # Llama-3.1-8B architecture
-  num_layers: 32
-  hidden_size: 4096
-  ffn_hidden_size: 14336
-  num_attention_heads: 32
+  # Llama-3.2-3B-Instruct architecture (align with HF config)
+  num_layers: 28
+  hidden_size: 3072
+  ffn_hidden_size: 8192
+  num_attention_heads: 24
   num_query_groups: 8
   seq_length: 2048
   max_position_embeddings: 131072
 
   tokenizer_type: HuggingFaceTokenizer
-  tokenizer_path: meta-llama/Llama-3.1-8B
-  tokenizer_model: meta-llama/Llama-3.1-8B
+  tokenizer_path: meta-llama/Llama-3.2-3B-Instruct
+  tokenizer_model: meta-llama/Llama-3.2-3B-Instruct
   make_vocab_size_divisible_by: 64
 
   norm_init_weight: 1.0
@@ -85,15 +73,13 @@ model:
   norm_epsilon: 1e-5
   swiglu: true
   untie_embeddings_and_output_weights: true
+
   attention_dropout: 0.0
   hidden_dropout: 0.0
   init_method_std: 0.02
 
   transformer_impl: transformer_engine
 
-  # ============================================
-  # PEFT/LoRA Configuration
-  # ============================================
   peft_type: lora
   lora_target_modules:
     - linear_qkv
