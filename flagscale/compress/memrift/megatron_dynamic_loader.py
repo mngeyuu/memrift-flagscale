@@ -403,7 +403,7 @@ def ensure_group_param_materialized(group: MergedWeightGroup) -> Optional[torch.
 class MegatronDynamicLoader:
     """
     Dynamic weight loader for Megatron models (TP=1 only).
-    
+
     Key features:
     1. HF -> Megatron name mapping
     2. Merged weight assembly (qkv, fc1)
@@ -411,7 +411,7 @@ class MegatronDynamicLoader:
     4. Original weight release
     5. TE-compatible pre-decompression
     6. Forward/backward hooks
-    
+
     Usage:
         loader = MegatronDynamicLoader(
             model=model,
@@ -435,7 +435,7 @@ class MegatronDynamicLoader:
         "up_proj": ("mlp.linear_fc1", "up"),
         "down_proj": ("mlp.linear_fc2", None),
     }
-    
+
     # Megatron target weights
     MEGATRON_WEIGHT_TARGETS = [
         "self_attention.linear_qkv",
@@ -443,6 +443,38 @@ class MegatronDynamicLoader:
         "mlp.linear_fc1",
         "mlp.linear_fc2",
     ]
+
+    # HF global (non-layer) param name → candidate Megatron paths (model-relative).
+    # Tried in order; first match wins.  Handles both wrapped (language_model.*) and
+    # bare Megatron GPT model structures.
+    NON_LAYER_HF_TO_MEGATRON_HINTS: Dict[str, List[str]] = {
+        "model.embed_tokens.weight": [
+            "embedding.word_embeddings.weight",
+            "language_model.embedding.word_embeddings.weight",
+        ],
+        "model.norm.weight": [
+            "decoder.final_layernorm.weight",
+            "language_model.decoder.final_layernorm.weight",
+        ],
+        "lm_head.weight": [
+            "output_layer.weight",
+            "language_model.output_layer.weight",
+        ],
+    }
+
+    # Per-layer HF norm suffix → candidate Megatron paths (layer-relative).
+    # TE (Transformer Engine) fuses layer norms into the adjacent linear module;
+    # the non-TE fallback paths are also listed.
+    LAYER_NORM_SUFFIX_TO_MEGATRON: Dict[str, List[str]] = {
+        "input_layernorm.weight": [
+            "self_attention.linear_qkv.layer_norm_weight",   # TE fused
+            "input_layernorm.weight",                         # non-TE
+        ],
+        "post_attention_layernorm.weight": [
+            "mlp.linear_fc1.layer_norm_weight",               # TE fused
+            "post_attention_layernorm.weight",                 # non-TE
+        ],
+    }
     
     def __init__(
         self,
@@ -870,7 +902,108 @@ class MegatronDynamicLoader:
         """Release all groups in a layer."""
         for group in self.layer2groups.get(layer_name, []):
             self._clear_param(group)
-    
+
+    # ── Non-layer weight helpers ─────────────────────────────────────────────
+
+    def _navigate(self, root: nn.Module, path: str):
+        """Navigate to a sub-module or parameter by dot-separated path."""
+        obj = root
+        for part in path.split("."):
+            obj = getattr(obj, part, None)
+            if obj is None:
+                return None
+        return obj
+
+    def _get_decoder_layers_for_norms(self) -> Optional[nn.ModuleList]:
+        """Return the decoder ModuleList (used for per-layer norm writes)."""
+        if hasattr(self.model, "decoder") and hasattr(self.model.decoder, "layers"):
+            return self.model.decoder.layers
+        if hasattr(self.model, "language_model") and hasattr(self.model.language_model, "decoder"):
+            return self.model.language_model.decoder.layers
+        for _name, m in self.model.named_modules():
+            if hasattr(m, "layers") and isinstance(m.layers, nn.ModuleList):
+                return m.layers
+        return None
+
+    def materialize_non_layer_weights(self) -> int:
+        """
+        Decompress and write all non-layer weights into the model.
+
+        This includes:
+        1. Global params: embed_tokens, final norm, lm_head
+        2. Per-layer norms: input_layernorm, post_attention_layernorm
+           (both TE-fused and non-TE paths are tried)
+
+        Call this **before** release_original_weights() so that the model has
+        correct weights for inference — the compressed directory is the sole
+        weight source when no Megatron checkpoint is loaded via --load.
+
+        Returns: number of parameters successfully written.
+        """
+        written = 0
+        decoder_layers = self._get_decoder_layers_for_norms()
+
+        for cp in self.non_layer_cps:
+            hf_name = cp.hf_name
+            written_this = False
+
+            # 1) Global non-layer mapping (embed_tokens, final norm, lm_head)
+            hints = self.NON_LAYER_HF_TO_MEGATRON_HINTS.get(hf_name)
+            if hints:
+                for hint_path in hints:
+                    target = self._navigate(self.model, hint_path)
+                    if target is not None and isinstance(target, torch.Tensor):
+                        weight = cp.materialize(sync=True)
+                        with torch.no_grad():
+                            target.data = weight.to(device=target.device, dtype=target.dtype)
+                        cp.release()
+                        written += 1
+                        written_this = True
+                        _trace(f"non-layer: {hf_name} → {hint_path}")
+                        break
+
+            # 2) Per-layer norm mapping
+            if not written_this and decoder_layers is not None:
+                layer_idx = cp.layer_idx
+                if 0 <= layer_idx < len(decoder_layers):
+                    layer = decoder_layers[layer_idx]
+                    for norm_suffix, mg_paths in self.LAYER_NORM_SUFFIX_TO_MEGATRON.items():
+                        if not hf_name.endswith(norm_suffix):
+                            continue
+                        for mg_path in mg_paths:
+                            parts = mg_path.rsplit(".", 1)
+                            attr = parts[-1]
+                            mod = self._navigate(layer, parts[0]) if len(parts) == 2 else layer
+                            if mod is None:
+                                continue
+                            target = getattr(mod, attr, None)
+                            if isinstance(target, torch.Tensor):
+                                weight = cp.materialize(sync=True)
+                                with torch.no_grad():
+                                    target.data = weight.to(
+                                        device=target.device, dtype=target.dtype
+                                    )
+                                cp.release()
+                                written += 1
+                                written_this = True
+                                _trace(
+                                    f"layer norm: {hf_name} → "
+                                    f"decoder.layers.{layer_idx}.{mg_path}"
+                                )
+                                break
+                        if written_this:
+                            break
+
+            if not written_this and self.print_debug:
+                print(f"[MemRift] materialize_non_layer: no target found for {hf_name!r}")
+
+        if self.print_debug:
+            print(
+                f"[MemRift] materialize_non_layer_weights: "
+                f"wrote {written}/{len(self.non_layer_cps)} params"
+            )
+        return written
+
     def prefetch_initial_layers(self):
         """
         Pre-materialize first K layers and write back to param.data (TE compatibility).
@@ -1131,7 +1264,101 @@ class MegatronDynamicLoader:
         
         if self.print_debug:
             print(f"[MemRift] Installed hooks for {len(self.layer_names)} layers")
-    
+
+    def install_inference_hooks(self, async_compressor=None):
+        """
+        Forward-only hooks for inference (no backward pass, no activation compression).
+
+        Weight lifecycle per token:
+          forward_pre  → decompress current layer (consumes prefetch future or sync),
+                         write to param.data, submit prefetch for next layer
+          forward_post → release current layer (GPU memory freed immediately)
+
+        GPU peak: ~1 layer resident at a time (~400 MB for Mistral-7B), identical
+        to the training forward pattern but without backward re-materialization.
+        """
+        self.async_compressor = async_compressor
+
+        # ── find layer modules (same logic as install_hooks) ──
+        name2layer = {}
+        for name, module in self.model.named_modules():
+            name2layer[name] = module
+
+        decoder_layers = None
+        if hasattr(self.model, "decoder") and hasattr(self.model.decoder, "layers"):
+            decoder_layers = self.model.decoder.layers
+        elif hasattr(self.model, "language_model") and hasattr(self.model.language_model, "decoder"):
+            decoder_layers = self.model.language_model.decoder.layers
+
+        if decoder_layers is not None:
+            for i, layer in enumerate(decoder_layers):
+                name2layer[f"decoder.layers.{i}"] = layer
+
+        if self.print_debug:
+            found = [n for n in self.layer_names if n in name2layer]
+            print(f"[MemRift] install_inference_hooks: found {len(found)}/{len(self.layer_names)} layers")
+
+        # ── forward hooks only (no backward hooks) ──
+        for i in range(len(self.layer_names)):
+            cur = self.layer_names[i]
+            span = 1
+            nxt_names = self.layer_names[i + 1 : min(len(self.layer_names), i + 1 + span)]
+
+            if cur not in name2layer:
+                continue
+
+            layer_module = name2layer[cur]
+            cur_groups = self.layer2groups.get(cur, [])
+            nxt_groups_list = [self.layer2groups.get(nm, []) for nm in nxt_names]
+
+            def make_fwd_pre_infer(cur_groups, nxt_groups_list, cur_name, async_comp):
+                def _hook(mod, inp):
+                    t0 = time.perf_counter()
+                    _trace(f"infer fwd_pre: layer={cur_name}")
+
+                    # 1) Submit prefetch for next layer before materializing current,
+                    #    so CPU decompression overlaps with GPU compute.
+                    if async_comp and nxt_groups_list:
+                        for nxt_groups in nxt_groups_list:
+                            for group in nxt_groups:
+                                for cp in group.components.values():
+                                    if cp._bf16 is None and cp._prefetch_future is None:
+                                        cp._sm_on_gpu = cp.sm_cpu.to(cp._device, non_blocking=False)
+                                        cp._prefetch_future = async_comp.materialize_async(
+                                            cp.exp_mv, cp._sm_on_gpu, cp.orig_shape, cp._dtype
+                                        )
+
+                    # 2) Materialize current layer (consume prefetch or sync decompress).
+                    for group in cur_groups:
+                        weight = self._materialize_group(
+                            group, sync=self._hook_materialize_sync
+                        )
+                        self._set_param(group, weight)
+
+                    hook_ms = (time.perf_counter() - t0) * 1000.0
+                    if hook_ms > self._hook_warn_ms:
+                        _trace(f"WARN infer fwd_pre: slow {hook_ms:.1f} ms (layer={cur_name})")
+                return _hook
+
+            def make_fwd_post_infer(cur_groups):
+                def _hook(mod, inp, out):
+                    # Release current layer immediately — next token's forward_pre
+                    # will re-materialize (or consume the prefetch future).
+                    for group in cur_groups:
+                        self._clear_param(group)
+                return _hook
+
+            layer_module.register_forward_pre_hook(
+                make_fwd_pre_infer(cur_groups, nxt_groups_list, cur, async_compressor)
+            )
+            layer_module.register_forward_hook(
+                make_fwd_post_infer(cur_groups)
+            )
+            # No backward hooks registered.
+
+        if self.print_debug:
+            print(f"[MemRift] Installed inference-only hooks for {len(self.layer_names)} layers")
+
     def reset(self):
         if self.async_compressor is not None:
             self.async_compressor.reset()

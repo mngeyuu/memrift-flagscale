@@ -428,6 +428,102 @@ def _inject_activation_compression(
         print(f"[MemRift] Activation compression enabled (per-layer, {wrapped_count} layers wrapped)")
 
 
+def inject_memrift_for_inference(
+    model: nn.Module | List[nn.Module],
+    args: Any,
+) -> None:
+    """
+    Inject MemRift weight streaming hooks for inference (forward-only).
+
+    Call this after model.eval() and before the first forward pass.
+
+    Differences from inject_memrift_if_configured:
+    - Calls loader.install_inference_hooks() (forward hooks only, no backward)
+    - Activation compression is NOT injected (saved_tensors_hooks require gradients)
+    - No memory profiler
+    - Works with torch.no_grad() contexts
+
+    Args:
+        model: Model or list of model chunks
+        args: Args object with --memrift-* attributes (same as training)
+    """
+    if not getattr(args, "memrift_enable", False):
+        return
+    if not getattr(args, "memrift_weight_enable", False):
+        return
+
+    _check_cuda_extension()
+    _check_zstandard()
+
+    compressed_weight_dir = getattr(args, "memrift_compressed_weight_dir", None)
+    if not compressed_weight_dir:
+        raise ValueError("[MemRift] --memrift-compressed-weight-dir is required for inference")
+
+    # AsyncCompressor (optional, same as training)
+    from flagscale.compress.memrift.async_compressor import AsyncCompressor
+
+    async_compressor = None
+    weight_async = getattr(args, "memrift_weight_async", False)
+    if weight_async:
+        zstd_level       = getattr(args, "memrift_zstd_level", 6)
+        decode_workers   = getattr(args, "memrift_decode_pool_workers", 16)
+        compress_workers = getattr(args, "memrift_compress_pool_workers", 8)
+        async_compressor = AsyncCompressor(
+            compress_workers=compress_workers,
+            decode_workers=decode_workers,
+            concurrency_limit=4,
+            zstd_level=zstd_level,
+            enable_async=True,
+        )
+
+    model_chunks = model if isinstance(model, list) else [model]
+    device = torch.device(f"cuda:{torch.cuda.current_device()}")
+    prefetch_layers = getattr(args, "memrift_prefetch_layers", 1)
+    print_debug = getattr(args, "memrift_print_debug", False)
+    rank = 0  # inference is always single-process in current usage
+
+    if print_debug:
+        print(f"[MemRift] inject_memrift_for_inference: dir={compressed_weight_dir}")
+
+    try:
+        from flagscale.compress.memrift.megatron_dynamic_loader import MegatronDynamicLoader
+    except ImportError as e:
+        raise RuntimeError(f"[MemRift] Failed to import MegatronDynamicLoader: {e}")
+
+    for chunk_idx, chunk in enumerate(model_chunks):
+        unwrapped = chunk.module if hasattr(chunk, "module") else chunk
+        loader = MegatronDynamicLoader(
+            model=unwrapped,
+            comp_dir=compressed_weight_dir,
+            device=device,
+            prefetch_layers=prefetch_layers,
+            print_debug=print_debug,
+        )
+        loader.load_weights()
+        loader.build_param_mapping()
+        # Materialize non-layer weights (embeddings, norms, lm_head) BEFORE
+        # releasing layer weights.  The compressed directory is the sole weight
+        # source when no Megatron checkpoint is loaded via --load; these params
+        # would otherwise stay at random initialization.
+        non_layer_written = loader.materialize_non_layer_weights()
+        if print_debug:
+            print(f"[MemRift] Chunk {chunk_idx}: wrote {non_layer_written} non-layer params")
+        loader.release_original_weights()
+        loader.install_inference_hooks(async_compressor=async_compressor)
+        loader.prefetch_initial_layers()   # pre-decompress layer 0 for TE compatibility
+
+        if print_debug:
+            stats = loader.get_memory_stats()
+            print(f"[MemRift] Chunk {chunk_idx} ready for inference: "
+                  f"sm_cpu={stats['sm_cpu_mb']:.0f} MB, "
+                  f"exp_cpu={stats['exp_cpu_mb']:.0f} MB, "
+                  f"cuda_alloc={stats['cuda_allocated_mb']:.0f} MB, "
+                  f"layers={stats['num_layers']}")
+
+    if print_debug:
+        print("[MemRift] inference injection complete")
+
+
 def get_memrift_status(args: Any) -> dict:
     """
     Get MemRift configuration status for logging.

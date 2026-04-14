@@ -1,0 +1,36 @@
+# MemRift vLLM inference — Mistral-7B-Instruct-v0.2
+#
+# GPU peak: ~1 decoder layer (~400 MB) + KV cache
+# instead of full model 13.5 GB
+#
+# Run:
+#   python flagscale/inference/inference_llm_memrift.py \
+#     --config-path examples/memrift/conf \
+#     --config-name inference_mistral_7b
+#
+# Env vars for tuning (optional):
+#   MEMRIFT_ZSTD_LEVEL=3
+#   MEMRIFT_DECODE_WORKERS=16
+#   MEMRIFT_PREFETCH_LAYERS=1
+
+llm:
+  model: /share/project/mengyc/models/Mistral-7B-Instruct-v0.2
+  tokenizer: /share/project/mengyc/models/Mistral-7B-Instruct-v0.2
+  dtype: bfloat16
+  tensor_parallel_size: 1
+  # Reserve only what's needed for KV cache + 1 layer.
+  # MemRift offloads weights; KV cache for 4K context ≈ 0.5 GB.
+  gpu_memory_utilization: 0.1
+  max_model_len: 4096
+  # enforce_eager is injected automatically by inference_llm_memrift.py
+  # Do NOT set torch_compile_config here.
+  seed: 42
+
+generate:
+  prompts:
+    - "Once upon a time"
+    - "The future of AI is"
+    - "Explain quantum computing in simple terms:"
+  sampling:
+    max_tokens: 50
+    temperature: 0.0   # greedy
