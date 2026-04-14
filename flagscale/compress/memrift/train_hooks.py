@@ -124,28 +124,22 @@ def inject_memrift_if_configured(
             raise ValueError(
                 f"memrift_compressed_weight_dir does not exist: {compressed_weight_dir}"
             )
+        # In multi-GPU mode the per-rank sub-directory may not exist yet at this
+        # point (it is created by the offline compression tool).  Only validate
+        # when using the legacy single-GPU layout (index.json directly under dir).
         index_path = os.path.join(compressed_weight_dir, "index.json")
-        if not os.path.isfile(index_path):
-            raise ValueError(
-                f"index.json not found in memrift_compressed_weight_dir: {index_path}"
-            )
-    
-    # Get TP rank/size from mpu if available and validate TP=1 constraint
-    tp_rank = 0
-    tp_size = 1
-    try:
-        from megatron.core import mpu
-        tp_rank = mpu.get_tensor_model_parallel_rank()
-        tp_size = mpu.get_tensor_model_parallel_world_size()
-    except:
-        pass
-    
-    if tp_size != 1:
-        raise ValueError(
-            f"MemRift v1 only supports TP=1, but tensor_model_parallel_size={tp_size}.\n"
-            "Please set tensor_model_parallel_size: 1 in your config.\n"
-            "TP>1 support will be added in a future version."
-        )
+        # Single-GPU legacy: index must be present.
+        # Multi-GPU shard mode: sub-dirs tp{N}_pp{M}/ will be validated by loader.
+        # We skip the hard check here so TP/PP runs can proceed.
+
+    # Get TP/PP rank and size from Megatron parallel state
+    from flagscale.compress.memrift.parallel_state_utils import (
+        get_tp_rank, get_tp_size, get_pp_rank, get_pp_size,
+    )
+    tp_rank = get_tp_rank()
+    tp_size = get_tp_size()
+    pp_rank = get_pp_rank()
+    pp_size = get_pp_size()
     
     # Convert model to list if needed
     if not isinstance(model, list):
@@ -154,12 +148,12 @@ def inject_memrift_if_configured(
         model_chunks = model
     
     rank = getattr(args, "rank", 0)
-    if print_debug and rank == 0:
-        print(f"[MemRift] Initializing with:")
+    if print_debug:
+        print(f"[MemRift][rank{rank}] Initializing with:")
         print(f"  weight_enable={weight_enable}")
         print(f"  activation_enable={activation_enable}")
         print(f"  compressed_weight_dir={compressed_weight_dir}")
-        print(f"  tp_rank={tp_rank}, tp_size={tp_size}")
+        print(f"  tp={tp_rank}/{tp_size}  pp={pp_rank}/{pp_size}")
         print(f"  prefetch_layers={prefetch_layers}")
         print(f"  weight_async={weight_async}")
     
@@ -189,6 +183,8 @@ def inject_memrift_if_configured(
             compressed_weight_dir=compressed_weight_dir,
             tp_rank=tp_rank,
             tp_size=tp_size,
+            pp_rank=pp_rank,
+            pp_size=pp_size,
             prefetch_layers=prefetch_layers,
             async_compressor=async_compressor,
             print_debug=print_debug,
@@ -234,6 +230,8 @@ def _inject_weight_compression(
     compressed_weight_dir: str,
     tp_rank: int,
     tp_size: int,
+    pp_rank: int,
+    pp_size: int,
     prefetch_layers: int,
     async_compressor: Optional[Any],
     print_debug: bool,
@@ -290,6 +288,9 @@ def _inject_weight_compression(
                 device=device,
                 tp_rank=tp_rank,
                 tp_size=tp_size,
+                pp_rank=pp_rank,
+                pp_size=pp_size,
+                total_layers=getattr(args, "num_layers", None),
                 prefetch_layers=prefetch_layers,
                 print_debug=print_debug,
                 allowed_targets=allowed_targets,
@@ -480,10 +481,19 @@ def inject_memrift_for_inference(
     device = torch.device(f"cuda:{torch.cuda.current_device()}")
     prefetch_layers = getattr(args, "memrift_prefetch_layers", 1)
     print_debug = getattr(args, "memrift_print_debug", False)
-    rank = 0  # inference is always single-process in current usage
+
+    # TP/PP rank (relevant for multi-GPU inference)
+    from flagscale.compress.memrift.parallel_state_utils import (
+        get_tp_rank, get_tp_size, get_pp_rank, get_pp_size,
+    )
+    tp_rank = get_tp_rank()
+    tp_size = get_tp_size()
+    pp_rank = get_pp_rank()
+    pp_size = get_pp_size()
 
     if print_debug:
-        print(f"[MemRift] inject_memrift_for_inference: dir={compressed_weight_dir}")
+        print(f"[MemRift] inject_memrift_for_inference: "
+              f"dir={compressed_weight_dir} tp={tp_rank}/{tp_size} pp={pp_rank}/{pp_size}")
 
     try:
         from flagscale.compress.memrift.megatron_dynamic_loader import MegatronDynamicLoader
@@ -496,6 +506,11 @@ def inject_memrift_for_inference(
             model=unwrapped,
             comp_dir=compressed_weight_dir,
             device=device,
+            tp_rank=tp_rank,
+            tp_size=tp_size,
+            pp_rank=pp_rank,
+            pp_size=pp_size,
+            total_layers=getattr(args, "num_layers", None),
             prefetch_layers=prefetch_layers,
             print_debug=print_debug,
         )

@@ -483,74 +483,100 @@ class MegatronDynamicLoader:
         device: torch.device,
         tp_rank: int = 0,
         tp_size: int = 1,
+        pp_rank: int = 0,
+        pp_size: int = 1,
+        total_layers: Optional[int] = None,
         prefetch_layers: int = 1,
         print_debug: bool = False,
         allowed_targets: Optional[Set[str]] = None,
     ):
         """
         Initialize the loader.
-        
+
         Args:
             model: Megatron model (unwrapped, should be the decoder/GPTModel)
-            comp_dir: Path to compressed weights directory
+            comp_dir: Base path to compressed weights directory.
+                      For multi-GPU: comp_dir/tp{N}_pp{M}/ is used when it exists.
+                      Falls back to comp_dir/tp{N}/ then comp_dir/ (single-GPU legacy).
             device: Target CUDA device
-            tp_rank: Tensor parallel rank (must be 0 for v1)
-            tp_size: Tensor parallel world size (must be 1 for v1)
-            prefetch_layers: Number of layers to prefetch
+            tp_rank: Tensor parallel rank of this process
+            tp_size: Tensor parallel world size
+            pp_rank: Pipeline parallel rank of this process
+            pp_size: Pipeline parallel world size
+            total_layers: Total number of transformer layers in the full model
+                          (used to compute PP layer offset).  Required when pp_size > 1.
+            prefetch_layers: Number of layers to prefetch ahead
             print_debug: Print debug messages
-            allowed_targets: Optional Megatron target filter. If set, only these
-                targets are dynamically managed (others are skipped).
+            allowed_targets: Optional Megatron target filter.
         """
-        # Validate TP=1 constraint
-        if tp_size != 1:
-            raise ValueError(
-                f"MegatronDynamicLoader v1 only supports TP=1, got tp_size={tp_size}. "
-                "Please set tensor_model_parallel_size: 1 in your config."
-            )
-        
         self.model = model
         self.comp_dir = comp_dir
         self.device = device
         self.tp_rank = tp_rank
         self.tp_size = tp_size
+        self.pp_rank = pp_rank
+        self.pp_size = pp_size
+        self.total_layers = total_layers
         self.prefetch_layers = prefetch_layers
         self.print_debug = print_debug
         self.allowed_targets = allowed_targets
+
+        # PP layer offset: local layer i on this rank = global layer (pp_offset + i)
+        if pp_size > 1 and total_layers is not None:
+            self.pp_layer_offset = pp_rank * (total_layers // pp_size)
+        else:
+            self.pp_layer_offset = 0
+
+        # Resolve effective compressed-weight directory for this TP/PP rank
+        from flagscale.compress.memrift.parallel_state_utils import resolve_comp_dir
+        self._effective_comp_dir = resolve_comp_dir(comp_dir, tp_rank, pp_rank)
+
+        # Detect shard mode: index uses Megatron-format names (already merged & sharded)
+        from flagscale.compress.memrift.parallel_state_utils import is_shard_index
+        _idx_path = os.path.join(self._effective_comp_dir, "index.json")
+        self._shard_mode: bool = is_shard_index(_idx_path)
+
         # Relax hook-side hard sync to reduce main-thread stalls.
-        # Default to relaxed sync for better overlap; force strict sync with
-        # MEMRIFT_WEIGHT_SYNC=1. Keep MEMRIFT_WEIGHT_RELAX_SYNC for compatibility.
         strict_sync = os.environ.get("MEMRIFT_WEIGHT_SYNC", "0") == "1"
         if os.environ.get("MEMRIFT_WEIGHT_RELAX_SYNC", "") == "1":
             strict_sync = False
         self._hook_materialize_sync = strict_sync
-        
-        # Load index
-        with open(os.path.join(comp_dir, "index.json")) as f:
+
+        # Load index from the effective (rank-specific) directory
+        with open(_idx_path) as f:
             self.index = json.load(f)
-        
+
+        if print_debug:
+            mode = "shard" if self._shard_mode else "HF"
+            print(
+                f"[MemRift] Init: tp={tp_rank}/{tp_size} pp={pp_rank}/{pp_size} "
+                f"offset={self.pp_layer_offset} mode={mode} "
+                f"dir={self._effective_comp_dir}"
+            )
+
         # Data structures
         self.num_layers = 0
         self.layer_names: List[str] = []
-        
+
         # layer_idx -> megatron_target -> MergedWeightGroup
         self.merged_groups: Dict[int, Dict[str, MergedWeightGroup]] = defaultdict(dict)
-        
+
         # layer_name -> list of MergedWeightGroup (for hooks)
         self.layer2groups: Dict[str, List[MergedWeightGroup]] = defaultdict(list)
-        
+
         # All CompressedParams (for memory tracking)
         self.all_cps: List[CompressedParam] = []
-        
+
         # Non-layer params (embed, lm_head, etc.)
         self.non_layer_cps: List[CompressedParam] = []
-        
+
         # Track original weights that were released
-        self.released_params: Set[int] = set()  # id(param) set
-        
+        self.released_params: Set[int] = set()
+
         # Async compressor reference
         self.async_compressor = None
         self._hook_warn_ms = _env_float("MEMRIFT_HOOK_WARN_MS", 800.0)
-        
+
         # Backward empty_cache counter (aligned with memrift_demo)
         self._bwd_counter = 0
         self._bwd_empty_step = int(_env_float("MEMRIFT_BWD_EMPTY_STEP", 5))
@@ -590,123 +616,201 @@ class MegatronDynamicLoader:
     def load_weights(self):
         """
         Load compressed weights from disk and organize into MergedWeightGroups.
+
+        Shard mode  (comp_dir/tp{N}_pp{M}/index.json):
+          - Names are Megatron-format: "decoder.layers.{i}.self_attention.linear_qkv.weight"
+          - Weights are already merged (QKV cat'd, FC1 gate+up cat'd) and TP-sharded.
+          - Layer indices are LOCAL to this PP rank (0 … L/PP-1).
+          - No HF→Megatron mapping needed.
+
+        HF mode (legacy, comp_dir/index.json):
+          - Names are HuggingFace-format: "model.layers.{i}.self_attn.q_proj.weight"
+          - QKV and FC1 components loaded separately and merged at materialize time.
+          - TP=1, PP=1 only.
         """
         if self.print_debug:
-            print(f"[MemRift] Loading weights from {self.comp_dir}")
-        
+            print(f"[MemRift] Loading weights from {self._effective_comp_dir} "
+                  f"(shard_mode={self._shard_mode})")
+
+        if self._shard_mode:
+            self._load_weights_shard_mode()
+        else:
+            self._load_weights_hf_mode()
+
+    def _load_weights_hf_mode(self):
+        """HF-mode loading: legacy single-GPU path with HF→Megatron name mapping."""
         # First pass: count layers
         for entry in self.index:
             layer_idx = self._get_layer_idx(entry["name"])
             if layer_idx is not None:
                 self.num_layers = max(self.num_layers, layer_idx + 1)
-        
+
         self.layer_names = [f"decoder.layers.{i}" for i in range(self.num_layers)]
-        
+
         if self.print_debug:
-            print(f"[MemRift] Found {self.num_layers} layers")
-        
-        # Second pass: load weights and organize
+            print(f"[MemRift] HF mode: {self.num_layers} layers")
+
         for entry in self.index:
             if entry["scheme"] != "split_zstd":
-                if self.print_debug:
-                    print(f"[MemRift] Skipping non-split_zstd: {entry['name']}")
                 continue
-            
+
             hf_name = entry["name"]
             layer_idx = self._get_layer_idx(hf_name)
             megatron_target, merge_key = self._map_hf_to_megatron(hf_name)
-            
-            # Read compressed data
-            file_path = os.path.join(self.comp_dir, entry["file"])
-            with open(file_path, "rb") as f:
-                numel = struct.unpack("<Q", f.read(8))[0]
-                sm_size = numel * (1 if entry["dtype"] == "bfloat16" else 3)
-                sm_bytes = np.frombuffer(f.read(sm_size), dtype=np.uint8)
-                exp_bytes = f.read()
-            
-            # Keep sm in pinned CPU memory; it will be moved to GPU only at merge time.
-            # This avoids holding ~6-7 GiB of GPU memory for the full sign matrix.
-            sm_pinned = torch.from_numpy(sm_bytes).pin_memory()
-            dtype = torch.bfloat16 if entry["dtype"] == "bfloat16" else torch.float32
 
-            # Create CompressedParam
-            cp = CompressedParam(entry["shape"], sm_pinned, exp_bytes, dtype, self.device)
+            file_path = os.path.join(self._effective_comp_dir, entry["file"])
+            cp = self._read_compressed_file(file_path, entry)
             cp.hf_name = hf_name
             cp.megatron_target = megatron_target or ""
             cp.merge_key = merge_key
             cp.layer_idx = layer_idx if layer_idx is not None else -1
-            
+
             self.all_cps.append(cp)
-            
+
             if layer_idx is not None and megatron_target:
-                # Layer parameter: add to merged group
                 if megatron_target not in self.merged_groups[layer_idx]:
                     self.merged_groups[layer_idx][megatron_target] = MergedWeightGroup(
                         megatron_target=megatron_target,
                         layer_idx=layer_idx,
                     )
-                
                 group = self.merged_groups[layer_idx][megatron_target]
-                if merge_key:
-                    group.components[merge_key] = cp
-                else:
-                    # Single weight (proj, fc2)
-                    group.components["single"] = cp
-                
+                group.components[merge_key if merge_key else "single"] = cp
                 if self.print_debug:
-                    print(f"[MemRift] Loaded {hf_name} -> layer {layer_idx} / {megatron_target} / {merge_key or 'single'}")
+                    print(f"[MemRift] HF {hf_name} → layer {layer_idx} / "
+                          f"{megatron_target} / {merge_key or 'single'}")
             else:
-                # Non-layer parameter
                 self.non_layer_cps.append(cp)
-                if self.print_debug:
-                    print(f"[MemRift] Non-layer param: {hf_name}")
-        
-        # Validate merged groups
+
+        # Validate
         for layer_idx, groups in self.merged_groups.items():
             for target, group in groups.items():
                 if not group.is_complete():
-                    missing = []
-                    if "linear_qkv" in target:
-                        missing = [k for k in ["q", "k", "v"] if k not in group.components]
-                    elif "linear_fc1" in target:
-                        missing = [k for k in ["gate", "up"] if k not in group.components]
-                    print(f"[MemRift] Warning: Incomplete group layer {layer_idx} / {target}, missing: {missing}")
-        
+                    missing = (
+                        [k for k in ["q", "k", "v"] if k not in group.components]
+                        if "linear_qkv" in target else
+                        [k for k in ["gate", "up"] if k not in group.components]
+                    )
+                    print(f"[MemRift] Warning: Incomplete group layer {layer_idx} "
+                          f"/ {target}, missing: {missing}")
+
         if self.print_debug:
-            print(f"[MemRift] Loaded {len(self.all_cps)} compressed params")
+            print(f"[MemRift] Loaded {len(self.all_cps)} compressed params (HF mode)")
+
+    def _load_weights_shard_mode(self):
+        """
+        Shard-mode loading: Megatron-format names, weights already merged & TP-sharded.
+
+        Name format: "decoder.layers.{local_i}.{megatron_target}.weight"
+        e.g.  "decoder.layers.0.self_attention.linear_qkv.weight"
+              "decoder.layers.0.mlp.linear_fc1.weight"
+
+        Each entry is a single 'single'-component MergedWeightGroup — no merging needed.
+        """
+        # First pass: count local layers on this PP rank
+        for entry in self.index:
+            layer_idx = self._get_layer_idx(entry["name"])
+            if layer_idx is not None:
+                self.num_layers = max(self.num_layers, layer_idx + 1)
+
+        self.layer_names = [f"decoder.layers.{i}" for i in range(self.num_layers)]
+
+        if self.print_debug:
+            print(f"[MemRift] Shard mode: {self.num_layers} local layers "
+                  f"(global offset {self.pp_layer_offset})")
+
+        for entry in self.index:
+            if entry["scheme"] != "split_zstd":
+                continue
+
+            param_name = entry["name"]  # Megatron-format
+            layer_idx = self._get_layer_idx(param_name)
+
+            file_path = os.path.join(self._effective_comp_dir, entry["file"])
+            cp = self._read_compressed_file(file_path, entry)
+            cp.hf_name = param_name   # reuse hf_name field for storage
+            cp.layer_idx = layer_idx if layer_idx is not None else -1
+
+            self.all_cps.append(cp)
+
+            if layer_idx is not None:
+                # Extract megatron_target: everything between "decoder.layers.{i}."
+                # and ".weight" (or end of string)
+                prefix = f"decoder.layers.{layer_idx}."
+                if param_name.startswith(prefix):
+                    remainder = param_name[len(prefix):]
+                    # Strip trailing ".weight" or ".bias"
+                    for suffix in (".weight", ".bias"):
+                        if remainder.endswith(suffix):
+                            remainder = remainder[: -len(suffix)]
+                            break
+                    megatron_target = remainder
+                else:
+                    megatron_target = param_name
+
+                cp.megatron_target = megatron_target
+                cp.merge_key = None
+
+                if megatron_target not in self.merged_groups[layer_idx]:
+                    self.merged_groups[layer_idx][megatron_target] = MergedWeightGroup(
+                        megatron_target=megatron_target,
+                        layer_idx=layer_idx,
+                    )
+                self.merged_groups[layer_idx][megatron_target].components["single"] = cp
+
+                if self.print_debug:
+                    print(f"[MemRift] Shard {param_name} → layer {layer_idx} / {megatron_target}")
+            else:
+                # Non-layer param (embed, norm, lm_head)
+                self.non_layer_cps.append(cp)
+
+        if self.print_debug:
+            print(f"[MemRift] Loaded {len(self.all_cps)} compressed params (shard mode)")
+
+    def _read_compressed_file(self, file_path: str, entry: dict) -> "CompressedParam":
+        """Read one split_zstd file and return an unbound CompressedParam."""
+        with open(file_path, "rb") as f:
+            numel = struct.unpack("<Q", f.read(8))[0]
+            sm_size = numel * (1 if entry["dtype"] == "bfloat16" else 3)
+            sm_bytes = np.frombuffer(f.read(sm_size), dtype=np.uint8)
+            exp_bytes = f.read()
+        sm_pinned = torch.from_numpy(sm_bytes).pin_memory()
+        dtype = torch.bfloat16 if entry["dtype"] == "bfloat16" else torch.float32
+        return CompressedParam(entry["shape"], sm_pinned, exp_bytes, dtype, self.device)
     
     def build_param_mapping(self):
         """
         Build mapping from MergedWeightGroup to actual model parameters.
-        
-        This finds the target nn.Module and attribute for each group,
-        so hooks can write materialized weights back to the model.
+
+        In shard mode the index uses LOCAL layer indices (0 … L/PP-1) which map
+        directly to decoder_layers[i] on this PP rank.  No offset translation
+        is needed inside this method — the index was generated against the same
+        local model.
+
+        In HF mode (TP=1, PP=1) behaviour is identical to the original.
         """
         if self.print_debug:
             print("[MemRift] Building param mapping...")
-        
+
         # Find decoder layers
         decoder_layers = None
         for name, module in self.model.named_modules():
-            # Try common patterns
             if hasattr(module, "layers") and isinstance(module.layers, nn.ModuleList):
                 decoder_layers = module.layers
                 if self.print_debug:
-                    print(f"[MemRift] Found decoder layers at: {name}.layers")
+                    print(f"[MemRift] Found decoder layers at: {name}.layers "
+                          f"({len(decoder_layers)} layers on this PP rank)")
                 break
-        
+
         if decoder_layers is None:
-            # Prefer explicit paths so we bind to the same structure used at runtime
             if hasattr(self.model, "decoder") and hasattr(self.model.decoder, "layers"):
                 decoder_layers = self.model.decoder.layers
             elif hasattr(self.model, "language_model") and hasattr(self.model.language_model, "decoder"):
                 decoder_layers = self.model.language_model.decoder.layers
             elif hasattr(self.model, "module"):
-                # DDP wrapped: bind against unwrapped model
                 unwrapped = self.model.module
                 self.model = unwrapped
                 return self.build_param_mapping()
-        
+
         if decoder_layers is None:
             print("[MemRift] Warning: Could not find decoder layers, param binding may fail")
             return
