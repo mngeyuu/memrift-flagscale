@@ -1,4 +1,5 @@
 import os
+
 from datetime import datetime
 
 from omegaconf import DictConfig, OmegaConf
@@ -6,9 +7,11 @@ from omegaconf import DictConfig, OmegaConf
 from flagscale.runner.backend.backend_base import BackendBase
 from flagscale.runner.runner_train import (
     _get_args_megatron,
+    _get_args_pi0,
+    _get_args_robotics,
     _update_config_train,
 )
-from flagscale.runner.utils import get_pkg_dir, logger, parse_hostfile, resolve_path
+from flagscale.runner.utils import logger, parse_hostfile
 
 
 class MegatronBackend(BackendBase):
@@ -20,7 +23,12 @@ class MegatronBackend(BackendBase):
 
     def _prepare(self):
         _update_config_train(self.config)
-        self.user_args = _get_args_megatron(self.config)
+        if self.config.experiment.task.backend == "megatron":
+            self.user_args = _get_args_megatron(self.config)
+        elif self.config.experiment.task.backend == "robotics":
+            self.user_args = _get_args_robotics(self.config)
+        elif self.config.experiment.task.backend == "pi0":
+            self.user_args = _get_args_pi0(self.config)
         self.rdzv_id = datetime.now().strftime("%Y%m%d_%H%M%S.%f")
         self.user_envs = self.config.experiment.get("envs", {})
         self.user_script = self.config.experiment.task.entrypoint
@@ -36,8 +44,9 @@ class MegatronBackend(BackendBase):
         host,
         node_rank,
         cmd,
-        background=False,
-        pkg_dir=None,
+        background=True,
+        with_test=False,
+        root_dir=None,
         enable_monitoring=False,
     ):
         system_config = config.train.system
@@ -45,7 +54,7 @@ class MegatronBackend(BackendBase):
 
         no_shared_fs = config.experiment.runner.get("no_shared_fs", False)
         if no_shared_fs:
-            host_output_file = os.path.join(logging_config.log_dir, "host.output")
+            host_output_file = os.path.join(logging_config.log_dir, f"host.output")
         else:
             host_output_file = os.path.join(
                 logging_config.log_dir, f"host_{node_rank}_{host}.output"
@@ -56,20 +65,39 @@ class MegatronBackend(BackendBase):
         host_pid_file = os.path.join(logging_config.pids_dir, f"host_{node_rank}_{host}.pid")
 
         os.makedirs(logging_config.scripts_dir, exist_ok=True)
-        pkg_dir = (
-            get_pkg_dir()
-            if pkg_dir is None
-            else resolve_path(pkg_dir, "build_dir", raise_missing=True)
-        )
-        assert os.path.exists(pkg_dir), f"PKG_DIR {pkg_dir} does not exist."
-        megatron_dir = os.path.join(pkg_dir, "flagscale", "train")
+        if root_dir is not None:
+            root_dir = os.path.abspath(root_dir)
+        else:
+            root_dir = os.path.dirname(
+                os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            )
+        assert os.path.exists(root_dir), f"ROOT_DIR {root_dir} does not exist."
+        megatron_dir = os.path.join(root_dir, "flagscale", "train")
         cmds_config = config.experiment.get("cmds", None)
         if cmds_config:
             before_start = cmds_config.get("before_start", "")
         else:
             before_start = ""
+        conda_env_name = (
+            os.environ.get("CONDA_DEFAULT_ENV")
+            or os.environ.get("CONDA_ENV")
+            or "myc-flagscale"
+        )
         with open(host_run_script_file, "w") as f:
             f.write("#!/bin/bash\n\n")
+            f.write(f'CONDA_ENV_NAME="{conda_env_name}"\n')
+            f.write('if ! command -v torchrun >/dev/null 2>&1; then\n')
+            f.write('  if [ -f "$HOME/miniconda3/etc/profile.d/conda.sh" ]; then\n')
+            f.write('    . "$HOME/miniconda3/etc/profile.d/conda.sh"\n')
+            f.write('    conda activate "$CONDA_ENV_NAME"\n')
+            f.write('  elif [ -f "$HOME/anaconda3/etc/profile.d/conda.sh" ]; then\n')
+            f.write('    . "$HOME/anaconda3/etc/profile.d/conda.sh"\n')
+            f.write('    conda activate "$CONDA_ENV_NAME"\n')
+            f.write('  fi\n')
+            f.write('fi\n')
+            f.write('if [ -n "${CONDA_PREFIX:-}" ]; then\n')
+            f.write('  export PATH="${CONDA_PREFIX}/bin:${PATH}"\n')
+            f.write('fi\n\n')
             f.write(f"{before_start}\n")
             f.write(f"mkdir -p {system_config.checkpoint.load}\n")
             f.write(f"mkdir -p {system_config.checkpoint.save}\n")
@@ -78,42 +106,46 @@ class MegatronBackend(BackendBase):
             f.write(f"mkdir -p {system_config.logging.details_dir}\n")
             f.write(f"mkdir -p {system_config.logging.tensorboard_dir}\n")
             f.write(f"mkdir -p {system_config.logging.wandb_save_dir}\n")
-            f.write("\n")
-            f.write(f"cd {pkg_dir}\n")
-            f.write("\n")
-            f.write(f"export PYTHONPATH={pkg_dir}:{megatron_dir}:${{PYTHONPATH}}\n")
-            f.write("\n")
+            f.write(f"\n")
+            f.write(f"cd {root_dir}\n")
+            f.write(f"\n")
+            f.write(f"export PYTHONPATH={root_dir}:{megatron_dir}:${{PYTHONPATH}}\n")
+            f.write(f"\n")
             f.write(f'cmd="{cmd}"\n')
-            f.write("\n")
+            f.write(f"\n")
             if enable_monitoring:
                 monitor_launcher_path = os.path.join(
-                    pkg_dir, "flagscale", "runner", "elastic", "monitor_launcher.py"
+                    root_dir, "flagscale", "runner", "elastic", "monitor_launcher.py"
                 )
                 ssh_port = config.experiment.runner.get("ssh_port", 22)
-                f.write("# Start monitoring service in background\n")
-                f.write(f"python {monitor_launcher_path} \\\n")
+                f.write(f'# Start monitoring service in background\n')
+                f.write(f'python {monitor_launcher_path} \\\n')
                 f.write(f'  --log-dir "{logging_config.log_dir}" \\\n')
                 f.write(f'  --pid-file "{host_pid_file}" \\\n')
                 f.write(f'  --host "{host}" \\\n')
-                f.write(f"  --node-rank {node_rank} \\\n")
-                f.write(f"  {'--no-shared-fs' if no_shared_fs else ''} \\\n")
-                f.write(f"  --ssh-port {ssh_port} \\\n")
-                f.write("  --interval 5 \\\n")
-                f.write("  --enable-log-collection \\\n")
-                f.write("  --enable-diagnostic \\\n")
-                f.write(f"  > /tmp/monitor_output_{node_rank}_{host}.log 2>&1 &\n")
+                f.write(f'  --node-rank {node_rank} \\\n')
+                f.write(f'  {"--no-shared-fs" if no_shared_fs else ""} \\\n')
+                f.write(f'  --ssh-port {ssh_port} \\\n')
+                f.write(f'  --interval 5 \\\n')
+                f.write(f'  --enable-log-collection \\\n')
+                f.write(f'  --enable-diagnostic \\\n')
+                f.write(f'  > /tmp/monitor_output_{node_rank}_{host}.log 2>&1 &\n')
                 f.write(
                     f'echo "Monitor service started in background for {host} (node {node_rank})"\n'
                 )
-            f.write("\n")
+            f.write(f'\n')
 
-            if background:
-                f.write(
-                    f'nohup bash -c "$cmd; sync" >> {host_output_file} 2>&1 & echo $! > {host_pid_file}\n'
-                )
+            if with_test:
+                f.write(f'bash -c "$cmd; sync" \n')
             else:
-                f.write("set -o pipefail\n")
-                f.write(f'bash -c "$cmd; sync" 2>&1 | tee -a {host_output_file}\n')
+                # TODO: need a option to control whether to append or overwrite the output file
+                # Now, it always appends to the output file
+                if background:
+                    f.write(
+                        f'nohup bash -c "$cmd; sync" >> {host_output_file} 2>&1 & echo $! > {host_pid_file}\n'
+                    )
+                else:
+                    f.write(f'bash -c "$cmd; sync" >> {host_output_file} 2>&1\n')
             f.write("\n")
             f.flush()
             os.fsync(f.fileno())

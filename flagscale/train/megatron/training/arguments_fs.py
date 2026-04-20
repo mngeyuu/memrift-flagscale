@@ -839,6 +839,109 @@ def _add_engram_args(parser):
     return parser
 
 
+def _add_memrift_args(parser):
+    """Add MemRift (memory-efficient training) arguments (FlagScale specific)."""
+    group = parser.add_argument_group(title='flagscale memrift')
+
+    group.add_argument(
+        '--memrift-enable',
+        action='store_true',
+        default=False,
+        help='Enable MemRift memory-efficient training (master switch).',
+    )
+    group.add_argument(
+        '--memrift-weight-enable',
+        action='store_true',
+        default=False,
+        help='Enable MemRift weight compression (frozen base weights on-demand load/release).',
+    )
+    group.add_argument(
+        '--memrift-activation-enable',
+        action='store_true',
+        default=False,
+        help='Enable MemRift activation compression (saved_tensors_hooks).',
+    )
+    group.add_argument(
+        '--memrift-compressed-weight-dir',
+        type=str,
+        default=None,
+        help='Path to MemRift compressed weight directory (contains index.json).',
+    )
+    group.add_argument(
+        '--memrift-zstd-level',
+        type=int,
+        default=6,
+        help='Zstd compression level for MemRift (1-22, default 6).',
+    )
+    group.add_argument(
+        '--memrift-prefetch-layers',
+        type=int,
+        default=4,
+        help='Number of layers to prefetch in MemRift (default 4).',
+    )
+    group.add_argument(
+        '--memrift-weight-async',
+        action='store_true',
+        default=False,
+        help='Enable async weight decompression in MemRift.',
+    )
+    group.add_argument(
+        '--memrift-act-async',
+        action='store_true',
+        default=False,
+        help='Enable async activation compression/decompression in MemRift.',
+    )
+    group.add_argument(
+        '--memrift-act-store-cpu',
+        type=int,
+        default=None,
+        choices=[0, 1],
+        help='1: after GPU ANS encode, copy compressed activation to pinned CPU (saves VRAM). '
+        '0: keep compressed tensor on GPU. If omitted, use env MEMRIFT_ACT_STORE_CPU (default 1).',
+    )
+    group.add_argument(
+        '--memrift-decode-pool-workers',
+        type=int,
+        default=16,
+        help='Number of decode thread pool workers for MemRift async operations.',
+    )
+    group.add_argument(
+        '--memrift-zstd-pool-workers',
+        type=int,
+        default=-1,
+        help='Dedicated thread pool for CPU zstd weight decompression only; '
+        '-1 means same as --memrift-decode-pool-workers (nvCOMP uses decode pool).',
+    )
+    group.add_argument(
+        '--memrift-compress-pool-workers',
+        type=int,
+        default=8,
+        help='Number of compress thread pool workers for MemRift async operations.',
+    )
+    group.add_argument(
+        '--memrift-gpu-weight-cache-layers',
+        type=int,
+        default=0,
+        help='Number of decoder layers whose merged bf16 weights are kept '
+        'in a GPU LRU cache across iterations to skip repeated decode/H2D. '
+        '0 (default) disables the cache. Each cached layer costs roughly '
+        '(model_params / num_layers) * 2 bytes of GPU memory.',
+    )
+    group.add_argument(
+        '--memrift-print-debug',
+        action='store_true',
+        default=False,
+        help='Print MemRift debug messages.',
+    )
+    group.add_argument(
+        '--memrift-profile-memory',
+        action='store_true',
+        default=False,
+        help='Enable per-layer memory profiling for MemRift (reports activation breakdown).',
+    )
+    return parser
+
+
 def add_flagscale_arguments(parser):
     """
     Add all FlagScale-specific arguments to a Megatron parser.
@@ -863,4 +966,5 @@ def add_flagscale_arguments(parser):
     parser = _add_regularization_args(parser)
     parser = _add_flagos_args(parser)
     parser = _add_engram_args(parser)
+    parser = _add_memrift_args(parser)
     return parser

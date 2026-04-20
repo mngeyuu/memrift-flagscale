@@ -1,0 +1,157 @@
+# TinyLlama 1.1B LoRA + MemRift Training Configuration
+# 
+# This example demonstrates MemRift memory-efficient training with:
+# - Frozen base weights loaded from compressed format
+# - LoRA adapters for fine-tuning
+# - On-demand weight materialization to save GPU memory
+#
+# IMPORTANT: MemRift v1 only supports TP=1 (tensor_model_parallel_size: 1)
+#
+# Prerequisites: 
+# 1. Build CUDA extension:
+#    cd flagscale/compress/float_split_stride_pin
+#    pip install -e .
+#
+# 2. Prepare compressed weights:
+#    python -m flagscale.compress.memrift.offline_comp.prepare_weight \
+#        --model /path/to/TinyLlama-1.1B \
+#        --outdir ./memrift_weights/tinyllama_1b_level18 \
+#        --level 18
+#
+# 3. Update paths below:
+#    - memrift_compressed_weight_dir
+#    - tokenizer_path
+#    - data_path
+
+system:
+  # ============================================
+  # CRITICAL: TP=1 constraint for MemRift v1
+  # ============================================
+  tensor_model_parallel_size: 1  # MUST be 1 for MemRift v1
+  pipeline_model_parallel_size: 1
+  context_parallel_size: 1
+  
+  disable_bias_linear: true
+  use_flash_attn: true
+  sequence_parallel: false
+  # LoRA+MemRift: false 避免为整网分配 DistributedOptimizer 的梯度缓冲，降低显存
+  use_distributed_optimizer: false
+  
+  precision:
+    fp16: false
+    bf16: true
+  
+  logging:
+    log_interval: 10
+    tensorboard_log_interval: 10
+    wandb_mode: disabled
+  
+  checkpoint:
+    save_interval: 500
+  # PEFT/LoRA 仅测试过 torch 格式 checkpoint（默认 torch_dist 会触发 AssertionError）
+  ckpt_format: torch
+  
+  # ============================================
+  # MemRift Configuration
+  # ============================================
+  # Master switch - set to true to enable MemRift
+  memrift_enable: true
+  
+  # Enable frozen base weight compression/on-demand loading
+  memrift_weight_enable: true
+  
+  # Path to compressed weights (REQUIRED when weight_enable is true)
+  # Must contain index.json and *.bin files from prepare_weight.py
+  memrift_compressed_weight_dir: ./memrift_weights/tinyllama_1b_level18
+  
+  # Zstd compression level (should match prepare_weight --level)
+  memrift_zstd_level: 6
+  
+  # Number of layers to prefetch (2+ helps GPU util when decompress is slow)
+  # Default 6; async_prefetch config overrides to 8 for closer-to-LoRA timing
+  memrift_prefetch_layers: 6
+  memrift_gpu_weight_cache_layers: 0
+
+  # Enable async decompression (recommended for better performance)
+  memrift_weight_async: true
+  
+  # Activation compression: compress saved activations and release on demand during backward
+  # Set to true to reduce peak activation memory (wired in train_step automatically)
+  memrift_activation_enable: true
+  memrift_act_async: true
+  
+  # Thread pool sizes for async operations (more decode workers = less "prefetch not ready")
+  memrift_decode_pool_workers: 16
+  memrift_compress_pool_workers: 8
+  
+  # Debug logging (set to true for troubleshooting)
+  memrift_print_debug: false
+
+model:
+  # Model architecture (TinyLlama 1.1B)
+  num_layers: 22
+  hidden_size: 2048
+  ffn_hidden_size: 5632
+  num_attention_heads: 32
+  num_query_groups: 4  # GQA
+  seq_length: 2048
+  max_position_embeddings: 2048
+  
+  # Tokenizer (update path to your model)
+  # 同时设置 tokenizer_path 与 tokenizer_model，兼容不同 Megatron 解析器，避免 AssertionError: Tokenizer path must be specified
+  tokenizer_type: HuggingFaceTokenizer
+  tokenizer_path: TinyLlama/TinyLlama-1.1B-Chat-v1.0  # 可通过 override 或环境覆盖
+  tokenizer_model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+  make_vocab_size_divisible_by: 1
+  
+  # Model config
+  norm_init_weight: 1.0
+  use_rotary_position_embeddings: true
+  rotary_base: 10000
+  no_position_embedding: true
+  normalization: RMSNorm
+  norm_epsilon: 1e-5
+  swiglu: true
+  untie_embeddings_and_output_weights: false
+  attention_dropout: 0.0
+  hidden_dropout: 0.0
+  init_method_std: 0.02
+  
+  # Transformer Engine
+  transformer_impl: transformer_engine
+
+  # ============================================
+  # PEFT/LoRA Configuration
+  # ============================================
+  # LoRA for fine-tuning with frozen base
+  peft_type: lora
+  lora_target_modules:
+    - linear_qkv
+    - linear_proj
+    - linear_fc1
+    - linear_fc2
+  lora_dim: 16
+  lora_alpha: 32
+  lora_dropout: 0.0
+
+data:
+  # Data configuration (update path to your data)
+  data_path: /path/to/data  # UPDATE THIS
+  split: 949,50,1
+  micro_batch_size: 1
+  global_batch_size: 8
+  # Reduce get_batch() blocking so GPU is not starved (see scripts/GPU_UTIL_ZERO_ANALYSIS.md)
+  num_workers: 4
+
+trainer:
+  # Training configuration
+  train_iters: 1000
+  lr: 2e-4
+  min_lr: 2e-5
+  lr_warmup_iters: 100
+  lr_decay_style: cosine
+  weight_decay: 0.1
+  clip_grad: 1.0
+  adam_beta1: 0.9
+  adam_beta2: 0.95
+  adam_eps: 1e-8

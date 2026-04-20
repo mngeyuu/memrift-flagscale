@@ -1,0 +1,26 @@
+# MemRift on + LoRA MLP-only: Llama-3.1-8B, seq=4096, bs=1, mock
+
+defaults:
+  - train/llama31_8b_seq4096_bs1_memrift_gpu_mlp_only
+
+experiment:
+  exp_name: llama31_8b_seq4096_bs1_memrift_mlp_only
+  exp_dir: ./outputs/${experiment.exp_name}
+  envs:
+    TORCH_DEVICE_BACKEND_AUTOLOAD: "0"
+    MEMRIFT_DEEP_ASYNC: "1"
+    MEMRIFT_WEIGHT_RELAX_SYNC: "1"
+  task:
+    type: train
+    backend: megatron
+    entrypoint: flagscale/train/train_gpt.py
+  runner:
+    type: torchrun
+    nnodes: 1
+    nproc_per_node: 1
+
+action: run
+
+hydra:
+  run:
+    dir: ${experiment.exp_dir}/hydra

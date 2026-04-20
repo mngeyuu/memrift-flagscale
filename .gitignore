@@ -10,6 +10,21 @@ logs
 log_file/*
 outputs
 *.log
+
+# Local profiling / benchmark dumps (can be huge)
+benchmark_profile_artifacts/
+
+# MemRift 压缩权重目录（不推送）
+memrift_weights/
+
+# 训练/模型大文件（不推送）
+checkpoints/
+**/checkpoints/
+*.safetensors
+data/
+pretrained/
+*.sqlite
+*.nsys-rep
 *.out
 .idea/
 third_party/*
@@ -23,4 +38,4 @@ template_conf.yaml
 template_funcs.py
 
 # data files
-# assets/
+assets/

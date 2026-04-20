@@ -1,0 +1,38 @@
+# TinyLlama 1.1B MemRift 全开配置
+# - 权重压缩 + 激活压缩均开启
+# - micro_batch_size=1, seq_length=4096
+# - 显存 & 迭代时间记录
+
+defaults:
+  - tinyllama_1b_lora_memrift
+
+model:
+  seq_length: 4096
+  max_position_embeddings: 4096
+
+data:
+  data_path: null
+  mock_data: true
+  split: 1,0,0
+  micro_batch_size: 1
+  global_batch_size: 1
+
+system:
+  # 权重压缩（MemRift weight）
+  memrift_weight_enable: true
+  memrift_weight_async: true
+  memrift_prefetch_layers: 4
+
+  # 激活压缩（MemRift activation）
+  memrift_activation_enable: true
+  memrift_act_async: true
+
+  # 显存逐层追踪（memory_profiler.py）
+  memrift_profile_memory: true
+
+  logging:
+    log_interval: 1      # 每步都打印 iteration time & memory
+
+trainer:
+  train_iters: 20
+  lr_warmup_iters: 2

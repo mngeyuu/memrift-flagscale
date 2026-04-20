@@ -1,0 +1,38 @@
+# TinyLlama 1.1B MemRift：仅权重压缩 + 权重异步解压（memrift_weight_async）
+# - 关闭激活压缩（memrift_activation_enable: false）
+# - micro_batch_size=1, global_batch_size=1, seq_length=4096
+# - 显存峰值（memrift_profile_memory）与每步迭代时间（log_interval=1）
+
+defaults:
+  - tinyllama_1b_lora_memrift
+
+model:
+  seq_length: 4096
+  max_position_embeddings: 4096
+
+data:
+  data_path: null
+  mock_data: true
+  split: 1,0,0
+  micro_batch_size: 1
+  global_batch_size: 1
+
+system:
+  # 前台运行 + tee 到 logs/host_0_*.output（便于直接看迭代时间与显存）
+  run_foreground: true
+
+  memrift_weight_enable: true
+  memrift_weight_async: true
+  memrift_prefetch_layers: 4
+
+  memrift_activation_enable: false
+  memrift_act_async: false
+
+  memrift_profile_memory: true
+
+  logging:
+    log_interval: 1
+
+trainer:
+  train_iters: 20
+  lr_warmup_iters: 2

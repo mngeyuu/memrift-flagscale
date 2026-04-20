@@ -1,0 +1,55 @@
+# TinyLlama 1.1B MemRift 全开 GPU-Only 优化配置
+# - 权重压缩 + 激活压缩均开启，完全走 GPU 路径（无 D2H/H2D）
+# - 异步压缩/解压，优化线程池和预取策略
+# - 目标：训练时长接近纯 LoRA
+# - micro_batch_size=1, seq_length=4096
+# - 显存 & 迭代时间记录
+
+defaults:
+  - tinyllama_1b_lora_memrift
+
+model:
+  seq_length: 4096
+  max_position_embeddings: 4096
+
+data:
+  data_path: null
+  mock_data: true
+  split: 1,0,0
+  micro_batch_size: 1
+  global_batch_size: 1
+
+system:
+  # 前台运行 + tee 到 logs/host_0_*.output（便于直接看迭代时间与显存）
+  run_foreground: true
+
+  # ============================================
+  # MemRift 优化配置（GPU-Only）
+  # ============================================
+
+  # 权重压缩（MemRift weight）- GPU nvCOMP ANS 路径
+  memrift_weight_enable: true
+  memrift_weight_async: true
+  memrift_prefetch_layers: 10  # 增加预取层数，最大化与计算重叠
+  memrift_compressed_weight_dir: ./memrift_weights/tinyllama_1b_nvcomp_ans
+
+  # 激活压缩（MemRift activation）- GPU-only nvCOMP ANS 路径
+  memrift_activation_enable: true
+  memrift_act_async: true
+
+  # 线程池优化（更大的线程池用于激活压缩/解压）
+  memrift_decode_pool_workers: 16    # 更多解压 worker
+  memrift_compress_pool_workers: 16  # 更多压缩 worker
+  memrift_zstd_level: 3              # 低压缩级别换取更快速度（GPU 路径用 nvCOMP，这个是备用）
+
+  # 显存逐层追踪（memory_profiler.py）
+  memrift_profile_memory: false  # 生产环境关闭以减少开销
+
+  memrift_print_debug: false
+
+  logging:
+    log_interval: 1      # 每步都打印 iteration time & memory
+
+trainer:
+  train_iters: 30
+  lr_warmup_iters: 3

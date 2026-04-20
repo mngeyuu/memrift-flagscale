@@ -2145,6 +2145,14 @@ def _add_training_args(parser):
                        help='Use the built-in pytorch profiler. '
                        'Useful if you wish to view profiles in tensorboard.',
                        dest='use_pytorch_profiler')
+    group.add_argument(
+        '--profile-chrome-trace-dir',
+        type=str,
+        default=None,
+        help='If set (with --profile --use-pytorch-profiler), export each profiler cycle as '
+        'Chrome Trace JSON (chrome_trace_*.json) into this directory for chrome://tracing '
+        'or perfetto.dev. TensorBoard handler still runs if --tensorboard-dir is set.',
+    )
     group.add_argument('--profile-ranks', nargs='+', type=int, default=[0],
                        help='Global ranks to profile.')
     group.add_argument('--record-memory-history', action="store_true", default=False,

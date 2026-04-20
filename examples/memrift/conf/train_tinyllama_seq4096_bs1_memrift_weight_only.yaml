@@ -1,0 +1,26 @@
+# TinyLlama 1.1B：seq=4096, bs=1, MemRift 仅权重压缩 + 显存/迭代时间记录
+
+defaults:
+  - train/tinyllama_1b_seq4096_bs1_memrift_weight_only
+
+experiment:
+  exp_name: memrift_tinyllama_seq4096_bs1_weight_only
+  exp_dir: ./outputs/${experiment.exp_name}
+  envs:
+    TORCH_DEVICE_BACKEND_AUTOLOAD: "0"
+    # 默认 memrift_weights/tinyllama_1b_level18 多为 legacy zstd；装 nvCOMP 时需放开 CPU zstd 权重路径
+    MEMRIFT_ALLOW_CPU_WEIGHT_ZSTD: "1"
+  task:
+    type: train
+    backend: megatron
+    entrypoint: flagscale/train/train_gpt.py
+  runner:
+    type: torchrun
+    nnodes: 1
+    nproc_per_node: 1
+
+action: run
+
+hydra:
+  run:
+    dir: ${experiment.exp_dir}/hydra

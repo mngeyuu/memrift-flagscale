@@ -1,0 +1,13 @@
+# 在「仅权重 MemRift」基础上，使用 prepare_weight --compression nvcomp_ans 生成的 NVAN 权重
+# 目录默认：./memrift_weights/tinyllama_1b_nvcomp_ans
+# 生成示例：
+#   python -m flagscale.compress.memrift.offline_comp.prepare_weight \
+#     --model TinyLlama/TinyLlama-1.1B-Chat-v1.0 \
+#     --outdir ./memrift_weights/tinyllama_1b_nvcomp_ans \
+#     --compression nvcomp_ans --level 18
+
+defaults:
+  - tinyllama_1b_seq4096_bs1_memrift_weight_only
+
+system:
+  memrift_compressed_weight_dir: ./memrift_weights/tinyllama_1b_nvcomp_ans

@@ -1,0 +1,55 @@
+# Llama-3.1-8B MemRift 仅权重压缩优化配置
+# - 仅开启权重压缩，关闭激活压缩
+# - 异步压缩/解压，优化线程池和预取策略
+# - micro_batch_size=1, seq_length=4096
+# - 显存 & 迭代时间记录
+
+defaults:
+  - llama31_8b_lora_memrift
+
+model:
+  seq_length: 4096
+  max_position_embeddings: 4096
+
+data:
+  data_path: null
+  mock_data: true
+  split: 1,0,0
+  micro_batch_size: 1
+  global_batch_size: 1
+
+system:
+  # 前台运行 + tee 到 logs/host_0_*.output（便于直接看迭代时间与显存）
+  run_foreground: true
+
+  # ============================================
+  # MemRift 优化配置（仅权重压缩）
+  # ============================================
+
+  # 权重压缩（MemRift weight）- GPU nvCOMP ANS 路径
+  memrift_weight_enable: true
+  memrift_weight_async: true
+  memrift_prefetch_layers: 12  # 增加预取层数，最大化与计算重叠
+  memrift_gpu_weight_cache_layers: 0
+  memrift_compressed_weight_dir: ./memrift_weights/llama31_8b_nvcomp_ans
+
+  # 激活压缩（关闭）
+  memrift_activation_enable: false
+  memrift_act_async: false
+
+  # 线程池优化
+  memrift_decode_pool_workers: 48
+  memrift_compress_pool_workers: 16
+  memrift_zstd_level: 3
+
+  # 显存逐层追踪（关闭）
+  memrift_profile_memory: false
+
+  memrift_print_debug: false
+
+  logging:
+    log_interval: 1
+
+trainer:
+  train_iters: 30
+  lr_warmup_iters: 3

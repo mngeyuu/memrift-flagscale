@@ -1,0 +1,40 @@
+# Llama-3.1-8B MemRift 全开 GPU-Only 优化配置
+# - 权重压缩 + 激活压缩均开启，完全走 GPU 路径
+# - seq=2048, bs=1，目标是训练时长尽量接近纯 LoRA
+
+defaults:
+  - llama31_8b_lora_memrift
+
+model:
+  seq_length: 2048
+  max_position_embeddings: 2048
+
+data:
+  data_path: null
+  mock_data: true
+  split: 1,0,0
+  micro_batch_size: 1
+  global_batch_size: 1
+  num_workers: 4
+
+system:
+  # myc 等环境未装 Apex CUDA 扩展时须关闭，否则 ColumnParallelLinear 报 fused_weight_gradient_mlp_cuda 缺失
+  no_gradient_accumulation_fusion: true
+  run_foreground: true
+  memrift_weight_enable: true
+  memrift_weight_async: true
+  memrift_prefetch_layers: 2
+  memrift_compressed_weight_dir: ./memrift_weights/llama31_8b_nvcomp_ans
+  memrift_activation_enable: true
+  memrift_act_async: true
+  memrift_decode_pool_workers: 4
+  memrift_compress_pool_workers: 16
+  memrift_zstd_level: 3
+  memrift_profile_memory: false
+  memrift_print_debug: false
+  logging:
+    log_interval: 1
+
+trainer:
+  train_iters: 30
+  lr_warmup_iters: 3

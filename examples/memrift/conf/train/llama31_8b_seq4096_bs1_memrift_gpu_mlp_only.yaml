@@ -1,0 +1,9 @@
+# Llama-3.1-8B MemRift GPU-only + LoRA MLP-only (linear_fc1, linear_fc2)
+
+defaults:
+  - llama31_8b_seq4096_bs1_memrift_gpu_only_optimized
+
+model:
+  lora_target_modules:
+    - linear_fc1
+    - linear_fc2
