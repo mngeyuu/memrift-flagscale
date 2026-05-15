@@ -267,6 +267,14 @@ from megatron.training.peft import PEFT
 from megatron.plugin.platform import get_platform
 cur_platform = get_platform()
 
+# MemRift: optional memory-efficient training
+try:
+    from flagscale.compress.memrift.train_hooks import inject_memrift_if_configured
+    MEMRIFT_AVAILABLE = True
+except ImportError:
+    MEMRIFT_AVAILABLE = False
+    inject_memrift_if_configured = None
+
 def destroy_global_state():
     destroy_global_vars()
     destroy_num_microbatches_calculator()
@@ -1406,6 +1414,12 @@ def pretrain(
     # Print setup timing.
     print_rank_0('done with setup ...')
     timers.log(['model-and-optimizer-setup', 'train/valid/test-data-iterators-setup'], barrier=True)
+
+    ######## FLAGSCALE MEMRIFT BEGIN ########
+    if MEMRIFT_AVAILABLE and inject_memrift_if_configured is not None:
+        for model_module in model:
+            inject_memrift_if_configured(model_module, args)
+    ######## FLAGSCALE MEMRIFT END   ########
 
     one_logger = get_one_logger()
     one_logger and one_logger.log_metrics(app_metrics)
