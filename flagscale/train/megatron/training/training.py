@@ -2442,12 +2442,6 @@ def training_log(
     if is_last_rank() and (iteration % args.tensorboard_log_interval == 0):
         if wandb_writer:
             wandb_writer.log({'samples vs steps': args.consumed_train_samples}, iteration)
-        if learning_rate is not None:
-            writer.add_scalar('learning-rate', learning_rate, iteration)
-            writer.add_scalar('learning-rate vs samples', learning_rate, args.consumed_train_samples)
-            if wandb_writer:
-                wandb_writer.log({'learning-rate': learning_rate}, iteration)
-            wandb_writer.log({'consumed-tokens': args.consumed_train_samples * args.seq_length / 1000. / 1000 / 1000}, iteration)
         if writer:
             writer.add_scalar('learning-rate', learning_rate, iteration)
             writer.add_scalar('learning-rate vs samples', learning_rate, args.consumed_train_samples)
