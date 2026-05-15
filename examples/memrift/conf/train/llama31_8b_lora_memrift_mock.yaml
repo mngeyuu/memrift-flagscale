@@ -1,0 +1,20 @@
+# Llama-3.1-8B + MemRift with mock data (no real data_path).
+# For smoke tests and memory comparison.
+
+defaults:
+  - llama31_8b_lora_memrift
+
+# Foreground run so compare script can parse peak VRAM / iter time from host logs.
+system:
+  run_foreground: true
+
+data:
+  data_path: null
+  mock_data: true
+  split: 1,0,0
+  micro_batch_size: 1
+  global_batch_size: 8
+
+trainer:
+  train_iters: 50
+  lr_warmup_iters: 10

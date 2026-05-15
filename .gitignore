@@ -11,6 +11,9 @@ log_file/*
 outputs
 *.log
 *.out
+memrift_weights/
+benchmark_profile_artifacts/
+data/
 .idea/
 third_party/*
 dist/*

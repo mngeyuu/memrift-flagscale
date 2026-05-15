@@ -1,0 +1,22 @@
+# MemRift 训练入口：使用 openassistant-guanaco（与 memrift_demo 同源），不用 mock
+
+defaults:
+  - train/tinyllama_1b_lora_memrift_guanaco
+
+experiment:
+  exp_name: memrift_guanaco
+  exp_dir: ./outputs/${experiment.exp_name}
+  task:
+    type: train
+    backend: megatron
+    entrypoint: flagscale/train/train_gpt.py
+  runner:
+    type: torchrun
+    nnodes: 1
+    nproc_per_node: 1
+
+action: run
+
+hydra:
+  run:
+    dir: ${experiment.exp_dir}/hydra
