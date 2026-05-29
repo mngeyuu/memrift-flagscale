@@ -92,7 +92,7 @@ class CompressedParam(nn.Parameter):
     def __init__(self, orig_shape, sm_cpu, exp_mv, dtype, device):
         super().__init__()
         self.orig_shape = tuple(orig_shape)
-        self.sm_cpu = sm_cpu   # sign matrix lives on pinned CPU; H2D only at merge time
+        self._sm_gpu = sm_cpu.to(device)   # sign matrix lives on GPU permanently
         self.exp_mv = exp_mv
         self._dtype = dtype
         self._device = device  # target CUDA device
@@ -111,7 +111,6 @@ class CompressedParam(nn.Parameter):
         
         # Async prefetch
         self._prefetch_future = None
-        self._sm_on_gpu = None  # temporary GPU sm tensor; lives from prefetch submission → release()
     
     def materialize(self, sync: bool = True):
         """Decompress and materialize the full tensor."""
@@ -176,17 +175,15 @@ class CompressedParam(nn.Parameter):
             nread = reader.readinto(view)
             assert nread == numel, f"decompress size mismatch: {nread} vs {numel}"
         
-        # Merge on GPU: move sm from pinned CPU to GPU temporarily
+        # Merge on GPU: sm is already resident on GPU
         strides = _c_contiguous_strides(self.orig_shape)
         stream = torch.cuda.current_stream()
         with torch.cuda.stream(stream):
-            sm_temp = self.sm_cpu.to(self._device, non_blocking=True)
             self._bf16 = fs_sp.merge(
-                self._exp_host, sm_temp,
+                self._exp_host, self._sm_gpu,
                 list(self.orig_shape), list(strides), 0,
                 self._dtype, stream.cuda_stream
             )
-            sm_temp.record_stream(stream)  # defer free until stream completes
         ev = stream.record_event()
         self._CtoD_evt = ev
         self._ready_event.set()
@@ -217,7 +214,6 @@ class CompressedParam(nn.Parameter):
         self._bf16 = None
         self._ready_event.clear()
         self._CtoD_evt = None
-        self._sm_on_gpu = None  # free temporary GPU sm tensor
 
         if self._exp_host is not None:
             del self._exp_host
@@ -226,7 +222,7 @@ class CompressedParam(nn.Parameter):
     def release_compressed(self):
         """Release compressed data (when no longer needed)."""
         self.exp_mv = None
-        self.sm_cpu = None
+        self._sm_gpu = None
 
 
 @dataclass
@@ -298,6 +294,11 @@ def _materialize_group_tensor(group: MergedWeightGroup, sync: bool = True) -> to
             return _param.data
 
     if "linear_qkv" in group.megatron_target:
+        # Shard mode: QKV already merged into a single tensor.
+        single_cp = group.components.get("single")
+        if single_cp is not None:
+            return single_cp.materialize(sync=sync)
+
         q_cp = group.components.get("q")
         k_cp = group.components.get("k")
         v_cp = group.components.get("v")
@@ -354,6 +355,11 @@ def _materialize_group_tensor(group: MergedWeightGroup, sync: bool = True) -> to
         return merged
 
     if "linear_fc1" in group.megatron_target:
+        # Shard mode: gate+up already merged into a single tensor.
+        single_cp = group.components.get("single")
+        if single_cp is not None:
+            return single_cp.materialize(sync=sync)
+
         gate_cp = group.components.get("gate")
         up_cp = group.components.get("up")
         if gate_cp is None or up_cp is None:
@@ -773,9 +779,9 @@ class MegatronDynamicLoader:
             sm_size = numel * (1 if entry["dtype"] == "bfloat16" else 3)
             sm_bytes = np.frombuffer(f.read(sm_size), dtype=np.uint8)
             exp_bytes = f.read()
-        sm_pinned = torch.from_numpy(sm_bytes).pin_memory()
+        sm_gpu = torch.tensor(sm_bytes, dtype=torch.uint8, device=self.device)
         dtype = torch.bfloat16 if entry["dtype"] == "bfloat16" else torch.float32
-        return CompressedParam(entry["shape"], sm_pinned, exp_bytes, dtype, self.device)
+        return CompressedParam(entry["shape"], sm_gpu, exp_bytes, dtype, self.device)
     
     def build_param_mapping(self):
         """
@@ -919,7 +925,7 @@ class MegatronDynamicLoader:
 
         # Non-layer params (embed, lm_head, norm) are never dynamically loaded via
         # hooks — their weights stay in param.data permanently.  Free their compressed
-        # form (sm_cpu + exp_mv) since it will never be used for decompression.
+        # form (_sm_gpu + exp_mv) since it will never be used for decompression.
         for cp in self.non_layer_cps:
             cp.release_compressed()
 
@@ -1215,12 +1221,8 @@ class MegatronDynamicLoader:
                             for group in nxt_groups:
                                 for cp in group.components.values():
                                     if cp._bf16 is None and cp._prefetch_future is None:
-                                        # Transfer sm to GPU on main thread (sync) so the worker
-                                        # thread never touches h2d_stream for sm H2D — this avoids
-                                        # stream conflicts with activation decompression.
-                                        cp._sm_on_gpu = cp.sm_cpu.to(cp._device, non_blocking=False)
                                         cp._prefetch_future = async_comp.materialize_async(
-                                            cp.exp_mv, cp._sm_on_gpu, cp.orig_shape, cp._dtype
+                                            cp.exp_mv, cp._sm_gpu, cp.orig_shape, cp._dtype
                                         )
 
                     # 2) Materialize current layer and write back to model param.
@@ -1289,11 +1291,8 @@ class MegatronDynamicLoader:
                             for group in prv_groups:
                                 for cp in group.components.values():
                                     if cp._bf16 is None and cp._prefetch_future is None:
-                                        # Transfer sm to GPU on main thread (sync) — same rationale
-                                        # as forward hook: avoid h2d_stream contention with activations.
-                                        cp._sm_on_gpu = cp.sm_cpu.to(cp._device, non_blocking=False)
                                         cp._prefetch_future = async_comp.materialize_async(
-                                            cp.exp_mv, cp._sm_on_gpu, cp.orig_shape, cp._dtype
+                                            cp.exp_mv, cp._sm_gpu, cp.orig_shape, cp._dtype
                                         )
 
                     # 2) Materialize current layer and write back to param (backward uses it).
@@ -1427,9 +1426,8 @@ class MegatronDynamicLoader:
                             for group in nxt_groups:
                                 for cp in group.components.values():
                                     if cp._bf16 is None and cp._prefetch_future is None:
-                                        cp._sm_on_gpu = cp.sm_cpu.to(cp._device, non_blocking=False)
                                         cp._prefetch_future = async_comp.materialize_async(
-                                            cp.exp_mv, cp._sm_on_gpu, cp.orig_shape, cp._dtype
+                                            cp.exp_mv, cp._sm_gpu, cp.orig_shape, cp._dtype
                                         )
 
                     # 2) Materialize current layer (consume prefetch or sync decompress).
@@ -1471,13 +1469,12 @@ class MegatronDynamicLoader:
 
     def get_memory_stats(self) -> Dict[str, float]:
         """Get memory statistics for monitoring."""
-        sm_cpu_bytes = sum(cp.sm_cpu.numel() for cp in self.all_cps if cp.sm_cpu is not None)
+        sm_gpu_bytes = sum(cp._sm_gpu.numel() for cp in self.all_cps if cp._sm_gpu is not None)
         exp_bytes = sum(len(cp.exp_mv) for cp in self.all_cps if cp.exp_mv is not None)
 
         return {
-            "sm_cpu_bytes": sm_cpu_bytes,
-            "sm_gpu_mb": sm_cpu_bytes / 1024**2,   # keep key for backward compat; value is now CPU
-            "sm_cpu_mb": sm_cpu_bytes / 1024**2,
+            "sm_gpu_bytes": sm_gpu_bytes,
+            "sm_gpu_mb": sm_gpu_bytes / 1024**2,
             "exp_cpu_bytes": exp_bytes,
             "exp_cpu_mb": exp_bytes / 1024**2,
             "num_layers": self.num_layers,

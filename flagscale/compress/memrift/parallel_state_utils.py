@@ -100,8 +100,9 @@ def is_shard_index(index_path: str) -> bool:
     Return True if the index.json at `index_path` uses Megatron-format
     parameter names (shard mode) rather than HuggingFace names (HF mode).
 
-    Heuristic: shard-mode names contain 'self_attention' or 'linear_qkv'
-    or start with 'decoder.layers'; HF-mode names use 'self_attn', 'q_proj', etc.
+    Heuristic: scan all entries (not just the first — embedding names appear
+    first and contain neither shard nor HF keywords).  The first entry
+    containing a discriminating keyword determines the mode.
     """
     import json
 
@@ -110,16 +111,16 @@ def is_shard_index(index_path: str) -> bool:
             index = json.load(f)
         if not index:
             return False
-        sample_name = index[0].get("name", "")
         shard_keywords = ("self_attention", "linear_qkv", "linear_fc1",
                           "linear_fc2", "linear_proj")
         hf_keywords = ("self_attn", "q_proj", "k_proj", "v_proj",
                        "gate_proj", "up_proj", "down_proj")
-        if any(kw in sample_name for kw in shard_keywords):
-            return True
-        if any(kw in sample_name for kw in hf_keywords):
-            return False
-        # Fallback: check for 'decoder.layers'
-        return "decoder.layers" in sample_name and "self_attention" in sample_name
+        for entry in index:
+            name = entry.get("name", "")
+            if any(kw in name for kw in shard_keywords):
+                return True
+            if any(kw in name for kw in hf_keywords):
+                return False
+        return False
     except Exception:
         return False

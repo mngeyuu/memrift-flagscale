@@ -22,8 +22,9 @@ def load_args_hf2mg(args):
     args.num_layers = mistral_args["num_hidden_layers"]
     args.num_query_groups = mistral_args["num_key_value_heads"]
     args.norm_epsilon = mistral_args["rms_norm_eps"]
+    rope_scaling = mistral_args.get("rope_scaling", None)
     args.rotary_seq_len_interpolation_factor = (
-        None if mistral_args["rope_scaling"] == "null" else mistral_args["rope_scaling"]
+        None if rope_scaling is None or rope_scaling == "null" else rope_scaling
     )
     args.rotary_base = mistral_args["rope_theta"]
     args.untie_embeddings_and_output_weights = not mistral_args["tie_word_embeddings"]

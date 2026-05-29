@@ -78,7 +78,10 @@ class DecoderLayerWrapper(nn.Module):
             if not _should_compress_activation(t, self.skip_storage_ptrs):
                 return t
 
-            key = (t.data_ptr(), t.nbytes)
+            # Include shape+stride in key: two views of the same storage with
+            # different shapes share the same data_ptr and nbytes but must get
+            # separate tokens, otherwise the wrong shape is returned on unpack.
+            key = (t.data_ptr(), t.shape, tuple(t.stride()), t.storage_offset())
             if key in seen:
                 tok_ref, t_ref = seen[key]
                 if t_ref() is not None:
@@ -151,7 +154,7 @@ def activation_compression_context(
         if not _should_compress_activation(t, skip_storage_ptrs):
             return t
 
-        key = (t.data_ptr(), t.nbytes)
+        key = (t.data_ptr(), t.shape, tuple(t.stride()), t.storage_offset())
         if key in seen:
             tok_ref, t_ref = seen[key]
             if t_ref() is not None:

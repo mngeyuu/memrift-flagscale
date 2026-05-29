@@ -9,8 +9,6 @@ Usage:
     # In get_model(), after PEFT but before DDP:
     inject_memrift_if_configured(model, args)
 
-Note: This version only supports TP=1 (tensor_model_parallel_size=1).
-
 Activation compression is injected per-layer (like memrift_demo): each decoder layer
 is wrapped in DecoderLayerWrapper; saved_tensors_hooks run only inside that layer's
 forward; tokens/futures are cleared in that layer's backward_hook.
@@ -88,8 +86,9 @@ def inject_memrift_if_configured(
         memrift_print_debug: bool - Print debug messages
     
     Note:
-        This version only supports TP=1. The function will raise an error
-        if tensor_model_parallel_size > 1.
+        Supports TP ≥ 1 and PP ≥ 1. When tp_size > 1 or pp_size > 1,
+        vocab embedding and output layer hooks are installed automatically
+        to compress those non-decoder-layer weights as well.
     """
     # Check if MemRift is enabled
     memrift_enable = getattr(args, "memrift_enable", False)
@@ -310,7 +309,12 @@ def _inject_weight_compression(
             
             # Step 5: Pre-materialize first K layers for TE compatibility
             loader.prefetch_initial_layers()
-            
+
+            # Note: install_vocab_embedding_hooks / install_output_layer_hooks
+            # (from megatron_tp_hooks.py) are for INFERENCE only — they release
+            # the weight after forward() which breaks training backward().
+            # Embedding and output_layer weights remain in GPU memory during training.
+
             # Log memory stats
             if print_debug and rank == 0:
                 stats = loader.get_memory_stats()
@@ -530,7 +534,7 @@ def inject_memrift_for_inference(
         if print_debug:
             stats = loader.get_memory_stats()
             print(f"[MemRift] Chunk {chunk_idx} ready for inference: "
-                  f"sm_cpu={stats['sm_cpu_mb']:.0f} MB, "
+                  f"sm_gpu={stats['sm_gpu_mb']:.0f} MB, "
                   f"exp_cpu={stats['exp_cpu_mb']:.0f} MB, "
                   f"cuda_alloc={stats['cuda_allocated_mb']:.0f} MB, "
                   f"layers={stats['num_layers']}")

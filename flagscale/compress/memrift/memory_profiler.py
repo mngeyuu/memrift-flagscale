@@ -280,10 +280,10 @@ class MemRiftMemoryProfiler:
                 lora_numel = 0
                 exp_bytes = 0
                 for name, param in model.named_parameters():
-                    # CompressedParam: sm_cpu on pinned CPU (not GPU), exp on CPU
+                    # CompressedParam: _sm_gpu on GPU, exp on CPU
                     if type(param).__name__ == "CompressedParam":
-                        if getattr(param, "sm_cpu", None) is not None and isinstance(param.sm_cpu, torch.Tensor):
-                            sm_gpu_bytes += param.sm_cpu.numel() * param.sm_cpu.element_size()
+                        if getattr(param, "_sm_gpu", None) is not None and isinstance(param._sm_gpu, torch.Tensor):
+                            sm_gpu_bytes += param._sm_gpu.numel() * param._sm_gpu.element_size()
                         if getattr(param, "exp_mv", None) is not None:
                             exp_bytes += len(param.exp_mv)
                     # LoRA / adapter 参数 (可训练)

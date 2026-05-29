@@ -14,7 +14,7 @@ args = parser.parse_args()
 os.makedirs(args.outdir, exist_ok=True)
 
 print(f"{args.model=}, {args.outdir=}")
-model = AutoModelForCausalLM.from_pretrained(args.model, torch_dtype=torch.bfloat16, device_map={"": 0})
+model = AutoModelForCausalLM.from_pretrained(args.model, torch_dtype=torch.bfloat16, device_map={"": 0}, trust_remote_code=True)
 
 comp_time = 0
 uncomp_bytes = 0

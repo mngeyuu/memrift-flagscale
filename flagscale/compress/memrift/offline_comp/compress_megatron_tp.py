@@ -8,13 +8,19 @@ Run with torchrun so each rank handles its own slice:
 
     torchrun --nnodes 1 --nproc_per_node <TP_SIZE> \\
         flagscale/compress/memrift/offline_comp/compress_megatron_tp.py \\
-        --flagscale-config examples/mistral_7b/conf/train/7b.yaml \\
         --outdir /path/to/comp_weights \\
-        --level 3
+        --load /path/to/megatron_tp<N>_checkpoint \\
+        --level 3 \\
+        -- \\
+        --tensor-model-parallel-size <TP_SIZE> \\
+        --pipeline-model-parallel-size 1 \\
+        --num-layers 32 --hidden-size 4096 ...   # model arch args
 
-For single-GPU (TP=1, PP=1) this is equivalent to prepare_weight.py but
-outputs in the shard-mode format (tp0_pp0/index.json) understood by
-MegatronDynamicLoader in shard mode.
+The --load checkpoint must have been saved with the same TP/PP as
+nproc_per_node.  Use run_convert_hf_to_megatron_tp2.sh to produce it.
+
+For single-GPU (TP=1, PP=1) omit --load to compress a randomly-initialized
+model (useful for testing the framework); provide --load for real weights.
 
 The script:
   1. Initialises Megatron with the same YAML config used for training.
@@ -54,12 +60,15 @@ MiB = 1024 * 1024
 
 def parse_args():
     p = argparse.ArgumentParser(
-        description="Distributed offline MemRift compression for Megatron TP/PP"
+        description="Distributed offline MemRift compression for Megatron TP/PP",
+        # allow_abbrev=False so Megatron-style args don't collide
+        allow_abbrev=False,
     )
     p.add_argument(
         "--flagscale-config",
-        required=True,
-        help="Path to FlagScale training YAML (used to init Megatron + build model)",
+        required=False,
+        default=None,
+        help="(Unused) Path to FlagScale YAML, kept for backward compatibility.",
     )
     p.add_argument(
         "--outdir",
@@ -84,7 +93,26 @@ def parse_args():
         default=512,
         help="Skip parameters with fewer than this many elements (default: 512)",
     )
-    return p.parse_args()
+    p.add_argument(
+        "--load",
+        type=str,
+        default=None,
+        help="Megatron checkpoint directory to load weights from before compressing. "
+             "Must match the TP/PP config used by torchrun (e.g. TP=2 → 2 GPUs).",
+    )
+    # parse_known_args so any extra Megatron-style CLI args pass through to
+    # initialize_megatron without causing an argparse error.
+    args, megatron_extra_args = p.parse_known_args()
+
+    # Rebuild sys.argv with only the Megatron-compatible args so that
+    # megatron.training.arguments.parse_args() (called inside initialize_megatron)
+    # doesn't choke on our compression-script-specific flags.
+    if args.load:
+        megatron_extra_args = ["--load", args.load,
+                               "--no-load-optim", "--no-load-rng"] + megatron_extra_args
+    sys.argv = [sys.argv[0]] + megatron_extra_args
+
+    return args
 
 
 def _compress_param(
@@ -212,6 +240,26 @@ def main():
         ModelType.encoder_or_decoder,
         wrap_with_ddp=False,
     )
+
+    # Load Megatron checkpoint if provided.
+    # mg_args.load is set from --load via sys.argv injected by parse_args().
+    if getattr(mg_args, "load", None):
+        from megatron.training.checkpointing import load_checkpoint
+        print(
+            f"[rank{global_rank}] Loading checkpoint from {mg_args.load} "
+            f"(tp={tp_rank}/{tp_size}, pp={pp_rank}/{pp_size}) ...",
+            flush=True,
+        )
+        load_checkpoint(model_list, optimizer=None, opt_param_scheduler=None)
+        print(f"[rank{global_rank}] Checkpoint loaded.", flush=True)
+    else:
+        print(
+            f"[rank{global_rank}] WARNING: --load not specified; "
+            "compressing randomly-initialized weights. "
+            "Pass --load <megatron_ckpt_dir> to compress real weights.",
+            flush=True,
+        )
+
     model = model_list[0]
     model.eval()
 

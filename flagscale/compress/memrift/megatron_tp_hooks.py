@@ -106,7 +106,6 @@ def _make_embedding_pre_hook(cp: CompressedParam, async_comp):
             else:
                 cp._bf16 = result
         else:
-            cp._sm_on_gpu = cp.sm_cpu.to(cp._device, non_blocking=False)
             cp.materialize(sync=True)
 
         with torch.no_grad():
@@ -172,7 +171,7 @@ def install_vocab_embedding_hooks(
 
     if loader.print_debug:
         shape = cp.orig_shape
-        sm_mb = cp.sm_cpu.numel() / 1024 ** 2
+        sm_mb = cp._sm_gpu.numel() / 1024 ** 2
         exp_mb = len(cp.exp_mv) / 1024 ** 2
         print(
             f"[MemRift] VocabEmbedding hook installed: "
