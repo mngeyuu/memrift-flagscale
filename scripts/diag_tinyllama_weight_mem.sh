@@ -35,7 +35,7 @@ COMMON="\
   --save-interval 99999 --no-load-optim --no-load-rng --ckpt-format torch \
   --tokenizer-type HuggingFaceTokenizer --tokenizer-path ${TOK} --tokenizer-model ${TOK} \
   --mock-data --micro-batch-size 1 --global-batch-size 1 --split 1,0,0 \
-  --train-iters 3 --lr 2e-4 --min-lr 2e-5 --lr-warmup-iters 1 --lr-decay-style cosine \
+  --train-iters ${TRAIN_ITERS:-3} --lr 2e-4 --min-lr 2e-5 --lr-warmup-iters 1 --lr-decay-style cosine \
   --weight-decay 0.1 --clip-grad 1.0 --adam-beta1 0.9 --adam-beta2 0.95 --adam-eps 1e-8 \
   --peft-type lora --lora-target-modules linear_qkv linear_proj linear_fc1 linear_fc2 \
   --lora-dim 16 --lora-alpha 32 --lora-dropout 0.0 \

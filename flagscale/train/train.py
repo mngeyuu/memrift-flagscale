@@ -204,6 +204,17 @@ def _memrift_profiler_on_iter_end():
             profiler.on_iter_end()
     except Exception:
         pass
+    # Per-iteration cleanup (every rank, every iter): free any residual materialized
+    # base weights — notably the lowest backward layer, which the _unpack release-lag
+    # never frees — and reset backward tracking state. The MEM_PROBE H2 path only runs
+    # this on rank0/iter0, so without this hook the residual would persist in real
+    # training. Safe: base weights are frozen and unused by optimizer.step (LoRA-only).
+    try:
+        from flagscale.compress.memrift import train_hooks as _th
+        for _ldr in getattr(_th, "_LOADERS", []):
+            _ldr.release_all_layers()
+    except Exception:
+        pass
 
 
 def destroy_global_state():

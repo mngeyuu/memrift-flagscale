@@ -222,16 +222,42 @@ class CompressedParam(nn.Parameter):
     
     def release(self):
         """Release the materialized tensor to free GPU memory."""
+        # Drain a dangling prefetch future so its pinned/GPU buffers are not orphaned.
+        # Non-blocking: cancel if not started; free the result only if already done.
+        fut_obj = self._prefetch_future
+        if fut_obj is not None:
+            self._prefetch_future = None
+            try:
+                if not fut_obj.cancel() and fut_obj.done():
+                    res = fut_obj.result()
+                    if isinstance(res, tuple):
+                        bf16 = res[0]
+                        evt = res[1] if len(res) >= 2 else None
+                        # Ensure the h2d_stream merge kernel has finished writing into
+                        # bf16 before returning it to the pool, else it could be
+                        # recycled mid-write. res (and its cpu_exp) stays referenced
+                        # until the sync completes.
+                        if evt is not None:
+                            evt.synchronize()
+                    else:
+                        bf16 = res
+                    if bf16 is not None:
+                        from flagscale.compress.float_split_stride_pin import float_split_stride_pin as fs_sp
+                        if fs_sp.is_available():
+                            fs_sp.release_cuda(bf16)
+            except Exception:
+                pass
+
         if self._bf16 is None:
             return
-        
+
         try:
             from flagscale.compress.float_split_stride_pin import float_split_stride_pin as fs_sp
             if fs_sp.is_available():
                 fs_sp.release_cuda(self._bf16)
         except:
             pass
-        
+
         self._bf16 = None
         self._ready_event.clear()
         self._CtoD_evt = None
