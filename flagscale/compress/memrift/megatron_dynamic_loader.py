@@ -430,28 +430,80 @@ def ensure_group_param_materialized(group: MergedWeightGroup) -> Optional[torch.
 # Counts on-demand re-materializations triggered from _unpack during backward.
 _BWD_REMATERIALIZE_COUNT = [0]
 
+# layer_idx -> list[MergedWeightGroup] currently materialized during backward.
+_BWD_MATERIALIZED: Dict[int, List["MergedWeightGroup"]] = {}
+
+
+def _read_bwd_release_lag() -> int:
+    try:
+        return max(1, int(os.environ.get("MEMRIFT_BWD_RELEASE_LAG", "1")))
+    except Exception:
+        return 1
+
+
+# Number of most-recent backward layers to keep resident (>=1). Read once at import.
+_BWD_RELEASE_LAG: int = _read_bwd_release_lag()
+
+
+def _clear_param_group(group: "MergedWeightGroup") -> None:
+    """Free a group's materialized weight (free-function form of loader._clear_param)."""
+    if group.target_module is not None:
+        param = getattr(group.target_module, group.target_attr, None)
+        if param is not None and param.data.numel() > 0:
+            old_ptr = int(param.data_ptr())
+            with torch.no_grad():
+                param.data = torch.empty(0, dtype=param.dtype, device=param.device)
+            _PTR2GROUP.pop(old_ptr, None)
+    for cp in group.components.values():
+        cp.release()
+
+
+def _release_layers_above(threshold: int) -> None:
+    """Release all tracked groups whose layer_idx > threshold (already backward'd)."""
+    for L in [k for k in list(_BWD_MATERIALIZED) if k > threshold]:
+        for g in _BWD_MATERIALIZED.pop(L, []):
+            _clear_param_group(g)
+
+
+def reset_bwd_tracking() -> int:
+    """Clear backward tracking state; return and reset the re-materialize count."""
+    _BWD_MATERIALIZED.clear()
+    n = _BWD_REMATERIALIZE_COUNT[0]
+    _BWD_REMATERIALIZE_COUNT[0] = 0
+    return n
+
 
 def unpack_weight_for_backward(group: "MergedWeightGroup") -> torch.Tensor:
     """Materialize a group's weight on demand from saved_tensors_hooks._unpack.
 
     Runs INSIDE the TE fused autograd Function's backward, at the exact moment
-    the weight is consumed (zero race). If a prior release freed the weight,
-    this re-materializes it (self-healing).
+    the weight is consumed (zero race; self-heals if a prior release freed it).
+    After materializing, releases already-processed layers (idx > L + lag - 1) to
+    bound resident weights to ~`lag` layers during backward.
 
     Returns the materialized weight tensor (param.data), or an empty tensor if
-    materialization failed (caller raises).
+    materialization failed (the caller in _unpack then raises).
     """
     if group.target_module is None:
         return torch.empty(0)
     param = getattr(group.target_module, group.target_attr, None)
     if param is not None and param.data.numel() > 0:
-        return param.data
-    if param is None:
-        return torch.empty(0)
-    # Empty -> materialize now (perfectly timed for TE backward consumption).
-    _BWD_REMATERIALIZE_COUNT[0] += 1
-    weight = ensure_group_param_materialized(group)
-    return weight if weight is not None else torch.empty(0)
+        weight = param.data
+    else:
+        if param is None:
+            return torch.empty(0)
+        _BWD_REMATERIALIZE_COUNT[0] += 1
+        weight = ensure_group_param_materialized(group)
+        if weight is None:
+            return torch.empty(0)
+
+    L = group.layer_idx
+    if L >= 0:
+        bucket = _BWD_MATERIALIZED.setdefault(L, [])
+        if group not in bucket:
+            bucket.append(group)
+        _release_layers_above(L + (_BWD_RELEASE_LAG - 1))
+    return weight
 
 
 class MegatronDynamicLoader:
@@ -1071,6 +1123,9 @@ class MegatronDynamicLoader:
         """
         for layer_name in self.layer_names:
             self._release_layer(layer_name)
+        n_remat = reset_bwd_tracking()
+        if self.print_debug:
+            print(f"[MemRift] bwd re-materialize count this iter: {n_remat}", flush=True)
 
     # ── Non-layer weight helpers ─────────────────────────────────────────────
 
