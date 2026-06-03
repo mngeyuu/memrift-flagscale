@@ -39,11 +39,16 @@ def _unpack(tok: Any, compressor: AsyncCompressor):
         group = tok.group_ref()
         if group is None or group.target_module is None:
             raise RuntimeError("WeightPlaceholder: MergedWeightGroup was GC'd before backward")
-        weight = group.target_module.weight.data
+        # On-demand materialize at the exact moment TE's fused backward consumes
+        # the weight (zero race; self-heals if a prior release freed it).
+        from flagscale.compress.memrift.megatron_dynamic_loader import (
+            unpack_weight_for_backward,
+        )
+        weight = unpack_weight_for_backward(group)
         if weight.numel() == 0:
             raise RuntimeError(
-                f"WeightPlaceholder: weight not materialized at backward time "
-                f"for {group.megatron_target} (layer {group.layer_idx})"
+                f"WeightPlaceholder: weight could not be materialized at backward "
+                f"time for {group.megatron_target} (layer {group.layer_idx})"
             )
         if tuple(weight.shape) != tok.shape or tuple(weight.stride()) != tok.stride:
             weight = weight.as_strided(tok.shape, tok.stride, 0)

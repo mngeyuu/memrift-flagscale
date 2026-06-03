@@ -427,6 +427,33 @@ def ensure_group_param_materialized(group: MergedWeightGroup) -> Optional[torch.
     return param.data
 
 
+# Counts on-demand re-materializations triggered from _unpack during backward.
+_BWD_REMATERIALIZE_COUNT = [0]
+
+
+def unpack_weight_for_backward(group: "MergedWeightGroup") -> torch.Tensor:
+    """Materialize a group's weight on demand from saved_tensors_hooks._unpack.
+
+    Runs INSIDE the TE fused autograd Function's backward, at the exact moment
+    the weight is consumed (zero race). If a prior release freed the weight,
+    this re-materializes it (self-healing).
+
+    Returns the materialized weight tensor (param.data), or an empty tensor if
+    materialization failed (caller raises).
+    """
+    if group.target_module is None:
+        return torch.empty(0)
+    param = getattr(group.target_module, group.target_attr, None)
+    if param is not None and param.data.numel() > 0:
+        return param.data
+    if param is None:
+        return torch.empty(0)
+    # Empty -> materialize now (perfectly timed for TE backward consumption).
+    _BWD_REMATERIALIZE_COUNT[0] += 1
+    weight = ensure_group_param_materialized(group)
+    return weight if weight is not None else torch.empty(0)
+
+
 class MegatronDynamicLoader:
     """
     Dynamic weight loader for Megatron models (TP=1 only).
