@@ -117,6 +117,7 @@ def inject_memrift_if_configured(
     activation_enable = getattr(args, "memrift_activation_enable", False)
     compressed_weight_dir = getattr(args, "memrift_compressed_weight_dir", None)
     zstd_level = getattr(args, "memrift_zstd_level", 6)
+    act_zstd_level = getattr(args, "memrift_act_zstd_level", 3)
     prefetch_layers = getattr(args, "memrift_prefetch_layers", 4)
     weight_async = getattr(args, "memrift_weight_async", False)
     act_async = getattr(args, "memrift_act_async", True)
@@ -182,7 +183,9 @@ def inject_memrift_if_configured(
                 compress_workers=compress_workers,
                 decode_workers=decode_workers,
                 concurrency_limit=4,
-                zstd_level=zstd_level,
+                # This compressor's level governs ONLY activation compression
+                # (weight prefetch is decompress-only). Use the activation level.
+                zstd_level=act_zstd_level,
                 enable_async=True,
             )
             if print_debug and rank == 0:
@@ -221,6 +224,7 @@ def inject_memrift_if_configured(
             print_debug=print_debug,
             rank=rank,
             compress_activations=activation_enable,
+            act_zstd_level=act_zstd_level,
         )
     
     # Memory profiler (optional, for activation memory breakdown)
@@ -374,6 +378,7 @@ def _inject_activation_compression(
     print_debug: bool,
     rank: int = 0,
     compress_activations: bool = True,
+    act_zstd_level: int = 3,
 ) -> None:
     """
     Enable activation compression per-layer (aligned with memrift_demo).
@@ -393,7 +398,7 @@ def _inject_activation_compression(
             print(f"[MemRift] Activation compression not available: {e}")
         return
 
-    zstd_level = 18
+    zstd_level = act_zstd_level
     compressor = async_compressor
     if compressor is None:
         try:
@@ -585,6 +590,7 @@ def get_memrift_status(args: Any) -> dict:
         "memrift_activation_enable": getattr(args, "memrift_activation_enable", False),
         "memrift_compressed_weight_dir": getattr(args, "memrift_compressed_weight_dir", None),
         "memrift_zstd_level": getattr(args, "memrift_zstd_level", 6),
+        "memrift_act_zstd_level": getattr(args, "memrift_act_zstd_level", 3),
         "memrift_prefetch_layers": getattr(args, "memrift_prefetch_layers", 4),
         "memrift_weight_async": getattr(args, "memrift_weight_async", False),
         "memrift_act_async": getattr(args, "memrift_act_async", True),
