@@ -90,7 +90,7 @@ backward 按层逆序执行（21→0）。当 `_unpack` 为层 L 物化权重时
 
 唯一可能触发重复物化的是 TE 的**延迟消费**节点（如 `megatron_dynamic_loader.py:1372` 注释提到的 RowParallelLinear deferred all-reduce backward）：该层被 5.2 释放后，其延迟节点又来 `_unpack`，触发一次重物化。
 
-释放滞后层数 `K`（`release_layers_above(L - (K-1))`）作为可调参数：
+释放滞后层数 `K`（`release_layers_above(L + (K-1))`，backward 逆序下已完成层为更高索引，故释放 idx > L+(K-1)）作为可调参数：
 
 - `K=1`（滞后 1 层）：峰值最低，接受极少数 deferred 节点的偶发重物化。
 - `K=2`：几乎消除重物化，峰值略升 1 层。
