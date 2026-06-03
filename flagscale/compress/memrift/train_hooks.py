@@ -21,6 +21,11 @@ import torch
 import torch.nn as nn
 
 
+# Module-level list of all MemRift loaders created during inject. Used by
+# external probes (e.g. train.py memory probes) to introspect loader state.
+_LOADERS: list = []
+
+
 def _check_cuda_extension():
     """Check if CUDA extension is available and raise clear error if not."""
     try:
@@ -94,6 +99,18 @@ def inject_memrift_if_configured(
     memrift_enable = getattr(args, "memrift_enable", False)
     if not memrift_enable:
         return
+
+    # Patch TE autograd Functions to release ctx-pinned weights after backward.
+    # Without this, ~15 GB of decoder weights stay pinned through entire backward.
+    _rank0 = (getattr(args, "rank", 0) == 0)
+    try:
+        from flagscale.compress.memrift.te_ctx_patch import patch_te_ctx_release
+        n = patch_te_ctx_release()
+        if _rank0:
+            print(f"[MemRift] TE ctx-weight release patch applied to {n} TE Function classes")
+    except Exception as e:
+        if _rank0:
+            print(f"[MemRift] Warning: failed to patch TE ctx release: {e}")
     
     # Get configuration
     weight_enable = getattr(args, "memrift_weight_enable", False)
@@ -191,14 +208,19 @@ def inject_memrift_if_configured(
             rank=rank,
         )
     
-    # Inject activation compression
-    if activation_enable:
+    # Inject activation compression (or weight placeholder hooks if only weight enabled).
+    # When weight_enable is True we MUST install DecoderLayerWrapper even without
+    # activation compression, so saved_tensors_hooks can intercept autograd-saved
+    # weights and replace them with WeightPlaceholder; otherwise materialized bf16
+    # weights are pinned in the autograd graph and ~15 GB of decoder weights leak.
+    if activation_enable or weight_enable:
         _inject_activation_compression(
             model_chunks=model_chunks,
             async_compressor=async_compressor,
             act_async=act_async,
             print_debug=print_debug,
             rank=rank,
+            compress_activations=activation_enable,
         )
     
     # Memory profiler (optional, for activation memory breakdown)
@@ -310,6 +332,8 @@ def _inject_weight_compression(
             # Step 5: Pre-materialize first K layers for TE compatibility
             loader.prefetch_initial_layers()
 
+            _LOADERS.append(loader)
+
             # Note: install_vocab_embedding_hooks / install_output_layer_hooks
             # (from megatron_tp_hooks.py) are for INFERENCE only — they release
             # the weight after forward() which breaks training backward().
@@ -349,6 +373,7 @@ def _inject_activation_compression(
     act_async: bool,
     print_debug: bool,
     rank: int = 0,
+    compress_activations: bool = True,
 ) -> None:
     """
     Enable activation compression per-layer (aligned with memrift_demo).
@@ -417,6 +442,7 @@ def _inject_activation_compression(
                 release_after_unpack=True,
                 skip_storage_ptrs=skip_storage_ptrs if skip_storage_ptrs else None,
                 do_empty=(i % empty_cache_interval == 1),
+                compress_activations=compress_activations,
             )
             decoder_layers[i] = wrapper
             wrapped_count += 1

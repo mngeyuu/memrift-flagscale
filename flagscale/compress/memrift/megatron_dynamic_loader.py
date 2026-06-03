@@ -24,6 +24,7 @@ from collections import defaultdict
 import numpy as np
 import torch
 import torch.nn as nn
+import weakref
 
 try:
     import zstandard as zstd
@@ -35,6 +36,26 @@ except ImportError:
 # Thread-local decompressor
 _tls = threading.local()
 _PTR2GROUP: Dict[int, "MergedWeightGroup"] = {}
+
+
+class WeightPlaceholder:
+    """Lightweight placeholder for autograd-saved materialized weights.
+
+    Holds a weakref to the MergedWeightGroup. The actual bf16 tensor is NOT held,
+    allowing _clear_param to free it after forward. During backward, the
+    corresponding layer's bwd_pre re-materializes the weight, and _unpack
+    retrieves the fresh bf16 via group.target_module.weight.data.
+    """
+    __slots__ = ("group_ref", "shape", "stride")
+
+    def __init__(self, group: "MergedWeightGroup", shape, stride):
+        self.group_ref = weakref.ref(group)
+        self.shape = tuple(shape)
+        self.stride = tuple(stride)
+
+
+def _lookup_weight_group(data_ptr: int) -> Optional["MergedWeightGroup"]:
+    return _PTR2GROUP.get(int(data_ptr))
 # Prefer stream/event-based dependency by default to maximize overlap.
 # Set MEMRIFT_DEEP_ASYNC=0 to fall back to host-side synchronize behavior.
 _DEEP_ASYNC = os.environ.get("MEMRIFT_DEEP_ASYNC", "1") == "1"
@@ -1013,6 +1034,17 @@ class MegatronDynamicLoader:
         for group in self.layer2groups.get(layer_name, []):
             self._clear_param(group)
 
+    def release_all_layers(self):
+        """Force-release every layer's materialized weights and cp._bf16.
+
+        Used as post-backward cleanup: per-linear bwd_pre fallback hooks can
+        re-materialize weights AFTER layer bwd_post clears them, leaving 32
+        layers pinned at end of iteration. Calling this after the autograd
+        graph is released frees them all.
+        """
+        for layer_name in self.layer_names:
+            self._release_layer(layer_name)
+
     # ── Non-layer weight helpers ─────────────────────────────────────────────
 
     def _navigate(self, root: nn.Module, path: str):
@@ -1277,6 +1309,8 @@ class MegatronDynamicLoader:
             
             def make_bwd_pre(cur_groups, prv_groups_list, cur_name, async_comp):
                 def _hook(mod, grad_out):
+                    if os.environ.get("MEMRIFT_HOOK_ORDER", "0") == "1":
+                        print(f"[HOOK_ORDER] bwd_pre  layer={cur_name}", flush=True)
                     t0 = time.perf_counter()
                     _trace(f"bwd_pre: enter layer={cur_name}, groups={len(cur_groups)}")
                     pending_cur = self._count_pending_prefetch(cur_groups)
@@ -1315,8 +1349,10 @@ class MegatronDynamicLoader:
                     _trace(f"bwd_pre: done layer={cur_name}")
                 return _hook
             
-            def make_bwd_post(cur_groups):
+            def make_bwd_post(cur_groups, cur_name=cur):
                 def _hook(mod, grad_in, grad_out):
+                    if os.environ.get("MEMRIFT_HOOK_ORDER", "0") == "1":
+                        print(f"[HOOK_ORDER] bwd_post layer={cur_name}", flush=True)
                     for group in cur_groups:
                         self._clear_param(group)
                     self._bwd_counter += 1
@@ -1331,23 +1367,37 @@ class MegatronDynamicLoader:
                 make_bwd_post(cur_groups)
             )
 
-            # TE safety: some linear backward paths run before layer-level backward_pre
-            # sees a fully-restored parameter. Add per-linear guard hooks to ensure
-            # empty weights are materialized before GEMM in backward.
-            seen_modules = set()
-            linear_modules = []
+            # Per-linear hooks bound to a single group: ensures the materialized
+            # weight is released as soon as THAT linear's backward truly finishes,
+            # not when the layer module's full_backward_hook fires (which can
+            # precede RowParallelLinear's deferred all-reduce backward Function).
+            # Module->group: deduplicate by id(target_module) since multiple
+            # weight groups might map to the same linear module (rare but safe).
+            mod2group = {}
             for group in cur_groups:
                 tm = getattr(group, "target_module", None)
                 if tm is None:
                     continue
-                mid = id(tm)
-                if mid in seen_modules:
-                    continue
-                seen_modules.add(mid)
-                linear_modules.append(tm)
+                mod2group.setdefault(id(tm), (tm, group))
 
-            def make_linear_bwd_pre(cur_groups):
+            # TE fuses fc1+fc2 (and self-attn qkv+proj) into single autograd
+            # Functions (e.g. _LayerNormMLP). Backward of these Functions reads
+            # BOTH weights simultaneously. So when ANY RowParallel linear in the
+            # layer fires lin_bwd_pre, we must materialize ALL the layer's groups,
+            # and the corresponding lin_bwd_post clears them all. ColumnParallel
+            # linears never independently fire their hooks (no standalone autograd
+            # Node), so registering on them is a harmless no-op.
+            def make_linear_bwd_pre_all(cur_groups, cur_name=cur):
                 def _hook(mod, grad_out):
+                    if os.environ.get("MEMRIFT_HOOK_ORDER", "0") == "1":
+                        empty = True
+                        try:
+                            w = getattr(mod, "weight", None)
+                            if w is not None and w.data.numel() > 0:
+                                empty = False
+                        except Exception:
+                            pass
+                        print(f"[HOOK_ORDER] lin_bwd_pre layer={cur_name} mod={type(mod).__name__} empty={empty}", flush=True)
                     try:
                         w = getattr(mod, "weight", None)
                         if w is not None and w.data.numel() > 0:
@@ -1361,9 +1411,20 @@ class MegatronDynamicLoader:
                         self._set_param(group, weight)
                 return _hook
 
-            linear_bwd_pre = make_linear_bwd_pre(cur_groups)
-            for tm in linear_modules:
-                tm.register_full_backward_pre_hook(linear_bwd_pre)
+            def make_linear_bwd_post_all(cur_groups, cur_name=cur):
+                def _hook(mod, grad_in, grad_out):
+                    if os.environ.get("MEMRIFT_HOOK_ORDER", "0") == "1":
+                        print(f"[HOOK_ORDER] lin_bwd_post layer={cur_name} mod={type(mod).__name__}", flush=True)
+                    for group in cur_groups:
+                        self._clear_param(group)
+                return _hook
+
+            if os.environ.get("MEMRIFT_DISABLE_LINEAR_BWD_PRE", "0") != "1":
+                lpre = make_linear_bwd_pre_all(cur_groups)
+                lpost = make_linear_bwd_post_all(cur_groups)
+                for tm, _g in mod2group.values():
+                    tm.register_full_backward_pre_hook(lpre)
+                    tm.register_full_backward_hook(lpost)
         
         if self.print_debug:
             print(f"[MemRift] Installed hooks for {len(self.layer_names)} layers")

@@ -1284,6 +1284,11 @@ def get_model(model_provider_func, model_type=ModelType.encoder_or_decoder, wrap
                 traceback.print_exc()
     ######## FLAGSCALE MEMRIFT END   ########
 
+    # MEMORY PROBE: after MemRift inject, before TP attrs / cuda() / Float16Module / DDP
+    if args.rank == 0:
+        import torch as _t
+        print(f"[MEM_PROBE] A. after MemRift inject: {_t.cuda.memory_allocated()/1024**2:.1f} MB", flush=True)
+
     # Set tensor model parallel attributes if not set.
     # Only parameters that are already tensor model parallel have these
     # attributes set for them. We should make sure the default attributes
@@ -1317,10 +1322,20 @@ def get_model(model_provider_func, model_type=ModelType.encoder_or_decoder, wrap
         for model_module in model:
             model_module.cuda(torch.cuda.current_device())
 
+    # MEMORY PROBE: before Float16Module wrap
+    if args.rank == 0:
+        import torch as _t
+        print(f"[MEM_PROBE] B. before Float16Module: {_t.cuda.memory_allocated()/1024**2:.1f} MB", flush=True)
+
     # Fp16 conversion.
     if args.fp16 or args.bf16:
         config = get_model_config(model[0])
         model = [Float16Module(config, model_module) for model_module in model]
+
+    # MEMORY PROBE: after Float16Module wrap
+    if args.rank == 0:
+        import torch as _t
+        print(f"[MEM_PROBE] C. after Float16Module: {_t.cuda.memory_allocated()/1024**2:.1f} MB", flush=True)
 
     # Materialize tensors on meta device (GPU allocation) if not using FSDP2.
     if args.init_model_with_meta_device and not args.use_torch_fsdp2:
@@ -1385,6 +1400,11 @@ def get_model(model_provider_func, model_type=ModelType.encoder_or_decoder, wrap
             # Set bucket_size to infinity if overlap_grad_reduce is False.
             if not ddp_config.overlap_grad_reduce:
                 ddp_config.bucket_size = None
+
+        # MEMORY PROBE: before DDP wrap
+        if args.rank == 0:
+            import torch as _t
+            print(f"[MEM_PROBE] D. before DDP wrap: {_t.cuda.memory_allocated()/1024**2:.1f} MB", flush=True)
 
         with torch.cuda.stream(torch.cuda.Stream()):
             model = [
@@ -1493,6 +1513,11 @@ def setup_model_and_optimizer(
     model = get_model(model_provider_func, model_type)
     unwrapped_model = unwrap_model(model)
 
+    # MEMORY PROBE: after get_model (DDP wrap done), before optimizer
+    if args.rank == 0:
+        import torch as _t
+        print(f"[MEM_PROBE] E. after get_model (DDP done), before optimizer: {_t.cuda.memory_allocated()/1024**2:.1f} MB", flush=True)
+
     one_logger and one_logger.log_metrics({"app_build_optimzer_start_time": one_logger_utils.get_timestamp_in_ms()})
 
     ########## FlagScale Begin ##########
@@ -1515,6 +1540,12 @@ def setup_model_and_optimizer(
         use_gloo_process_groups=args.enable_gloo_process_groups,
     )
     opt_param_scheduler = get_optimizer_param_scheduler(optimizer)
+
+    # MEMORY PROBE: after optimizer setup
+    if args.rank == 0:
+        import torch as _t
+        print(f"[MEM_PROBE] F. after optimizer setup: {_t.cuda.memory_allocated()/1024**2:.1f} MB", flush=True)
+
     one_logger and one_logger.log_metrics({"app_build_optimzer_finish_time": one_logger_utils.get_timestamp_in_ms()})
 
     if args.moe_use_upcycling:
@@ -1678,6 +1709,14 @@ def train_step(forward_step_func, data_iterator, model, optimizer, opt_param_sch
             f"num_microbatches={get_num_microbatches()}, memrift_act={getattr(args, 'memrift_activation_enable', False)})"
         )
         _memrift_profiler_on_iter_start()
+
+        # MEM_PROBE: before forward+backward
+        if args.rank == 0 and getattr(args, 'curr_iteration', 0) == 0:
+            import torch as _t
+            _t.cuda.synchronize()
+            _t.cuda.reset_peak_memory_stats()
+            print(f"[MEM_PROBE] G. before fwd+bwd (iter 0): allocated={_t.cuda.memory_allocated()/1024**2:.1f} MB (peak reset)", flush=True)
+
         with _get_memrift_activation_context(model):
             losses_reduced = forward_backward_func(
                 forward_step_func=forward_step_func,
@@ -1690,6 +1729,93 @@ def train_step(forward_step_func, data_iterator, model, optimizer, opt_param_sch
                 forward_only=False,
                 adjust_tensor_shapes_fn=adjust_tensor_shapes_fn,
             )
+
+        # MEM_PROBE: after forward+backward, before optimizer
+        if args.rank == 0 and getattr(args, 'curr_iteration', 0) == 0:
+            import torch as _t
+            _t.cuda.synchronize()
+            print(f"[MEM_PROBE] H. after fwd+bwd, before optimizer: allocated={_t.cuda.memory_allocated()/1024**2:.1f} MB", flush=True)
+            try:
+                from flagscale.compress.memrift.activation_compression import (
+                    _pack_diag_total, _pack_diag_placeholder, _pack_diag_other
+                )
+                print(f"[MEM_PROBE] H_diag. _pack called total={_pack_diag_total[0]}, "
+                      f"weight placeholders made={_pack_diag_placeholder[0]}, "
+                      f"other tensors={_pack_diag_other[0]}", flush=True)
+            except Exception as _e:
+                print(f"[MEM_PROBE] H_diag: failed to import counters: {_e}", flush=True)
+            # Inspect large CUDA tensors via gc — find who pins the 14 GB
+            try:
+                import gc
+                gc.collect()
+                big = []
+                for o in gc.get_objects():
+                    try:
+                        if isinstance(o, _t.Tensor) and o.is_cuda:
+                            sz = o.numel() * o.element_size()
+                            if sz >= 50 * 1024 * 1024:  # >= 50 MB
+                                big.append((sz, tuple(o.shape), str(o.dtype), o.data_ptr()))
+                    except ReferenceError:
+                        continue
+                    except Exception:
+                        continue
+                big.sort(reverse=True)
+                total_big = sum(x[0] for x in big)
+                print(f"[MEM_PROBE] H_big. {len(big)} CUDA tensors >= 50 MB, total={total_big/1024**2:.1f} MB", flush=True)
+                shape_counts = {}
+                for sz, shape, dtype, ptr in big:
+                    key = (shape, dtype)
+                    if key not in shape_counts:
+                        shape_counts[key] = [0, 0, set()]
+                    shape_counts[key][0] += 1
+                    shape_counts[key][1] += sz
+                    shape_counts[key][2].add(ptr)
+                for (shape, dtype), (count, total, ptrs) in sorted(shape_counts.items(), key=lambda x: -x[1][1])[:15]:
+                    uniq = len(ptrs)
+                    uniq_total = uniq * (total // count) if count > 0 else 0
+                    print(f"[MEM_PROBE] H_big.   shape={shape} dtype={dtype}: count={count} uniq_ptr={uniq} total={total/1024**2:.1f} MB uniq_total={uniq_total/1024**2:.1f} MB", flush=True)
+            except Exception as _e:
+                print(f"[MEM_PROBE] H_big: failed: {_e}", flush=True)
+            # MemRift state: how many groups have materialized weights?
+            try:
+                from flagscale.compress.memrift.megatron_dynamic_loader import _PTR2GROUP
+                from flagscale.compress.memrift import train_hooks as _th
+                ldrs = getattr(_th, "_LOADERS", [])
+                ldr = ldrs[0] if ldrs else None
+                print(f"[MEM_PROBE] H_state. len(_PTR2GROUP)={len(_PTR2GROUP)} n_loaders={len(ldrs)}", flush=True)
+                if ldr is not None:
+                    n_total = 0; n_mat = 0; n_cp_alive = 0
+                    by_target = {}
+                    for ly_idx, gmap in ldr.merged_groups.items():
+                        for tgt, grp in gmap.items():
+                            n_total += 1
+                            param = getattr(grp.target_module, grp.target_attr, None) if grp.target_module else None
+                            mat = (param is not None and param.data.numel() > 0)
+                            if mat:
+                                n_mat += 1
+                            cps = sum(1 for cp in grp.components.values() if getattr(cp, "_bf16", None) is not None)
+                            n_cp_alive += cps
+                            short = tgt.split('.')[-1]
+                            by_target.setdefault(short, [0, 0])
+                            by_target[short][0] += 1
+                            if mat: by_target[short][1] += 1
+                    print(f"[MEM_PROBE] H_state. groups total={n_total} materialized={n_mat} cp_bf16_alive={n_cp_alive}", flush=True)
+                    for k, (t, m) in sorted(by_target.items()):
+                        print(f"[MEM_PROBE] H_state.   {k}: total={t} materialized={m}", flush=True)
+                else:
+                    print("[MEM_PROBE] H_state. loader=None", flush=True)
+                # H2: force-release all layers and re-measure
+                if ldr is not None:
+                    import gc
+                    ldr.release_all_layers()
+                    gc.collect()
+                    _t.cuda.empty_cache()
+                    _t.cuda.synchronize()
+                    print(f"[MEM_PROBE] H2. after release_all_layers+empty_cache: allocated={_t.cuda.memory_allocated()/1024**2:.1f} MB", flush=True)
+            except Exception as _e:
+                import traceback
+                print(f"[MEM_PROBE] H_state: failed: {_e}\n{traceback.format_exc()}", flush=True)
+
         _memrift_profiler_on_iter_end()
         _memrift_trace("train_step: exit fwd_bwd")
     should_checkpoint, should_exit, exit_code = rerun_state_machine.should_checkpoint_and_exit()
@@ -1724,6 +1850,19 @@ def train_step(forward_step_func, data_iterator, model, optimizer, opt_param_sch
     update_successful, grad_norm, num_zeros_in_grad = optimizer.step()
     timers('optimizer').stop()
     _memrift_trace("train_step: optimizer.step end")
+
+    # MEM_PROBE: after optimizer step
+    if args.rank == 0 and getattr(args, 'curr_iteration', 0) == 0:
+        import torch as _t
+        _t.cuda.synchronize()
+        print(f"[MEM_PROBE] I. after optimizer.step (iter 0): allocated={_t.cuda.memory_allocated()/1024**2:.1f} MB", flush=True)
+        # Force GC and re-check
+        import gc
+        gc.collect()
+        _t.cuda.empty_cache()
+        print(f"[MEM_PROBE] J. after gc.collect+empty_cache: allocated={_t.cuda.memory_allocated()/1024**2:.1f} MB", flush=True)
+        print(f"[MEM_PROBE] K. peak max_memory_allocated this iter: {_t.cuda.max_memory_allocated()/1024**2:.1f} MB", flush=True)
+        print(f"[MEM_PROBE] K. peak max_memory_reserved  this iter: {_t.cuda.max_memory_reserved()/1024**2:.1f} MB", flush=True)
 
     # when freezing sub-models we may have a mixture of successful and unsucessful ranks,
     # so we must gather across mp ranks

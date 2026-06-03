@@ -7,6 +7,15 @@ import torch
 import torch.nn as nn
 
 from flagscale.compress.memrift.async_compressor import PlaceHolderToken, AsyncCompressor
+from flagscale.compress.memrift.megatron_dynamic_loader import (
+    WeightPlaceholder,
+    _lookup_weight_group,
+)
+
+# Diagnostics: counts of _pack invocations. Mutable lists used as box for closure access.
+_pack_diag_total = [0]
+_pack_diag_placeholder = [0]
+_pack_diag_other = [0]
 
 
 def _should_compress_activation(t: torch.Tensor, skip_storage_ptrs: Optional[Set[int]] = None) -> bool:
@@ -26,6 +35,19 @@ def _should_compress_activation(t: torch.Tensor, skip_storage_ptrs: Optional[Set
 
 
 def _unpack(tok: Any, compressor: AsyncCompressor):
+    if isinstance(tok, WeightPlaceholder):
+        group = tok.group_ref()
+        if group is None or group.target_module is None:
+            raise RuntimeError("WeightPlaceholder: MergedWeightGroup was GC'd before backward")
+        weight = group.target_module.weight.data
+        if weight.numel() == 0:
+            raise RuntimeError(
+                f"WeightPlaceholder: weight not materialized at backward time "
+                f"for {group.megatron_target} (layer {group.layer_idx})"
+            )
+        if tuple(weight.shape) != tok.shape or tuple(weight.stride()) != tok.stride:
+            weight = weight.as_strided(tok.shape, tok.stride, 0)
+        return weight
     if isinstance(tok, PlaceHolderToken):
         tok_act_async = bool(getattr(tok, "act_async", False))
         if tok_act_async and compressor.enable_async:
@@ -55,6 +77,7 @@ class DecoderLayerWrapper(nn.Module):
         release_after_unpack: bool = True,
         skip_storage_ptrs: Optional[Set[int]] = None,
         do_empty: bool = False,
+        compress_activations: bool = True,
     ):
         super().__init__()
         self.layer = layer
@@ -65,6 +88,7 @@ class DecoderLayerWrapper(nn.Module):
         self.tokens = []
         self.futures = []
         self.do_empty = do_empty
+        self.compress_activations = compress_activations
 
         self.register_full_backward_pre_hook(self._bwd_pre_hook)
         self.register_full_backward_hook(self._bwd_hook)
@@ -75,6 +99,23 @@ class DecoderLayerWrapper(nn.Module):
         seen = {}
 
         def _pack(t):
+            _pack_diag_total[0] += 1
+            # Intercept materialized weights so autograd saves a tiny placeholder
+            # instead of the full bf16 tensor — avoids pinning ~15 GB of decoder
+            # weights in the saved-tensors of frozen-base LoRA training.
+            if isinstance(t, torch.Tensor) and not t.requires_grad and t.is_cuda and t.numel() > 0:
+                try:
+                    group = _lookup_weight_group(t.data_ptr())
+                except Exception:
+                    group = None
+                if group is not None:
+                    _pack_diag_placeholder[0] += 1
+                    return WeightPlaceholder(group, t.shape, tuple(t.stride()))
+            _pack_diag_other[0] += 1
+
+            if not self.compress_activations:
+                return t
+
             if not _should_compress_activation(t, self.skip_storage_ptrs):
                 return t
 
@@ -151,6 +192,14 @@ def activation_compression_context(
     seen = {}
 
     def pack(t):
+        if not t.requires_grad and t.is_cuda and t.numel() > 0:
+            try:
+                group = _lookup_weight_group(t.data_ptr())
+            except Exception:
+                group = None
+            if group is not None:
+                return WeightPlaceholder(group, t.shape, tuple(t.stride()))
+
         if not _should_compress_activation(t, skip_storage_ptrs):
             return t
 
