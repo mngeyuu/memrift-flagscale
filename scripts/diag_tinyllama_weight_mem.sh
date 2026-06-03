@@ -57,7 +57,7 @@ if [ "$MODE" = "memrift" ]; then
   MEMRIFT_ARGS="\
     --memrift-enable --memrift-weight-enable \
     --memrift-compressed-weight-dir ${MEMRIFT_WEIGHTS} \
-    --memrift-zstd-level ${ZLEVEL:-18} --memrift-prefetch-layers ${PREFETCH} --memrift-weight-async \
+    --memrift-zstd-level ${ZLEVEL:-18} --memrift-act-zstd-level ${ACT_ZLEVEL:-3} --memrift-prefetch-layers ${PREFETCH} --memrift-weight-async \
     --memrift-decode-pool-workers 16 --memrift-compress-pool-workers 8 ${ACT_ARGS}"
 else
   MEMRIFT_ARGS=""   # 纯 LoRA：memrift 全关
