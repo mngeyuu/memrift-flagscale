@@ -958,6 +958,15 @@ def _add_memrift_args(parser):
         help='Zstd compression level for MemRift (1-22, default 6).',
     )
     group.add_argument(
+        '--memrift-act-zstd-level',
+        type=int,
+        default=3,
+        help='Zstd level for online ACTIVATION compression only (1-22, default 3). '
+             'Independent of --memrift-zstd-level (which is the offline weight-prep '
+             'level and has no runtime effect on activations). High levels (e.g. 18) '
+             'make online activation compression extremely slow.',
+    )
+    group.add_argument(
         '--memrift-prefetch-layers',
         type=int,
         default=4,
