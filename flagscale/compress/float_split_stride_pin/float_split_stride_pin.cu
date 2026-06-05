@@ -153,16 +153,19 @@ __global__ void pack_bf16_kernel_vec2(const uint16_t* __restrict__ in,
                                       uint8_t* __restrict__ sm_out,
                                       int64_t numel) {
     int64_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 2;
-    if (idx + 1 >= numel) return;
+    if (idx >= numel) return;
 
     int64_t off = ix.offset(idx);
     uint16_t bits0 = __ldg(&in[ off ]);
-    uint16_t bits1 = __ldg(&in[ off + 1 ]);
 
     exp_out[idx]     = (bits0 >> 7) & 0xFF;
     sm_out[idx]      = ((bits0 >> 15) & 0x1) << 7 | (bits0 & 0x7F);
-    exp_out[idx + 1] = (bits1 >> 7) & 0xFF;
-    sm_out[idx + 1]  = ((bits1 >> 15) & 0x1) << 7 | (bits1 & 0x7F);
+
+    if (idx + 1 < numel) {
+        uint16_t bits1 = __ldg(&in[ off + 1 ]);
+        exp_out[idx + 1] = (bits1 >> 7) & 0xFF;
+        sm_out[idx + 1]  = ((bits1 >> 15) & 0x1) << 7 | (bits1 & 0x7F);
+    }
 }
 
 template<int N>
@@ -190,26 +193,30 @@ __global__ void pack_fp32_kernel_vec2(const float* __restrict__ in,
                                  uint8_t* __restrict__ sm_out,
                                  int64_t numel) {
     int64_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 2;
-    if (idx + 1 >= numel) return;
+    if (idx >= numel) return;
 
     int64_t off = ix.offset(idx);
     uint32_t bits = __ldg(& reinterpret_cast<const uint32_t*>(in)[ off ]);
-    uint32_t bits_1 = __ldg(& reinterpret_cast<const uint32_t*>(in)[ off + 1 ]);
     exp_out[idx]  = (bits >> 23) & 0xFF;
-    exp_out[idx+1]  = (bits_1 >> 23) & 0xFF;
 
     uint32_t sm24 = ((bits & 0x7FFFFF)      )      // mant
                   | ((bits >> 8) & 0x800000);      // sign
-    uint32_t sm24_1 = ((bits_1 & 0x7FFFFF)      )      // mant
-                  | ((bits_1 >> 8) & 0x800000);      // sign
 
     sm_out[idx*3+0] =  sm24        & 0xFF;
     sm_out[idx*3+1] = (sm24 >> 8 ) & 0xFF;
     sm_out[idx*3+2] = (sm24 >> 16) & 0xFF;
 
-    sm_out[(idx+1)*3+0] =  sm24_1        & 0xFF;
-    sm_out[(idx+1)*3+1] = (sm24_1 >> 8 ) & 0xFF;
-    sm_out[(idx+1)*3+2] = (sm24_1 >> 16) & 0xFF;
+    if (idx + 1 < numel) {
+        uint32_t bits_1 = __ldg(& reinterpret_cast<const uint32_t*>(in)[ off + 1 ]);
+        exp_out[idx+1]  = (bits_1 >> 23) & 0xFF;
+
+        uint32_t sm24_1 = ((bits_1 & 0x7FFFFF)      )      // mant
+                      | ((bits_1 >> 8) & 0x800000);      // sign
+
+        sm_out[(idx+1)*3+0] =  sm24_1        & 0xFF;
+        sm_out[(idx+1)*3+1] = (sm24_1 >> 8 ) & 0xFF;
+        sm_out[(idx+1)*3+2] = (sm24_1 >> 16) & 0xFF;
+    }
 }
 
 template<int N>
@@ -236,19 +243,22 @@ __global__ void unpack_bf16_kernel_vec2(const uint8_t* __restrict__ exp_in,
                                         uint16_t* __restrict__ out,
                                         int64_t numel) {
     int64_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 2;
-    if (idx + 1 >= numel) return;
+    if (idx >= numel) return;
 
     uint8_t sm0 = __ldg(&sm_in[idx]);
-    uint8_t sm1 = __ldg(&sm_in[idx + 1]);
     uint8_t exp0 = __ldg(&exp_in[idx]);
-    uint8_t exp1 = __ldg(&exp_in[idx + 1]);
 
     uint16_t bits0 = ((sm0 >> 7) << 15) | (static_cast<uint16_t>(exp0) << 7) | (sm0 & 0x7F);
-    uint16_t bits1 = ((sm1 >> 7) << 15) | (static_cast<uint16_t>(exp1) << 7) | (sm1 & 0x7F);
 
     int64_t off = ix.offset(idx);
     out[ off ]     = bits0;
-    out[ off + 1 ] = bits1;
+
+    if (idx + 1 < numel) {
+        uint8_t sm1 = __ldg(&sm_in[idx + 1]);
+        uint8_t exp1 = __ldg(&exp_in[idx + 1]);
+        uint16_t bits1 = ((sm1 >> 7) << 15) | (static_cast<uint16_t>(exp1) << 7) | (sm1 & 0x7F);
+        out[ off + 1 ] = bits1;
+    }
 }
 
 template<int N>
@@ -280,30 +290,36 @@ __global__ void unpack_fp32_kernel_vec2(const uint8_t* __restrict__ exp_in,
                                    float* __restrict__ out,
                                    int64_t numel) {
     int64_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 2;
-    if (idx + 1 >= numel) return;
+    if (idx >= numel) return;
 
     uint32_t sm24 =  __ldg(&sm_in[idx*3+0])
                    | (__ldg(&sm_in[idx*3+1]) << 8 )
                    | (__ldg(&sm_in[idx*3+2]) << 16);
-    uint32_t sm24_1 =  __ldg(&sm_in[(idx+1)*3+0])
-                   | (__ldg(&sm_in[(idx+1)*3+1]) << 8 )
-                   | (__ldg(&sm_in[(idx+1)*3+2]) << 16);
 
     uint32_t sign = (sm24 >> 23) & 0x1;
-    uint32_t sign_1 = (sm24_1 >> 23) & 0x1;
     uint32_t mant =  sm24 & 0x7FFFFF;
-    uint32_t mant_1 =  sm24_1 & 0x7FFFFF;
 
     uint32_t bits = (sign << 31)
                   | (static_cast<uint32_t>(__ldg(& exp_in[idx])) << 23)
                   |  mant;
-    uint32_t bits_1 = (sign_1 << 31)
-                  | (static_cast<uint32_t>(__ldg(& exp_in[idx+1])) << 23)
-                  |  mant_1;
     
     int64_t off = ix.offset(idx);
     reinterpret_cast<uint32_t*>(out)[ off ] = bits;
-    reinterpret_cast<uint32_t*>(out)[ off + 1 ] = bits_1;
+
+    if (idx + 1 < numel) {
+        uint32_t sm24_1 =  __ldg(&sm_in[(idx+1)*3+0])
+                       | (__ldg(&sm_in[(idx+1)*3+1]) << 8 )
+                       | (__ldg(&sm_in[(idx+1)*3+2]) << 16);
+
+        uint32_t sign_1 = (sm24_1 >> 23) & 0x1;
+        uint32_t mant_1 =  sm24_1 & 0x7FFFFF;
+
+        uint32_t bits_1 = (sign_1 << 31)
+                      | (static_cast<uint32_t>(__ldg(& exp_in[idx+1])) << 23)
+                      |  mant_1;
+
+        reinterpret_cast<uint32_t*>(out)[ off + 1 ] = bits_1;
+    }
 }
 
 //----------------------------------------------------------------------------
@@ -537,7 +553,8 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
             return Pool::inst().get(numel, dtype, -1, /*pinned=*/true, 0);
         });
     m.def("release_pin", [](at::Tensor t){
-            Pool::inst().put(std::move(t), /*pinned=*/true, 0);
+            cudaStream_t cur = c10::cuda::getCurrentCUDAStream().stream();
+            Pool::inst().put(std::move(t), /*pinned=*/true, cur);
         });
     m.def("release_cuda", [](at::Tensor t){
             cudaStream_t cur = c10::cuda::getCurrentCUDAStream().stream();
