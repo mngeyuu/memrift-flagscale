@@ -37,7 +37,7 @@ try:
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=FutureWarning, module="torch.cuda")
         import_module("torch")
-except ImportError:
+except Exception:
     pass
 
 # Method 1: Try direct import (when package is installed)
