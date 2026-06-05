@@ -11,24 +11,47 @@ Provides:
 from importlib import import_module
 import os
 import sys
+from types import ModuleType
+import warnings
 
 # Try multiple import methods
 _ext = None
 _AVAILABLE = False
+_REQUIRED_SYMBOLS = (
+    "split",
+    "split_copy",
+    "merge",
+    "acquire_pin",
+    "release_pin",
+    "release_cuda",
+)
+
+
+def _is_valid_extension(module):
+    return isinstance(module, ModuleType) and all(
+        hasattr(module, symbol) for symbol in _REQUIRED_SYMBOLS
+    )
+
+
+try:
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=FutureWarning, module="torch.cuda")
+        import_module("torch")
+except ImportError:
+    pass
 
 # Method 1: Try direct import (when package is installed)
 try:
     _ext = import_module("float_split_stride_pin._ext")
-    _AVAILABLE = True
+    _AVAILABLE = _is_valid_extension(_ext)
 except ImportError:
     pass
 
 # Method 2: Try relative import from package directory
 if not _AVAILABLE:
     try:
-        from . import _ext as _ext_module
-        _ext = _ext_module
-        _AVAILABLE = True
+        _ext = import_module(f"{__name__}._ext")
+        _AVAILABLE = _is_valid_extension(_ext)
     except ImportError:
         pass
 
@@ -40,14 +63,14 @@ if not _AVAILABLE:
             sys.path.insert(0, pkg_dir)
         import _ext as _ext_module
         _ext = _ext_module
-        _AVAILABLE = True
+        _AVAILABLE = _is_valid_extension(_ext)
     except ImportError:
         pass
 
 
 def is_available():
     """Check if the CUDA extension is available."""
-    return _AVAILABLE
+    return _AVAILABLE and _ext is not None
 
 
 def split(t, stream_ptr):
