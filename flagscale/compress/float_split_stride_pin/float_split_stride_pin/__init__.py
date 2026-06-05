@@ -68,6 +68,27 @@ def split(t, stream_ptr):
     return _ext.split(t, stream_ptr)
 
 
+def split_copy(t, stream_ptr):
+    """
+    Split a bf16/fp32 CUDA tensor using GPU exponent staging followed by
+    cudaMemcpyAsync into pinned CPU memory.
+
+    Args:
+        t: Input tensor, bf16 or fp32, on CUDA.
+        stream_ptr: CUDA stream pointer from stream.cuda_stream.
+
+    Returns:
+        (exp, sm, exp_gpu): Tuple of tensors.
+            - exp: Exponent bytes in pinned CPU memory.
+            - sm: Sign+mantissa bytes on CUDA.
+            - exp_gpu: Temporary CUDA exponent buffer. Keep this alive until the
+              stream event after split_copy has completed.
+    """
+    if not _AVAILABLE:
+        raise RuntimeError("float_split_stride_pin CUDA extension not available")
+    return _ext.split_copy(t, stream_ptr)
+
+
 def merge(exp, sm, size, stride, offset, dtype, stream_ptr):
     """
     Merge exponent and sign-mantissa components back to original tensor.
