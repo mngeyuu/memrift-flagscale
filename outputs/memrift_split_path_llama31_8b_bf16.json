@@ -1,0 +1,670 @@
+{
+  "config": {
+    "mode": "both",
+    "dtype": "bf16",
+    "shapes": [
+      [
+        32,
+        2048,
+        2048
+      ],
+      [
+        2048,
+        28672
+      ],
+      [
+        2048,
+        1,
+        14336
+      ],
+      [
+        2048,
+        1,
+        4096
+      ],
+      [
+        32,
+        2048,
+        128
+      ]
+    ],
+    "warmup": 0,
+    "iters": 1,
+    "zstd_level": 18,
+    "stream": "current"
+  },
+  "environment": {
+    "torch_version": "2.8.0+metax3.3.0.2",
+    "stream": "current",
+    "argv": [
+      "scripts/benchmark_memrift_split_paths.py",
+      "--warmup",
+      "0",
+      "--iters",
+      "1",
+      "--out",
+      "outputs/memrift_split_path_llama31_8b_bf16.json"
+    ],
+    "device_name": "MetaX C550"
+  },
+  "results": [
+    {
+      "mode": "mapped",
+      "shape": [
+        32,
+        2048,
+        2048
+      ],
+      "dtype": "bf16",
+      "numel": 134217728,
+      "warmup": 0,
+      "iters": 1,
+      "zstd_level": 18,
+      "stream": "current",
+      "iterations": [
+        {
+          "submit_ms": 13.633189984830096,
+          "cuda_event_ms": 23803.0546875,
+          "event_wait_ms": 23789.98562900233,
+          "numpy_ms": 0.24105398915708065,
+          "zstd_ms": 104416.94140198524,
+          "compressed_bytes": 43546268
+        }
+      ],
+      "summaries": {
+        "submit": {
+          "min_ms": 13.633189984830096,
+          "max_ms": 13.633189984830096,
+          "mean_ms": 13.633189984830096,
+          "median_ms": 13.633189984830096
+        },
+        "cuda_event": {
+          "min_ms": 23803.0546875,
+          "max_ms": 23803.0546875,
+          "mean_ms": 23803.0546875,
+          "median_ms": 23803.0546875
+        },
+        "event_wait": {
+          "min_ms": 23789.98562900233,
+          "max_ms": 23789.98562900233,
+          "mean_ms": 23789.98562900233,
+          "median_ms": 23789.98562900233
+        },
+        "numpy": {
+          "min_ms": 0.24105398915708065,
+          "max_ms": 0.24105398915708065,
+          "mean_ms": 0.24105398915708065,
+          "median_ms": 0.24105398915708065
+        },
+        "zstd": {
+          "min_ms": 104416.94140198524,
+          "max_ms": 104416.94140198524,
+          "mean_ms": 104416.94140198524,
+          "median_ms": 104416.94140198524
+        },
+        "compressed_bytes": {
+          "min_bytes": 43546268,
+          "max_bytes": 43546268,
+          "mean_bytes": 43546268.0,
+          "median_bytes": 43546268
+        }
+      }
+    },
+    {
+      "mode": "copy",
+      "shape": [
+        32,
+        2048,
+        2048
+      ],
+      "dtype": "bf16",
+      "numel": 134217728,
+      "warmup": 0,
+      "iters": 1,
+      "zstd_level": 18,
+      "stream": "current",
+      "iterations": [
+        {
+          "submit_ms": 0.2538479748181999,
+          "cuda_event_ms": 6.013951778411865,
+          "event_wait_ms": 5.866797000635415,
+          "numpy_ms": 0.054773001465946436,
+          "zstd_ms": 108879.8055969819,
+          "compressed_bytes": 43546268
+        }
+      ],
+      "summaries": {
+        "submit": {
+          "min_ms": 0.2538479748181999,
+          "max_ms": 0.2538479748181999,
+          "mean_ms": 0.2538479748181999,
+          "median_ms": 0.2538479748181999
+        },
+        "cuda_event": {
+          "min_ms": 6.013951778411865,
+          "max_ms": 6.013951778411865,
+          "mean_ms": 6.013951778411865,
+          "median_ms": 6.013951778411865
+        },
+        "event_wait": {
+          "min_ms": 5.866797000635415,
+          "max_ms": 5.866797000635415,
+          "mean_ms": 5.866797000635415,
+          "median_ms": 5.866797000635415
+        },
+        "numpy": {
+          "min_ms": 0.054773001465946436,
+          "max_ms": 0.054773001465946436,
+          "mean_ms": 0.054773001465946436,
+          "median_ms": 0.054773001465946436
+        },
+        "zstd": {
+          "min_ms": 108879.8055969819,
+          "max_ms": 108879.8055969819,
+          "mean_ms": 108879.8055969819,
+          "median_ms": 108879.8055969819
+        },
+        "compressed_bytes": {
+          "min_bytes": 43546268,
+          "max_bytes": 43546268,
+          "mean_bytes": 43546268.0,
+          "median_bytes": 43546268
+        }
+      }
+    },
+    {
+      "mode": "mapped",
+      "shape": [
+        2048,
+        28672
+      ],
+      "dtype": "bf16",
+      "numel": 58720256,
+      "warmup": 0,
+      "iters": 1,
+      "zstd_level": 18,
+      "stream": "current",
+      "iterations": [
+        {
+          "submit_ms": 6.969042005948722,
+          "cuda_event_ms": 10418.8681640625,
+          "event_wait_ms": 10412.617369001964,
+          "numpy_ms": 0.08418902871198952,
+          "zstd_ms": 47555.27128302492,
+          "compressed_bytes": 19052364
+        }
+      ],
+      "summaries": {
+        "submit": {
+          "min_ms": 6.969042005948722,
+          "max_ms": 6.969042005948722,
+          "mean_ms": 6.969042005948722,
+          "median_ms": 6.969042005948722
+        },
+        "cuda_event": {
+          "min_ms": 10418.8681640625,
+          "max_ms": 10418.8681640625,
+          "mean_ms": 10418.8681640625,
+          "median_ms": 10418.8681640625
+        },
+        "event_wait": {
+          "min_ms": 10412.617369001964,
+          "max_ms": 10412.617369001964,
+          "mean_ms": 10412.617369001964,
+          "median_ms": 10412.617369001964
+        },
+        "numpy": {
+          "min_ms": 0.08418902871198952,
+          "max_ms": 0.08418902871198952,
+          "mean_ms": 0.08418902871198952,
+          "median_ms": 0.08418902871198952
+        },
+        "zstd": {
+          "min_ms": 47555.27128302492,
+          "max_ms": 47555.27128302492,
+          "mean_ms": 47555.27128302492,
+          "median_ms": 47555.27128302492
+        },
+        "compressed_bytes": {
+          "min_bytes": 19052364,
+          "max_bytes": 19052364,
+          "mean_bytes": 19052364.0,
+          "median_bytes": 19052364
+        }
+      }
+    },
+    {
+      "mode": "copy",
+      "shape": [
+        2048,
+        28672
+      ],
+      "dtype": "bf16",
+      "numel": 58720256,
+      "warmup": 0,
+      "iters": 1,
+      "zstd_level": 18,
+      "stream": "current",
+      "iterations": [
+        {
+          "submit_ms": 0.2066390006802976,
+          "cuda_event_ms": 2.9322240352630615,
+          "event_wait_ms": 2.8420510061550885,
+          "numpy_ms": 0.05570499342866242,
+          "zstd_ms": 48172.466279997025,
+          "compressed_bytes": 19052364
+        }
+      ],
+      "summaries": {
+        "submit": {
+          "min_ms": 0.2066390006802976,
+          "max_ms": 0.2066390006802976,
+          "mean_ms": 0.2066390006802976,
+          "median_ms": 0.2066390006802976
+        },
+        "cuda_event": {
+          "min_ms": 2.9322240352630615,
+          "max_ms": 2.9322240352630615,
+          "mean_ms": 2.9322240352630615,
+          "median_ms": 2.9322240352630615
+        },
+        "event_wait": {
+          "min_ms": 2.8420510061550885,
+          "max_ms": 2.8420510061550885,
+          "mean_ms": 2.8420510061550885,
+          "median_ms": 2.8420510061550885
+        },
+        "numpy": {
+          "min_ms": 0.05570499342866242,
+          "max_ms": 0.05570499342866242,
+          "mean_ms": 0.05570499342866242,
+          "median_ms": 0.05570499342866242
+        },
+        "zstd": {
+          "min_ms": 48172.466279997025,
+          "max_ms": 48172.466279997025,
+          "mean_ms": 48172.466279997025,
+          "median_ms": 48172.466279997025
+        },
+        "compressed_bytes": {
+          "min_bytes": 19052364,
+          "max_bytes": 19052364,
+          "mean_bytes": 19052364.0,
+          "median_bytes": 19052364
+        }
+      }
+    },
+    {
+      "mode": "mapped",
+      "shape": [
+        2048,
+        1,
+        14336
+      ],
+      "dtype": "bf16",
+      "numel": 29360128,
+      "warmup": 0,
+      "iters": 1,
+      "zstd_level": 18,
+      "stream": "current",
+      "iterations": [
+        {
+          "submit_ms": 3.8370980182662606,
+          "cuda_event_ms": 5207.1083984375,
+          "event_wait_ms": 5203.632165997988,
+          "numpy_ms": 0.0662039965391159,
+          "zstd_ms": 23520.32573398901,
+          "compressed_bytes": 9528788
+        }
+      ],
+      "summaries": {
+        "submit": {
+          "min_ms": 3.8370980182662606,
+          "max_ms": 3.8370980182662606,
+          "mean_ms": 3.8370980182662606,
+          "median_ms": 3.8370980182662606
+        },
+        "cuda_event": {
+          "min_ms": 5207.1083984375,
+          "max_ms": 5207.1083984375,
+          "mean_ms": 5207.1083984375,
+          "median_ms": 5207.1083984375
+        },
+        "event_wait": {
+          "min_ms": 5203.632165997988,
+          "max_ms": 5203.632165997988,
+          "mean_ms": 5203.632165997988,
+          "median_ms": 5203.632165997988
+        },
+        "numpy": {
+          "min_ms": 0.0662039965391159,
+          "max_ms": 0.0662039965391159,
+          "mean_ms": 0.0662039965391159,
+          "median_ms": 0.0662039965391159
+        },
+        "zstd": {
+          "min_ms": 23520.32573398901,
+          "max_ms": 23520.32573398901,
+          "mean_ms": 23520.32573398901,
+          "median_ms": 23520.32573398901
+        },
+        "compressed_bytes": {
+          "min_bytes": 9528788,
+          "max_bytes": 9528788,
+          "mean_bytes": 9528788.0,
+          "median_bytes": 9528788
+        }
+      }
+    },
+    {
+      "mode": "copy",
+      "shape": [
+        2048,
+        1,
+        14336
+      ],
+      "dtype": "bf16",
+      "numel": 29360128,
+      "warmup": 0,
+      "iters": 1,
+      "zstd_level": 18,
+      "stream": "current",
+      "iterations": [
+        {
+          "submit_ms": 0.19401501049287617,
+          "cuda_event_ms": 1.6673280000686646,
+          "event_wait_ms": 1.5699230134487152,
+          "numpy_ms": 0.05546500324271619,
+          "zstd_ms": 23158.035375003237,
+          "compressed_bytes": 9528788
+        }
+      ],
+      "summaries": {
+        "submit": {
+          "min_ms": 0.19401501049287617,
+          "max_ms": 0.19401501049287617,
+          "mean_ms": 0.19401501049287617,
+          "median_ms": 0.19401501049287617
+        },
+        "cuda_event": {
+          "min_ms": 1.6673280000686646,
+          "max_ms": 1.6673280000686646,
+          "mean_ms": 1.6673280000686646,
+          "median_ms": 1.6673280000686646
+        },
+        "event_wait": {
+          "min_ms": 1.5699230134487152,
+          "max_ms": 1.5699230134487152,
+          "mean_ms": 1.5699230134487152,
+          "median_ms": 1.5699230134487152
+        },
+        "numpy": {
+          "min_ms": 0.05546500324271619,
+          "max_ms": 0.05546500324271619,
+          "mean_ms": 0.05546500324271619,
+          "median_ms": 0.05546500324271619
+        },
+        "zstd": {
+          "min_ms": 23158.035375003237,
+          "max_ms": 23158.035375003237,
+          "mean_ms": 23158.035375003237,
+          "median_ms": 23158.035375003237
+        },
+        "compressed_bytes": {
+          "min_bytes": 9528788,
+          "max_bytes": 9528788,
+          "mean_bytes": 9528788.0,
+          "median_bytes": 9528788
+        }
+      }
+    },
+    {
+      "mode": "mapped",
+      "shape": [
+        2048,
+        1,
+        4096
+      ],
+      "dtype": "bf16",
+      "numel": 8388608,
+      "warmup": 0,
+      "iters": 1,
+      "zstd_level": 18,
+      "stream": "current",
+      "iterations": [
+        {
+          "submit_ms": 1.2174709991086274,
+          "cuda_event_ms": 1487.482666015625,
+          "event_wait_ms": 1486.574282986112,
+          "numpy_ms": 0.05428201984614134,
+          "zstd_ms": 5756.927416980034,
+          "compressed_bytes": 2722078
+        }
+      ],
+      "summaries": {
+        "submit": {
+          "min_ms": 1.2174709991086274,
+          "max_ms": 1.2174709991086274,
+          "mean_ms": 1.2174709991086274,
+          "median_ms": 1.2174709991086274
+        },
+        "cuda_event": {
+          "min_ms": 1487.482666015625,
+          "max_ms": 1487.482666015625,
+          "mean_ms": 1487.482666015625,
+          "median_ms": 1487.482666015625
+        },
+        "event_wait": {
+          "min_ms": 1486.574282986112,
+          "max_ms": 1486.574282986112,
+          "mean_ms": 1486.574282986112,
+          "median_ms": 1486.574282986112
+        },
+        "numpy": {
+          "min_ms": 0.05428201984614134,
+          "max_ms": 0.05428201984614134,
+          "mean_ms": 0.05428201984614134,
+          "median_ms": 0.05428201984614134
+        },
+        "zstd": {
+          "min_ms": 5756.927416980034,
+          "max_ms": 5756.927416980034,
+          "mean_ms": 5756.927416980034,
+          "median_ms": 5756.927416980034
+        },
+        "compressed_bytes": {
+          "min_bytes": 2722078,
+          "max_bytes": 2722078,
+          "mean_bytes": 2722078.0,
+          "median_bytes": 2722078
+        }
+      }
+    },
+    {
+      "mode": "copy",
+      "shape": [
+        2048,
+        1,
+        4096
+      ],
+      "dtype": "bf16",
+      "numel": 8388608,
+      "warmup": 0,
+      "iters": 1,
+      "zstd_level": 18,
+      "stream": "current",
+      "iterations": [
+        {
+          "submit_ms": 0.20644799224101007,
+          "cuda_event_ms": 0.5716480016708374,
+          "event_wait_ms": 0.4580910026561469,
+          "numpy_ms": 0.05300997872836888,
+          "zstd_ms": 5624.628085992299,
+          "compressed_bytes": 2722078
+        }
+      ],
+      "summaries": {
+        "submit": {
+          "min_ms": 0.20644799224101007,
+          "max_ms": 0.20644799224101007,
+          "mean_ms": 0.20644799224101007,
+          "median_ms": 0.20644799224101007
+        },
+        "cuda_event": {
+          "min_ms": 0.5716480016708374,
+          "max_ms": 0.5716480016708374,
+          "mean_ms": 0.5716480016708374,
+          "median_ms": 0.5716480016708374
+        },
+        "event_wait": {
+          "min_ms": 0.4580910026561469,
+          "max_ms": 0.4580910026561469,
+          "mean_ms": 0.4580910026561469,
+          "median_ms": 0.4580910026561469
+        },
+        "numpy": {
+          "min_ms": 0.05300997872836888,
+          "max_ms": 0.05300997872836888,
+          "mean_ms": 0.05300997872836888,
+          "median_ms": 0.05300997872836888
+        },
+        "zstd": {
+          "min_ms": 5624.628085992299,
+          "max_ms": 5624.628085992299,
+          "mean_ms": 5624.628085992299,
+          "median_ms": 5624.628085992299
+        },
+        "compressed_bytes": {
+          "min_bytes": 2722078,
+          "max_bytes": 2722078,
+          "mean_bytes": 2722078.0,
+          "median_bytes": 2722078
+        }
+      }
+    },
+    {
+      "mode": "mapped",
+      "shape": [
+        32,
+        2048,
+        128
+      ],
+      "dtype": "bf16",
+      "numel": 8388608,
+      "warmup": 0,
+      "iters": 1,
+      "zstd_level": 18,
+      "stream": "current",
+      "iterations": [
+        {
+          "submit_ms": 0.06399000994861126,
+          "cuda_event_ms": 1486.19873046875,
+          "event_wait_ms": 1486.4372889860533,
+          "numpy_ms": 0.03023698809556663,
+          "zstd_ms": 5556.453305005562,
+          "compressed_bytes": 2723871
+        }
+      ],
+      "summaries": {
+        "submit": {
+          "min_ms": 0.06399000994861126,
+          "max_ms": 0.06399000994861126,
+          "mean_ms": 0.06399000994861126,
+          "median_ms": 0.06399000994861126
+        },
+        "cuda_event": {
+          "min_ms": 1486.19873046875,
+          "max_ms": 1486.19873046875,
+          "mean_ms": 1486.19873046875,
+          "median_ms": 1486.19873046875
+        },
+        "event_wait": {
+          "min_ms": 1486.4372889860533,
+          "max_ms": 1486.4372889860533,
+          "mean_ms": 1486.4372889860533,
+          "median_ms": 1486.4372889860533
+        },
+        "numpy": {
+          "min_ms": 0.03023698809556663,
+          "max_ms": 0.03023698809556663,
+          "mean_ms": 0.03023698809556663,
+          "median_ms": 0.03023698809556663
+        },
+        "zstd": {
+          "min_ms": 5556.453305005562,
+          "max_ms": 5556.453305005562,
+          "mean_ms": 5556.453305005562,
+          "median_ms": 5556.453305005562
+        },
+        "compressed_bytes": {
+          "min_bytes": 2723871,
+          "max_bytes": 2723871,
+          "mean_bytes": 2723871.0,
+          "median_bytes": 2723871
+        }
+      }
+    },
+    {
+      "mode": "copy",
+      "shape": [
+        32,
+        2048,
+        128
+      ],
+      "dtype": "bf16",
+      "numel": 8388608,
+      "warmup": 0,
+      "iters": 1,
+      "zstd_level": 18,
+      "stream": "current",
+      "iterations": [
+        {
+          "submit_ms": 0.18773399642668664,
+          "cuda_event_ms": 0.5519359707832336,
+          "event_wait_ms": 0.45034699724055827,
+          "numpy_ms": 0.05048501770943403,
+          "zstd_ms": 5500.1725719776005,
+          "compressed_bytes": 2723871
+        }
+      ],
+      "summaries": {
+        "submit": {
+          "min_ms": 0.18773399642668664,
+          "max_ms": 0.18773399642668664,
+          "mean_ms": 0.18773399642668664,
+          "median_ms": 0.18773399642668664
+        },
+        "cuda_event": {
+          "min_ms": 0.5519359707832336,
+          "max_ms": 0.5519359707832336,
+          "mean_ms": 0.5519359707832336,
+          "median_ms": 0.5519359707832336
+        },
+        "event_wait": {
+          "min_ms": 0.45034699724055827,
+          "max_ms": 0.45034699724055827,
+          "mean_ms": 0.45034699724055827,
+          "median_ms": 0.45034699724055827
+        },
+        "numpy": {
+          "min_ms": 0.05048501770943403,
+          "max_ms": 0.05048501770943403,
+          "mean_ms": 0.05048501770943403,
+          "median_ms": 0.05048501770943403
+        },
+        "zstd": {
+          "min_ms": 5500.1725719776005,
+          "max_ms": 5500.1725719776005,
+          "mean_ms": 5500.1725719776005,
+          "median_ms": 5500.1725719776005
+        },
+        "compressed_bytes": {
+          "min_bytes": 2723871,
+          "max_bytes": 2723871,
+          "mean_bytes": 2723871.0,
+          "median_bytes": 2723871
+        }
+      }
+    }
+  ]
+}
