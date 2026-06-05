@@ -7,8 +7,15 @@ import argparse
 import json
 import os
 import statistics
+import sys
 import time
+from pathlib import Path
 from typing import Any
+
+os.environ.setdefault("TORCH_DEVICE_BACKEND_AUTOLOAD", "0")
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 import torch
 import zstandard as zstd
@@ -141,24 +148,22 @@ def warmup(
 
 
 def benchmark_mode(
-    shape: tuple[int, ...],
+    tensor: torch.Tensor,
     dtype_name: str,
     mode: str,
     args: argparse.Namespace,
 ) -> dict[str, Any]:
     stream = get_stream(args.stream)
-    dtype = DTYPES[dtype_name]
-    tensor = torch.randn(shape, device="cuda", dtype=torch.float32).to(dtype)
     if args.stream == "new":
         stream.wait_stream(torch.cuda.current_stream())
     compressor = zstd.ZstdCompressor(level=args.zstd_level)
+    shape = tuple(tensor.shape)
 
     warmup(tensor, mode, stream, args.warmup)
     iterations = [
         measure_once(tensor, mode, stream, compressor) for _ in range(args.iters)
     ]
 
-    del tensor
     if args.stream == "new":
         torch.cuda.current_stream().wait_stream(stream)
 
@@ -166,7 +171,7 @@ def benchmark_mode(
         "mode": mode,
         "shape": list(shape),
         "dtype": dtype_name,
-        "numel": int(torch.Size(shape).numel()),
+        "numel": int(tensor.numel()),
         "warmup": args.warmup,
         "iters": args.iters,
         "zstd_level": args.zstd_level,
@@ -205,6 +210,8 @@ def parse_args() -> argparse.Namespace:
         parser.error("--warmup must be non-negative")
     if args.iters <= 0:
         parser.error("--iters must be positive")
+    if not 1 <= args.zstd_level <= 22:
+        parser.error("--zstd-level must be between 1 and 22")
 
     args.shapes = args.shape or DEFAULT_SHAPES
     return args
@@ -223,6 +230,17 @@ def selected_modes(mode: str) -> list[str]:
     if mode == "both":
         return ["mapped", "copy"]
     return [mode]
+
+
+def collect_environment(args: argparse.Namespace) -> dict[str, Any]:
+    environment = {
+        "torch_version": torch.__version__,
+        "stream": args.stream,
+        "argv": sys.argv,
+    }
+    if torch.cuda.is_available():
+        environment["device_name"] = torch.cuda.get_device_name()
+    return environment
 
 
 def print_table(results: list[dict[str, Any]]) -> None:
@@ -249,9 +267,12 @@ def main() -> None:
     check_environment(args.mode)
 
     results = []
+    dtype = DTYPES[args.dtype]
     for shape in args.shapes:
+        tensor = torch.randn(shape, device="cuda", dtype=torch.float32).to(dtype)
         for mode in selected_modes(args.mode):
-            results.append(benchmark_mode(shape, args.dtype, mode, args))
+            results.append(benchmark_mode(tensor, args.dtype, mode, args))
+        del tensor
 
     output = {
         "config": {
@@ -263,6 +284,7 @@ def main() -> None:
             "zstd_level": args.zstd_level,
             "stream": args.stream,
         },
+        "environment": collect_environment(args),
         "results": results,
     }
 
