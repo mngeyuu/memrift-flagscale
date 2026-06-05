@@ -362,6 +362,67 @@ std::vector<at::Tensor> pack_tensor(const at::Tensor& t, unsigned long long stre
     return {exp_host, sm};
 }
 
+std::vector<at::Tensor> pack_tensor_copy(const at::Tensor& t, unsigned long long stream_ptr) {
+    TORCH_CHECK(t.is_cuda(), "input must be CUDA");
+    TORCH_CHECK(t.scalar_type()==at::kFloat || t.scalar_type()==at::kBFloat16,
+                "dtype must be fp32 / bf16");
+
+    int dev_idx = t.device().index();
+    TORCH_CHECK(dev_idx >= 0, "input tensor must be on CUDA");
+    cudaStream_t raw = reinterpret_cast<cudaStream_t>(stream_ptr);
+    c10::cuda::CUDAStream s = c10::cuda::getStreamFromExternal(raw, dev_idx);
+    c10::cuda::CUDAStreamGuard guard{s};
+
+    const int64_t N = t.numel();
+    dim3 grid = grid_for(N);
+
+    auto exp_host = Pool::inst().get(N, at::kByte, -1, true, raw);
+    auto exp_gpu = Pool::inst().get(N, at::kByte, dev_idx, false, raw);
+    int64_t sm_elems = (t.scalar_type()==at::kFloat) ? N * 3 : N;
+    auto sm = Pool::inst().get(sm_elems, at::kByte, dev_idx, false, raw);
+
+    auto ix = make_indexer<4>(t);
+
+    if (t.scalar_type() == at::kFloat) {
+        if (ix.is_contig)
+            pack_fp32_kernel_vec2<4><<<grid,256,0,raw>>>(
+                t.data_ptr<float>(), ix,
+                exp_gpu.data_ptr<uint8_t>(),
+                sm.data_ptr<uint8_t>(), N);
+        else
+            pack_fp32_kernel<4><<<grid,256,0,raw>>>(
+                t.data_ptr<float>(), ix,
+                exp_gpu.data_ptr<uint8_t>(),
+                sm.data_ptr<uint8_t>(), N);
+    } else {
+        if (ix.is_contig)
+            pack_bf16_kernel_vec2<4><<<grid,256,0,raw>>>(
+                reinterpret_cast<const uint16_t*>(t.data_ptr<at::BFloat16>()),
+                ix,
+                exp_gpu.data_ptr<uint8_t>(),
+                sm.data_ptr<uint8_t>(), N);
+        else
+            pack_bf16_kernel<4><<<grid,256,0,raw>>>(
+                reinterpret_cast<const uint16_t*>(t.data_ptr<at::BFloat16>()),
+                ix,
+                exp_gpu.data_ptr<uint8_t>(),
+                sm.data_ptr<uint8_t>(), N);
+    }
+
+    cudaError_t err = cudaMemcpyAsync(
+        exp_host.data_ptr<uint8_t>(),
+        exp_gpu.data_ptr<uint8_t>(),
+        static_cast<size_t>(N),
+        cudaMemcpyDeviceToHost,
+        raw);
+    TORCH_CHECK(err == cudaSuccess, "cudaMemcpyAsync D2H failed: ",
+                cudaGetErrorString(err));
+
+    exp_gpu.record_stream(s);
+    sm.record_stream(s);
+    return {exp_host, sm, exp_gpu};
+}
+
 // util: 计算 offset+sizes,strides 需要的底层 storage 大小
 int64_t required_storage(int64_t base_off,
             const std::vector<int64_t>& sizes,
@@ -464,6 +525,8 @@ at::Tensor unpack_tensor(at::Tensor exp,
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("split", &pack_tensor, "pack tensor -> (exp, sm)");
+    m.def("split_copy", &pack_tensor_copy,
+          "pack tensor using GPU exp staging + cudaMemcpyAsync D2H -> (exp_host, sm, exp_gpu)");
     m.def("merge", &unpack_tensor,
           "unpack (exp,sm,sizes,strides,offset,dtype,stream) -> tensor",
           py::arg("exp"), py::arg("sm"),
