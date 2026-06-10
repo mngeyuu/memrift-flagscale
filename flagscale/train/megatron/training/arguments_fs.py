@@ -366,8 +366,8 @@ class FSTrainArguments:
 
         if args.peft_type is not None:
             assert (
-                args.transformer_impl == 'transformer_engine'
-            ), 'PEFT is only supported with transformer_engine implementation'
+                args.transformer_impl in ('transformer_engine', 'local')
+            ), 'PEFT is only supported with transformer_engine/local implementation'
             if (
                 args.num_experts is not None
                 and args.moe_shared_expert_intermediate_size is not None
@@ -446,8 +446,8 @@ class FSTrainArguments:
 
         if args.peft_type is not None:
             assert (
-                args.transformer_impl == 'transformer_engine'
-            ), 'PEFT is only supported with transformer_engine implementation'
+                args.transformer_impl in ('transformer_engine', 'local')
+            ), 'PEFT is only supported with transformer_engine/local implementation'
             assert args.num_experts is None, "PEFT is not tested with MoE currently"
             assert (
                 args.recompute_method is None

@@ -2,6 +2,7 @@
 
 import os
 import pathlib
+import shutil
 import subprocess
 
 from torch.utils import cpp_extension
@@ -15,10 +16,19 @@ os.environ["TORCH_CUDA_ARCH_LIST"] = ""
 
 
 def load(args):
+    cuda_home = cpp_extension.CUDA_HOME
+    nvcc = os.path.join(cuda_home, "bin", "nvcc") if cuda_home else None
+    if not nvcc or not os.path.exists(nvcc):
+        if getattr(args, "rank", 0) == 0:
+            print(
+                f"> skipping fused kernel build: nvcc not found under CUDA_HOME={cuda_home!r}",
+                flush=True,
+            )
+        return
 
     # Check if cuda 11 is installed for compute capability 8.0
     cc_flag = []
-    _, bare_metal_major, bare_metal_minor = _get_cuda_bare_metal_version(cpp_extension.CUDA_HOME)
+    _, bare_metal_major, bare_metal_minor = _get_cuda_bare_metal_version(cuda_home)
     if int(bare_metal_major) >= 11:
         cc_flag.append('-gencode')
         cc_flag.append('arch=compute_80,code=sm_80')
@@ -46,7 +56,10 @@ def load(args):
 
 
 def _get_cuda_bare_metal_version(cuda_dir):
-    raw_output = subprocess.check_output([cuda_dir + "/bin/nvcc", "-V"], universal_newlines=True)
+    nvcc = shutil.which("nvcc", path=os.path.join(cuda_dir, "bin"))
+    if nvcc is None:
+        raise FileNotFoundError(f"nvcc not found under CUDA_HOME={cuda_dir!r}")
+    raw_output = subprocess.check_output([nvcc, "-V"], universal_newlines=True)
     output = raw_output.split()
     release_idx = output.index("release") + 1
     release = output[release_idx].split(".")
