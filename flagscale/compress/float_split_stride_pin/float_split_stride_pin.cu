@@ -411,17 +411,19 @@ at::Tensor unpack_tensor(at::Tensor exp,
         exp_dev_ptr = exp.data_ptr<uint8_t>();
     } else {
         TORCH_CHECK(exp.is_pinned(),
-                    "exp on CPU must be pinned for zero-copy");
+                    "exp on CPU must be pinned for async H2D copy");
 
-        cudaError_t err = cudaHostGetDevicePointer(
-                reinterpret_cast<void**>(&exp_dev_ptr),
-                exp.data_ptr(), 0);
-
-        if (err != cudaSuccess) {
-            tmp_gpu_exp.emplace(
-                exp.to(sm.device(), /*non_blocking=*/true));
-            exp_dev_ptr = tmp_gpu_exp->data_ptr<uint8_t>();
-        }
+        const int64_t E = exp.numel();
+        auto exp_gpu = Pool::inst().get(E, at::kByte, dev_idx, /*pinned=*/false, raw);
+        cudaError_t err = cudaMemcpyAsync(exp_gpu.data_ptr<uint8_t>(),
+                                          exp.data_ptr<uint8_t>(),
+                                          static_cast<size_t>(E),
+                                          cudaMemcpyHostToDevice, raw);
+        TORCH_CHECK(err == cudaSuccess,
+                    "cudaMemcpyAsync H2D failed: ", cudaGetErrorString(err));
+        exp_gpu.record_stream(s);
+        exp_dev_ptr = exp_gpu.data_ptr<uint8_t>();
+        tmp_gpu_exp.emplace(std::move(exp_gpu));
     }
     
     // allocate output tensor (原 stride)
