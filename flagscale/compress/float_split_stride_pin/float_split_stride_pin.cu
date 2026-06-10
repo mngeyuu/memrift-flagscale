@@ -329,36 +329,46 @@ std::vector<at::Tensor> pack_tensor(const at::Tensor& t, unsigned long long stre
     int64_t sm_elems=(t.scalar_type()==at::kFloat)?N*3:N;
     auto sm = Pool::inst().get(sm_elems, at::kByte, dev_idx, false, raw);
 
-    uint8_t* host_ptr = exp_host.data_ptr<uint8_t>();
-    uint8_t* dev_ptr;
-    cudaHostGetDevicePointer(&dev_ptr, host_ptr, 0);
+    auto exp_gpu = Pool::inst().get(N, at::kByte, dev_idx, /*pinned=*/false, raw);
     auto ix  = make_indexer<4>(t);
 
     if (t.scalar_type() == at::kFloat) {
         if (ix.is_contig)
             pack_fp32_kernel_vec2<4><<<grid,256,0,raw>>>(
                 t.data_ptr<float>(), ix,
-                dev_ptr,
+                exp_gpu.data_ptr<uint8_t>(),
                 sm.data_ptr<uint8_t>(), N);
         else
             pack_fp32_kernel<4><<<grid,256,0,raw>>>(
                 t.data_ptr<float>(), ix,
-                dev_ptr,
+                exp_gpu.data_ptr<uint8_t>(),
                 sm.data_ptr<uint8_t>(), N);
     } else {    // bf16
-        if (ix.is_contig) 
+        if (ix.is_contig)
             pack_bf16_kernel_vec2<4><<<grid,256,0,raw>>>(
                 reinterpret_cast<const uint16_t*>(t.data_ptr<at::BFloat16>()),
                 ix,
-                dev_ptr,
+                exp_gpu.data_ptr<uint8_t>(),
                 sm.data_ptr<uint8_t>(), N);
         else
             pack_bf16_kernel<4><<<grid,256,0,raw>>>(
                 reinterpret_cast<const uint16_t*>(t.data_ptr<at::BFloat16>()),
                 ix,
-                dev_ptr,
+                exp_gpu.data_ptr<uint8_t>(),
                 sm.data_ptr<uint8_t>(), N);
     }
+    cudaError_t cpy_err = cudaMemcpyAsync(exp_host.data_ptr<uint8_t>(),
+                                          exp_gpu.data_ptr<uint8_t>(),
+                                          static_cast<size_t>(N),
+                                          cudaMemcpyDeviceToHost, raw);
+    TORCH_CHECK(cpy_err == cudaSuccess,
+                "cudaMemcpyAsync D2H failed: ", cudaGetErrorString(cpy_err));
+    // record_stream 防止 PyTorch caching allocator 在异步 memcpy 完成前回收
+    // exp_gpu 的底层显存:Pool::put 的 cudaEvent 守护的是"从池里再次取出"这条路径,
+    // record_stream 守护的是 Pool 在 bucket 满时 evict 后 allocator 自身的 free 路径。
+    // 两者都需要,勿删 record_stream。
+    exp_gpu.record_stream(s);
+    Pool::inst().put(std::move(exp_gpu), /*pinned=*/false, raw);
     return {exp_host, sm};
 }
 
