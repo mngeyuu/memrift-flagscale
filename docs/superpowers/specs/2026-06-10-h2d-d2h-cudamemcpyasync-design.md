@@ -121,16 +121,21 @@ pybind(不新增任何函数)、`Pool`、所有 CUDA kernel、`__init__.py`、�
 - 跑一个 memrift 小流程(如 `run_memrift_weight_only_test.sh` 或 `run_memrift_dbg.sh`)确认压缩/解压链路不崩。
 
 ### 6.3 端到端训练验证(单卡全路径 + 零拷贝 baseline 对比)
-**配置**:单卡 LLaMA-3.1-8B 全路径(`memrift_full.sh` 或 `run_ablation_llama31_8b.sh` 的"权重+激活"档),5 iters,mock data,需现有 `memrift_weights/llama31_8b_level18` 压缩权重。该配置同时压到:
-- 新 `split`(激活压缩 D2H)
-- 新 `merge`(权重解压 + 激活解压 H2D)
 
-**判定标准——与零拷贝 baseline 逐 iter 对比 loss**:
-1. **改动前**:在当前零拷贝版本上跑一次,保存逐 iter loss(baseline 日志)。
-2. **改动后**:重编译扩展,同配置、同随机种子再跑一次。
-3. **对比**:逐 iter loss 应与 baseline 近似逐位一致(允许 fp 累加噪声内的极小偏差);无 NaN、无崩溃、loss 正常下降。
+**脚本**:`memrift_full.sh`(已选定)。关键配置:
+- 单卡 `CUDA_VISIBLE_DEVICES=2`,LLaMA-3.1-8B,`transformer_engine` + LoRA。
+- `--memrift-weight-enable`(权重解压 → 走 `merge`)+ `--memrift-activation-enable --memrift-act-async`(激活压缩 → 走 `split`;激活解压 → 走 `merge`)。该配置同时压到**新 `split`(D2H)与新 `merge`(H2D)**。
+- 依赖现有压缩权重 `./memrift_weights/llama31_8b_level18`。
+- `conda activate myc`;真机 SSH `172.24.178.248`。
+- 注意:脚本 `--train-iters 1`、`--global-batch-size 1`、无显式 `--seed`(Megatron 默认,mock-data 下可复现)。日志走 stdout,对比时需 `tee` 落盘。
 
-> 注:由于第 5 节"数值不变性",理论上 loss 应当几乎逐位相同。若出现明显偏差,说明改动引入了 race / 生命周期 / 传输错误,需回到 systematic-debugging。
+**判定标准——与零拷贝 baseline 对比单点 loss**:
+1. **改动前**:在当前零拷贝版本上跑一次,`bash memrift_full.sh 2>&1 | tee outputs/baseline_zerocopy.log`,记录 iter-1 loss。
+2. **改动后**:重编译扩展,同脚本再跑 `... | tee outputs/after_memcpy.log`。
+3. **对比**:iter-1 loss 应与 baseline 近似逐位一致(fp 噪声内极小偏差);无 NaN、无崩溃、解压/压缩链路无报错。
+
+> 因 `--train-iters 1`,对比是单点 loss(无曲线)。由于第 5 节"数值不变性",理论上该 loss 应几乎逐位相同;若明显偏差,说明引入了 race / 生命周期 / 传输错误,回到 systematic-debugging。
+> 可选增强:临时把 `--train-iters` 提到 5 跑一小段曲线对比,更易暴露偶发 async race;非必需。
 
 ## 7. 范围外(本设计不含)
 
