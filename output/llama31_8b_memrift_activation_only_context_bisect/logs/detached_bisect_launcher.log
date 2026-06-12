@@ -1,0 +1,1024 @@
+[detached] start: 2026-06-01T10:26:38+08:00
+==============================================================
+ Llama-3.1-8B MemRift Activation-Only Context Bisect
+==============================================================
+ REPO_ROOT:               /home/secure/myc/memrift-flagscale
+ OUT_ROOT:                /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect
+ MODEL:                   /home/secure/myc/model/llama-3.1-8b
+ MEMRIFT_WEIGHT_ENABLE:   false
+ MEMRIFT_ACT_ENABLE:      true
+ MEMRIFT_ACT_ASYNC:       1
+ TRAIN_ITERS:             1
+ LR_WARMUP_ITERS:         0
+ EVAL_INTERVAL:           1000000000
+ PYTORCH_CUDA_ALLOC_CONF: expandable_segments:True
+ GLOBAL_BATCH_SIZE:       1
+ MICRO_BATCH_SIZE:        1
+ MIN_SEQ:                 2048
+ MAX_SEQ:                 131072
+ SEQ_ALIGN:               256
+ MAX_POSITION_EMBEDDINGS: 131072
+ TRIAL_TIMEOUT:           <disabled>
+==============================================================
+
+>> Trial #1 | seq_length=66560
+   exp_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_66560
+   stdout : /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/logs/seq_66560.stdout.log
+/opt/conda/lib/python3.10/site-packages/hydra/_internal/defaults_list.py:251: UserWarning: In 'train_llama31_8b_mock': Defaults list is missing `_self_`. See https://hydra.cc/docs/1.2/upgrades/1.0_to_1.1/default_composition_order for more information
+  warnings.warn(msg, UserWarning)
+[2026-06-01 10:26:39,883 FlagScale logger.py:28 WARNING] Hostfile None not found. The training will proceed using only local resources.
+[2026-06-01 10:26:39,883 FlagScale logger.py:25 INFO] 
+************** configuration **************
+[2026-06-01 10:26:39,890 FlagScale logger.py:25 INFO] 
+train:
+  system:
+    tensor_model_parallel_size: 1
+    pipeline_model_parallel_size: 1
+    context_parallel_size: 1
+    disable_bias_linear: true
+    use_flash_attn: true
+    sequence_parallel: false
+    use_distributed_optimizer: false
+    precision:
+      fp16: false
+      bf16: true
+    logging:
+      log_interval: 1
+      tensorboard_log_interval: 10
+      wandb_mode: disabled
+      log_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_66560/logs
+      scripts_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_66560/logs/scripts
+      pids_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_66560/logs/pids
+      details_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_66560/logs/details
+      tensorboard_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_66560/tensorboard
+      wandb_save_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_66560/wandb
+    checkpoint:
+      save_interval: 500
+      save: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_66560/checkpoints
+      load: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_66560/checkpoints
+    ckpt_format: torch
+    memrift_enable: true
+    memrift_weight_enable: false
+    memrift_compressed_weight_dir: ./memrift_weights/llama31_8b_level18
+    memrift_zstd_level: 3
+    memrift_prefetch_layers: 12
+    memrift_weight_async: true
+    memrift_activation_enable: true
+    memrift_act_async: true
+    memrift_decode_pool_workers: 48
+    memrift_compress_pool_workers: 8
+    memrift_print_debug: false
+    run_foreground: true
+    num_workers: 0
+  model:
+    num_layers: 32
+    hidden_size: 4096
+    ffn_hidden_size: 14336
+    num_attention_heads: 32
+    num_query_groups: 8
+    seq_length: 66560
+    max_position_embeddings: 131072
+    tokenizer_type: HuggingFaceTokenizer
+    tokenizer_path: /home/secure/myc/model/llama-3.1-8b
+    tokenizer_model: /home/secure/myc/model/llama-3.1-8b
+    make_vocab_size_divisible_by: 64
+    norm_init_weight: 1.0
+    use_rotary_position_embeddings: true
+    rotary_base: 500000
+    no_position_embedding: true
+    normalization: RMSNorm
+    norm_epsilon: 1.0e-05
+    swiglu: true
+    untie_embeddings_and_output_weights: true
+    attention_dropout: 0.0
+    hidden_dropout: 0.0
+    init_method_std: 0.02
+    transformer_impl: transformer_engine
+    peft_type: lora
+    lora_target_modules:
+    - linear_qkv
+    - linear_proj
+    - linear_fc1
+    - linear_fc2
+    lora_dim: 16
+    lora_alpha: 32
+    lora_dropout: 0.0
+  data:
+    data_path: null
+    split: 1,0,0
+    micro_batch_size: 1
+    global_batch_size: 1
+    mock_data: true
+  trainer:
+    train_iters: 1
+    lr: 0.0002
+    min_lr: 2.0e-05
+    lr_warmup_iters: 0
+    lr_decay_style: cosine
+    weight_decay: 0.1
+    clip_grad: 1.0
+    adam_beta1: 0.9
+    adam_beta2: 0.95
+    adam_eps: 1.0e-08
+    eval_iters: 0
+    eval_interval: 1000000000
+experiment:
+  envs:
+    TORCH_DEVICE_BACKEND_AUTOLOAD: '0'
+  cmds:
+    before_start: export TORCH_DEVICE_BACKEND_AUTOLOAD=0
+  exp_name: llama31_8b_memrift_act_only_ctx_66560
+  exp_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_66560
+  task:
+    type: train
+    backend: megatron
+    entrypoint: flagscale/train/train_gpt.py
+  runner:
+    type: torchrun
+    nnodes: 1
+    nproc_per_node: 1
+action: run
+
+[2026-06-01 10:26:39,892 FlagScale logger.py:25 INFO] Run the local command: bash /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_66560/logs/scripts/host_0_localhost_run.sh
+   status : OOM
+   exit   : 0
+   elapsed: 3151s
+   host   : /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_66560/logs/host_0_localhost.output
+
+>> Trial #2 | seq_length=34048
+   exp_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_34048
+   stdout : /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/logs/seq_34048.stdout.log
+/opt/conda/lib/python3.10/site-packages/hydra/_internal/defaults_list.py:251: UserWarning: In 'train_llama31_8b_mock': Defaults list is missing `_self_`. See https://hydra.cc/docs/1.2/upgrades/1.0_to_1.1/default_composition_order for more information
+  warnings.warn(msg, UserWarning)
+[2026-06-01 11:19:10,515 FlagScale logger.py:28 WARNING] Hostfile None not found. The training will proceed using only local resources.
+[2026-06-01 11:19:10,516 FlagScale logger.py:25 INFO] 
+************** configuration **************
+[2026-06-01 11:19:10,522 FlagScale logger.py:25 INFO] 
+train:
+  system:
+    tensor_model_parallel_size: 1
+    pipeline_model_parallel_size: 1
+    context_parallel_size: 1
+    disable_bias_linear: true
+    use_flash_attn: true
+    sequence_parallel: false
+    use_distributed_optimizer: false
+    precision:
+      fp16: false
+      bf16: true
+    logging:
+      log_interval: 1
+      tensorboard_log_interval: 10
+      wandb_mode: disabled
+      log_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_34048/logs
+      scripts_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_34048/logs/scripts
+      pids_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_34048/logs/pids
+      details_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_34048/logs/details
+      tensorboard_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_34048/tensorboard
+      wandb_save_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_34048/wandb
+    checkpoint:
+      save_interval: 500
+      save: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_34048/checkpoints
+      load: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_34048/checkpoints
+    ckpt_format: torch
+    memrift_enable: true
+    memrift_weight_enable: false
+    memrift_compressed_weight_dir: ./memrift_weights/llama31_8b_level18
+    memrift_zstd_level: 3
+    memrift_prefetch_layers: 12
+    memrift_weight_async: true
+    memrift_activation_enable: true
+    memrift_act_async: true
+    memrift_decode_pool_workers: 48
+    memrift_compress_pool_workers: 8
+    memrift_print_debug: false
+    run_foreground: true
+    num_workers: 0
+  model:
+    num_layers: 32
+    hidden_size: 4096
+    ffn_hidden_size: 14336
+    num_attention_heads: 32
+    num_query_groups: 8
+    seq_length: 34048
+    max_position_embeddings: 131072
+    tokenizer_type: HuggingFaceTokenizer
+    tokenizer_path: /home/secure/myc/model/llama-3.1-8b
+    tokenizer_model: /home/secure/myc/model/llama-3.1-8b
+    make_vocab_size_divisible_by: 64
+    norm_init_weight: 1.0
+    use_rotary_position_embeddings: true
+    rotary_base: 500000
+    no_position_embedding: true
+    normalization: RMSNorm
+    norm_epsilon: 1.0e-05
+    swiglu: true
+    untie_embeddings_and_output_weights: true
+    attention_dropout: 0.0
+    hidden_dropout: 0.0
+    init_method_std: 0.02
+    transformer_impl: transformer_engine
+    peft_type: lora
+    lora_target_modules:
+    - linear_qkv
+    - linear_proj
+    - linear_fc1
+    - linear_fc2
+    lora_dim: 16
+    lora_alpha: 32
+    lora_dropout: 0.0
+  data:
+    data_path: null
+    split: 1,0,0
+    micro_batch_size: 1
+    global_batch_size: 1
+    mock_data: true
+  trainer:
+    train_iters: 1
+    lr: 0.0002
+    min_lr: 2.0e-05
+    lr_warmup_iters: 0
+    lr_decay_style: cosine
+    weight_decay: 0.1
+    clip_grad: 1.0
+    adam_beta1: 0.9
+    adam_beta2: 0.95
+    adam_eps: 1.0e-08
+    eval_iters: 0
+    eval_interval: 1000000000
+experiment:
+  envs:
+    TORCH_DEVICE_BACKEND_AUTOLOAD: '0'
+  cmds:
+    before_start: export TORCH_DEVICE_BACKEND_AUTOLOAD=0
+  exp_name: llama31_8b_memrift_act_only_ctx_34048
+  exp_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_34048
+  task:
+    type: train
+    backend: megatron
+    entrypoint: flagscale/train/train_gpt.py
+  runner:
+    type: torchrun
+    nnodes: 1
+    nproc_per_node: 1
+action: run
+
+[2026-06-01 11:19:10,524 FlagScale logger.py:25 INFO] Run the local command: bash /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_34048/logs/scripts/host_0_localhost_run.sh
+   status : OOM
+   exit   : 0
+   elapsed: 4917s
+   host   : /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_34048/logs/host_0_localhost.output
+
+>> Trial #3 | seq_length=17920
+   exp_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_17920
+   stdout : /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/logs/seq_17920.stdout.log
+/opt/conda/lib/python3.10/site-packages/hydra/_internal/defaults_list.py:251: UserWarning: In 'train_llama31_8b_mock': Defaults list is missing `_self_`. See https://hydra.cc/docs/1.2/upgrades/1.0_to_1.1/default_composition_order for more information
+  warnings.warn(msg, UserWarning)
+[2026-06-01 12:41:08,101 FlagScale logger.py:28 WARNING] Hostfile None not found. The training will proceed using only local resources.
+[2026-06-01 12:41:08,101 FlagScale logger.py:25 INFO] 
+************** configuration **************
+[2026-06-01 12:41:08,108 FlagScale logger.py:25 INFO] 
+train:
+  system:
+    tensor_model_parallel_size: 1
+    pipeline_model_parallel_size: 1
+    context_parallel_size: 1
+    disable_bias_linear: true
+    use_flash_attn: true
+    sequence_parallel: false
+    use_distributed_optimizer: false
+    precision:
+      fp16: false
+      bf16: true
+    logging:
+      log_interval: 1
+      tensorboard_log_interval: 10
+      wandb_mode: disabled
+      log_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_17920/logs
+      scripts_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_17920/logs/scripts
+      pids_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_17920/logs/pids
+      details_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_17920/logs/details
+      tensorboard_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_17920/tensorboard
+      wandb_save_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_17920/wandb
+    checkpoint:
+      save_interval: 500
+      save: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_17920/checkpoints
+      load: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_17920/checkpoints
+    ckpt_format: torch
+    memrift_enable: true
+    memrift_weight_enable: false
+    memrift_compressed_weight_dir: ./memrift_weights/llama31_8b_level18
+    memrift_zstd_level: 3
+    memrift_prefetch_layers: 12
+    memrift_weight_async: true
+    memrift_activation_enable: true
+    memrift_act_async: true
+    memrift_decode_pool_workers: 48
+    memrift_compress_pool_workers: 8
+    memrift_print_debug: false
+    run_foreground: true
+    num_workers: 0
+  model:
+    num_layers: 32
+    hidden_size: 4096
+    ffn_hidden_size: 14336
+    num_attention_heads: 32
+    num_query_groups: 8
+    seq_length: 17920
+    max_position_embeddings: 131072
+    tokenizer_type: HuggingFaceTokenizer
+    tokenizer_path: /home/secure/myc/model/llama-3.1-8b
+    tokenizer_model: /home/secure/myc/model/llama-3.1-8b
+    make_vocab_size_divisible_by: 64
+    norm_init_weight: 1.0
+    use_rotary_position_embeddings: true
+    rotary_base: 500000
+    no_position_embedding: true
+    normalization: RMSNorm
+    norm_epsilon: 1.0e-05
+    swiglu: true
+    untie_embeddings_and_output_weights: true
+    attention_dropout: 0.0
+    hidden_dropout: 0.0
+    init_method_std: 0.02
+    transformer_impl: transformer_engine
+    peft_type: lora
+    lora_target_modules:
+    - linear_qkv
+    - linear_proj
+    - linear_fc1
+    - linear_fc2
+    lora_dim: 16
+    lora_alpha: 32
+    lora_dropout: 0.0
+  data:
+    data_path: null
+    split: 1,0,0
+    micro_batch_size: 1
+    global_batch_size: 1
+    mock_data: true
+  trainer:
+    train_iters: 1
+    lr: 0.0002
+    min_lr: 2.0e-05
+    lr_warmup_iters: 0
+    lr_decay_style: cosine
+    weight_decay: 0.1
+    clip_grad: 1.0
+    adam_beta1: 0.9
+    adam_beta2: 0.95
+    adam_eps: 1.0e-08
+    eval_iters: 0
+    eval_interval: 1000000000
+experiment:
+  envs:
+    TORCH_DEVICE_BACKEND_AUTOLOAD: '0'
+  cmds:
+    before_start: export TORCH_DEVICE_BACKEND_AUTOLOAD=0
+  exp_name: llama31_8b_memrift_act_only_ctx_17920
+  exp_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_17920
+  task:
+    type: train
+    backend: megatron
+    entrypoint: flagscale/train/train_gpt.py
+  runner:
+    type: torchrun
+    nnodes: 1
+    nproc_per_node: 1
+action: run
+
+[2026-06-01 12:41:08,110 FlagScale logger.py:25 INFO] Run the local command: bash /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_17920/logs/scripts/host_0_localhost_run.sh
+   status : OOM
+   exit   : 0
+   elapsed: 5328s
+   host   : /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_17920/logs/host_0_localhost.output
+
+>> Trial #4 | seq_length=9728
+   exp_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_9728
+   stdout : /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/logs/seq_9728.stdout.log
+/opt/conda/lib/python3.10/site-packages/hydra/_internal/defaults_list.py:251: UserWarning: In 'train_llama31_8b_mock': Defaults list is missing `_self_`. See https://hydra.cc/docs/1.2/upgrades/1.0_to_1.1/default_composition_order for more information
+  warnings.warn(msg, UserWarning)
+[2026-06-01 14:09:55,631 FlagScale logger.py:28 WARNING] Hostfile None not found. The training will proceed using only local resources.
+[2026-06-01 14:09:55,631 FlagScale logger.py:25 INFO] 
+************** configuration **************
+[2026-06-01 14:09:55,637 FlagScale logger.py:25 INFO] 
+train:
+  system:
+    tensor_model_parallel_size: 1
+    pipeline_model_parallel_size: 1
+    context_parallel_size: 1
+    disable_bias_linear: true
+    use_flash_attn: true
+    sequence_parallel: false
+    use_distributed_optimizer: false
+    precision:
+      fp16: false
+      bf16: true
+    logging:
+      log_interval: 1
+      tensorboard_log_interval: 10
+      wandb_mode: disabled
+      log_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_9728/logs
+      scripts_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_9728/logs/scripts
+      pids_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_9728/logs/pids
+      details_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_9728/logs/details
+      tensorboard_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_9728/tensorboard
+      wandb_save_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_9728/wandb
+    checkpoint:
+      save_interval: 500
+      save: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_9728/checkpoints
+      load: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_9728/checkpoints
+    ckpt_format: torch
+    memrift_enable: true
+    memrift_weight_enable: false
+    memrift_compressed_weight_dir: ./memrift_weights/llama31_8b_level18
+    memrift_zstd_level: 3
+    memrift_prefetch_layers: 12
+    memrift_weight_async: true
+    memrift_activation_enable: true
+    memrift_act_async: true
+    memrift_decode_pool_workers: 48
+    memrift_compress_pool_workers: 8
+    memrift_print_debug: false
+    run_foreground: true
+    num_workers: 0
+  model:
+    num_layers: 32
+    hidden_size: 4096
+    ffn_hidden_size: 14336
+    num_attention_heads: 32
+    num_query_groups: 8
+    seq_length: 9728
+    max_position_embeddings: 131072
+    tokenizer_type: HuggingFaceTokenizer
+    tokenizer_path: /home/secure/myc/model/llama-3.1-8b
+    tokenizer_model: /home/secure/myc/model/llama-3.1-8b
+    make_vocab_size_divisible_by: 64
+    norm_init_weight: 1.0
+    use_rotary_position_embeddings: true
+    rotary_base: 500000
+    no_position_embedding: true
+    normalization: RMSNorm
+    norm_epsilon: 1.0e-05
+    swiglu: true
+    untie_embeddings_and_output_weights: true
+    attention_dropout: 0.0
+    hidden_dropout: 0.0
+    init_method_std: 0.02
+    transformer_impl: transformer_engine
+    peft_type: lora
+    lora_target_modules:
+    - linear_qkv
+    - linear_proj
+    - linear_fc1
+    - linear_fc2
+    lora_dim: 16
+    lora_alpha: 32
+    lora_dropout: 0.0
+  data:
+    data_path: null
+    split: 1,0,0
+    micro_batch_size: 1
+    global_batch_size: 1
+    mock_data: true
+  trainer:
+    train_iters: 1
+    lr: 0.0002
+    min_lr: 2.0e-05
+    lr_warmup_iters: 0
+    lr_decay_style: cosine
+    weight_decay: 0.1
+    clip_grad: 1.0
+    adam_beta1: 0.9
+    adam_beta2: 0.95
+    adam_eps: 1.0e-08
+    eval_iters: 0
+    eval_interval: 1000000000
+experiment:
+  envs:
+    TORCH_DEVICE_BACKEND_AUTOLOAD: '0'
+  cmds:
+    before_start: export TORCH_DEVICE_BACKEND_AUTOLOAD=0
+  exp_name: llama31_8b_memrift_act_only_ctx_9728
+  exp_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_9728
+  task:
+    type: train
+    backend: megatron
+    entrypoint: flagscale/train/train_gpt.py
+  runner:
+    type: torchrun
+    nnodes: 1
+    nproc_per_node: 1
+action: run
+
+[2026-06-01 14:09:55,639 FlagScale logger.py:25 INFO] Run the local command: bash /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_9728/logs/scripts/host_0_localhost_run.sh
+   status : FAIL
+   exit   : 0
+   elapsed: 2375s
+   host   : /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_9728/logs/host_0_localhost.output
+
+>> Trial #5 | seq_length=5632
+   exp_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_5632
+   stdout : /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/logs/seq_5632.stdout.log
+/opt/conda/lib/python3.10/site-packages/hydra/_internal/defaults_list.py:251: UserWarning: In 'train_llama31_8b_mock': Defaults list is missing `_self_`. See https://hydra.cc/docs/1.2/upgrades/1.0_to_1.1/default_composition_order for more information
+  warnings.warn(msg, UserWarning)
+[2026-06-01 14:49:30,372 FlagScale logger.py:28 WARNING] Hostfile None not found. The training will proceed using only local resources.
+[2026-06-01 14:49:30,372 FlagScale logger.py:25 INFO] 
+************** configuration **************
+[2026-06-01 14:49:30,379 FlagScale logger.py:25 INFO] 
+train:
+  system:
+    tensor_model_parallel_size: 1
+    pipeline_model_parallel_size: 1
+    context_parallel_size: 1
+    disable_bias_linear: true
+    use_flash_attn: true
+    sequence_parallel: false
+    use_distributed_optimizer: false
+    precision:
+      fp16: false
+      bf16: true
+    logging:
+      log_interval: 1
+      tensorboard_log_interval: 10
+      wandb_mode: disabled
+      log_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_5632/logs
+      scripts_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_5632/logs/scripts
+      pids_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_5632/logs/pids
+      details_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_5632/logs/details
+      tensorboard_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_5632/tensorboard
+      wandb_save_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_5632/wandb
+    checkpoint:
+      save_interval: 500
+      save: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_5632/checkpoints
+      load: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_5632/checkpoints
+    ckpt_format: torch
+    memrift_enable: true
+    memrift_weight_enable: false
+    memrift_compressed_weight_dir: ./memrift_weights/llama31_8b_level18
+    memrift_zstd_level: 3
+    memrift_prefetch_layers: 12
+    memrift_weight_async: true
+    memrift_activation_enable: true
+    memrift_act_async: true
+    memrift_decode_pool_workers: 48
+    memrift_compress_pool_workers: 8
+    memrift_print_debug: false
+    run_foreground: true
+    num_workers: 0
+  model:
+    num_layers: 32
+    hidden_size: 4096
+    ffn_hidden_size: 14336
+    num_attention_heads: 32
+    num_query_groups: 8
+    seq_length: 5632
+    max_position_embeddings: 131072
+    tokenizer_type: HuggingFaceTokenizer
+    tokenizer_path: /home/secure/myc/model/llama-3.1-8b
+    tokenizer_model: /home/secure/myc/model/llama-3.1-8b
+    make_vocab_size_divisible_by: 64
+    norm_init_weight: 1.0
+    use_rotary_position_embeddings: true
+    rotary_base: 500000
+    no_position_embedding: true
+    normalization: RMSNorm
+    norm_epsilon: 1.0e-05
+    swiglu: true
+    untie_embeddings_and_output_weights: true
+    attention_dropout: 0.0
+    hidden_dropout: 0.0
+    init_method_std: 0.02
+    transformer_impl: transformer_engine
+    peft_type: lora
+    lora_target_modules:
+    - linear_qkv
+    - linear_proj
+    - linear_fc1
+    - linear_fc2
+    lora_dim: 16
+    lora_alpha: 32
+    lora_dropout: 0.0
+  data:
+    data_path: null
+    split: 1,0,0
+    micro_batch_size: 1
+    global_batch_size: 1
+    mock_data: true
+  trainer:
+    train_iters: 1
+    lr: 0.0002
+    min_lr: 2.0e-05
+    lr_warmup_iters: 0
+    lr_decay_style: cosine
+    weight_decay: 0.1
+    clip_grad: 1.0
+    adam_beta1: 0.9
+    adam_beta2: 0.95
+    adam_eps: 1.0e-08
+    eval_iters: 0
+    eval_interval: 1000000000
+experiment:
+  envs:
+    TORCH_DEVICE_BACKEND_AUTOLOAD: '0'
+  cmds:
+    before_start: export TORCH_DEVICE_BACKEND_AUTOLOAD=0
+  exp_name: llama31_8b_memrift_act_only_ctx_5632
+  exp_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_5632
+  task:
+    type: train
+    backend: megatron
+    entrypoint: flagscale/train/train_gpt.py
+  runner:
+    type: torchrun
+    nnodes: 1
+    nproc_per_node: 1
+action: run
+
+[2026-06-01 14:49:30,381 FlagScale logger.py:25 INFO] Run the local command: bash /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_5632/logs/scripts/host_0_localhost_run.sh
+   status : FAIL
+   exit   : 0
+   elapsed: 1313s
+   host   : /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_5632/logs/host_0_localhost.output
+
+>> Trial #6 | seq_length=3584
+   exp_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_3584
+   stdout : /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/logs/seq_3584.stdout.log
+/opt/conda/lib/python3.10/site-packages/hydra/_internal/defaults_list.py:251: UserWarning: In 'train_llama31_8b_mock': Defaults list is missing `_self_`. See https://hydra.cc/docs/1.2/upgrades/1.0_to_1.1/default_composition_order for more information
+  warnings.warn(msg, UserWarning)
+[2026-06-01 15:11:23,472 FlagScale logger.py:28 WARNING] Hostfile None not found. The training will proceed using only local resources.
+[2026-06-01 15:11:23,473 FlagScale logger.py:25 INFO] 
+************** configuration **************
+[2026-06-01 15:11:23,479 FlagScale logger.py:25 INFO] 
+train:
+  system:
+    tensor_model_parallel_size: 1
+    pipeline_model_parallel_size: 1
+    context_parallel_size: 1
+    disable_bias_linear: true
+    use_flash_attn: true
+    sequence_parallel: false
+    use_distributed_optimizer: false
+    precision:
+      fp16: false
+      bf16: true
+    logging:
+      log_interval: 1
+      tensorboard_log_interval: 10
+      wandb_mode: disabled
+      log_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_3584/logs
+      scripts_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_3584/logs/scripts
+      pids_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_3584/logs/pids
+      details_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_3584/logs/details
+      tensorboard_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_3584/tensorboard
+      wandb_save_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_3584/wandb
+    checkpoint:
+      save_interval: 500
+      save: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_3584/checkpoints
+      load: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_3584/checkpoints
+    ckpt_format: torch
+    memrift_enable: true
+    memrift_weight_enable: false
+    memrift_compressed_weight_dir: ./memrift_weights/llama31_8b_level18
+    memrift_zstd_level: 3
+    memrift_prefetch_layers: 12
+    memrift_weight_async: true
+    memrift_activation_enable: true
+    memrift_act_async: true
+    memrift_decode_pool_workers: 48
+    memrift_compress_pool_workers: 8
+    memrift_print_debug: false
+    run_foreground: true
+    num_workers: 0
+  model:
+    num_layers: 32
+    hidden_size: 4096
+    ffn_hidden_size: 14336
+    num_attention_heads: 32
+    num_query_groups: 8
+    seq_length: 3584
+    max_position_embeddings: 131072
+    tokenizer_type: HuggingFaceTokenizer
+    tokenizer_path: /home/secure/myc/model/llama-3.1-8b
+    tokenizer_model: /home/secure/myc/model/llama-3.1-8b
+    make_vocab_size_divisible_by: 64
+    norm_init_weight: 1.0
+    use_rotary_position_embeddings: true
+    rotary_base: 500000
+    no_position_embedding: true
+    normalization: RMSNorm
+    norm_epsilon: 1.0e-05
+    swiglu: true
+    untie_embeddings_and_output_weights: true
+    attention_dropout: 0.0
+    hidden_dropout: 0.0
+    init_method_std: 0.02
+    transformer_impl: transformer_engine
+    peft_type: lora
+    lora_target_modules:
+    - linear_qkv
+    - linear_proj
+    - linear_fc1
+    - linear_fc2
+    lora_dim: 16
+    lora_alpha: 32
+    lora_dropout: 0.0
+  data:
+    data_path: null
+    split: 1,0,0
+    micro_batch_size: 1
+    global_batch_size: 1
+    mock_data: true
+  trainer:
+    train_iters: 1
+    lr: 0.0002
+    min_lr: 2.0e-05
+    lr_warmup_iters: 0
+    lr_decay_style: cosine
+    weight_decay: 0.1
+    clip_grad: 1.0
+    adam_beta1: 0.9
+    adam_beta2: 0.95
+    adam_eps: 1.0e-08
+    eval_iters: 0
+    eval_interval: 1000000000
+experiment:
+  envs:
+    TORCH_DEVICE_BACKEND_AUTOLOAD: '0'
+  cmds:
+    before_start: export TORCH_DEVICE_BACKEND_AUTOLOAD=0
+  exp_name: llama31_8b_memrift_act_only_ctx_3584
+  exp_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_3584
+  task:
+    type: train
+    backend: megatron
+    entrypoint: flagscale/train/train_gpt.py
+  runner:
+    type: torchrun
+    nnodes: 1
+    nproc_per_node: 1
+action: run
+
+[2026-06-01 15:11:23,481 FlagScale logger.py:25 INFO] Run the local command: bash /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_3584/logs/scripts/host_0_localhost_run.sh
+   status : FAIL
+   exit   : 0
+   elapsed: 929s
+   host   : /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_3584/logs/host_0_localhost.output
+
+>> Trial #7 | seq_length=2560
+   exp_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_2560
+   stdout : /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/logs/seq_2560.stdout.log
+/opt/conda/lib/python3.10/site-packages/hydra/_internal/defaults_list.py:251: UserWarning: In 'train_llama31_8b_mock': Defaults list is missing `_self_`. See https://hydra.cc/docs/1.2/upgrades/1.0_to_1.1/default_composition_order for more information
+  warnings.warn(msg, UserWarning)
+[2026-06-01 15:26:52,413 FlagScale logger.py:28 WARNING] Hostfile None not found. The training will proceed using only local resources.
+[2026-06-01 15:26:52,413 FlagScale logger.py:25 INFO] 
+************** configuration **************
+[2026-06-01 15:26:52,420 FlagScale logger.py:25 INFO] 
+train:
+  system:
+    tensor_model_parallel_size: 1
+    pipeline_model_parallel_size: 1
+    context_parallel_size: 1
+    disable_bias_linear: true
+    use_flash_attn: true
+    sequence_parallel: false
+    use_distributed_optimizer: false
+    precision:
+      fp16: false
+      bf16: true
+    logging:
+      log_interval: 1
+      tensorboard_log_interval: 10
+      wandb_mode: disabled
+      log_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_2560/logs
+      scripts_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_2560/logs/scripts
+      pids_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_2560/logs/pids
+      details_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_2560/logs/details
+      tensorboard_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_2560/tensorboard
+      wandb_save_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_2560/wandb
+    checkpoint:
+      save_interval: 500
+      save: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_2560/checkpoints
+      load: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_2560/checkpoints
+    ckpt_format: torch
+    memrift_enable: true
+    memrift_weight_enable: false
+    memrift_compressed_weight_dir: ./memrift_weights/llama31_8b_level18
+    memrift_zstd_level: 3
+    memrift_prefetch_layers: 12
+    memrift_weight_async: true
+    memrift_activation_enable: true
+    memrift_act_async: true
+    memrift_decode_pool_workers: 48
+    memrift_compress_pool_workers: 8
+    memrift_print_debug: false
+    run_foreground: true
+    num_workers: 0
+  model:
+    num_layers: 32
+    hidden_size: 4096
+    ffn_hidden_size: 14336
+    num_attention_heads: 32
+    num_query_groups: 8
+    seq_length: 2560
+    max_position_embeddings: 131072
+    tokenizer_type: HuggingFaceTokenizer
+    tokenizer_path: /home/secure/myc/model/llama-3.1-8b
+    tokenizer_model: /home/secure/myc/model/llama-3.1-8b
+    make_vocab_size_divisible_by: 64
+    norm_init_weight: 1.0
+    use_rotary_position_embeddings: true
+    rotary_base: 500000
+    no_position_embedding: true
+    normalization: RMSNorm
+    norm_epsilon: 1.0e-05
+    swiglu: true
+    untie_embeddings_and_output_weights: true
+    attention_dropout: 0.0
+    hidden_dropout: 0.0
+    init_method_std: 0.02
+    transformer_impl: transformer_engine
+    peft_type: lora
+    lora_target_modules:
+    - linear_qkv
+    - linear_proj
+    - linear_fc1
+    - linear_fc2
+    lora_dim: 16
+    lora_alpha: 32
+    lora_dropout: 0.0
+  data:
+    data_path: null
+    split: 1,0,0
+    micro_batch_size: 1
+    global_batch_size: 1
+    mock_data: true
+  trainer:
+    train_iters: 1
+    lr: 0.0002
+    min_lr: 2.0e-05
+    lr_warmup_iters: 0
+    lr_decay_style: cosine
+    weight_decay: 0.1
+    clip_grad: 1.0
+    adam_beta1: 0.9
+    adam_beta2: 0.95
+    adam_eps: 1.0e-08
+    eval_iters: 0
+    eval_interval: 1000000000
+experiment:
+  envs:
+    TORCH_DEVICE_BACKEND_AUTOLOAD: '0'
+  cmds:
+    before_start: export TORCH_DEVICE_BACKEND_AUTOLOAD=0
+  exp_name: llama31_8b_memrift_act_only_ctx_2560
+  exp_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_2560
+  task:
+    type: train
+    backend: megatron
+    entrypoint: flagscale/train/train_gpt.py
+  runner:
+    type: torchrun
+    nnodes: 1
+    nproc_per_node: 1
+action: run
+
+[2026-06-01 15:26:52,422 FlagScale logger.py:25 INFO] Run the local command: bash /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_2560/logs/scripts/host_0_localhost_run.sh
+   status : FAIL
+   exit   : 0
+   elapsed: 642s
+   host   : /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_2560/logs/host_0_localhost.output
+
+>> Trial #8 | seq_length=2048
+   exp_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_2048
+   stdout : /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/logs/seq_2048.stdout.log
+/opt/conda/lib/python3.10/site-packages/hydra/_internal/defaults_list.py:251: UserWarning: In 'train_llama31_8b_mock': Defaults list is missing `_self_`. See https://hydra.cc/docs/1.2/upgrades/1.0_to_1.1/default_composition_order for more information
+  warnings.warn(msg, UserWarning)
+[2026-06-01 15:37:35,121 FlagScale logger.py:28 WARNING] Hostfile None not found. The training will proceed using only local resources.
+[2026-06-01 15:37:35,121 FlagScale logger.py:25 INFO] 
+************** configuration **************
+[2026-06-01 15:37:35,127 FlagScale logger.py:25 INFO] 
+train:
+  system:
+    tensor_model_parallel_size: 1
+    pipeline_model_parallel_size: 1
+    context_parallel_size: 1
+    disable_bias_linear: true
+    use_flash_attn: true
+    sequence_parallel: false
+    use_distributed_optimizer: false
+    precision:
+      fp16: false
+      bf16: true
+    logging:
+      log_interval: 1
+      tensorboard_log_interval: 10
+      wandb_mode: disabled
+      log_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_2048/logs
+      scripts_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_2048/logs/scripts
+      pids_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_2048/logs/pids
+      details_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_2048/logs/details
+      tensorboard_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_2048/tensorboard
+      wandb_save_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_2048/wandb
+    checkpoint:
+      save_interval: 500
+      save: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_2048/checkpoints
+      load: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_2048/checkpoints
+    ckpt_format: torch
+    memrift_enable: true
+    memrift_weight_enable: false
+    memrift_compressed_weight_dir: ./memrift_weights/llama31_8b_level18
+    memrift_zstd_level: 3
+    memrift_prefetch_layers: 12
+    memrift_weight_async: true
+    memrift_activation_enable: true
+    memrift_act_async: true
+    memrift_decode_pool_workers: 48
+    memrift_compress_pool_workers: 8
+    memrift_print_debug: false
+    run_foreground: true
+    num_workers: 0
+  model:
+    num_layers: 32
+    hidden_size: 4096
+    ffn_hidden_size: 14336
+    num_attention_heads: 32
+    num_query_groups: 8
+    seq_length: 2048
+    max_position_embeddings: 131072
+    tokenizer_type: HuggingFaceTokenizer
+    tokenizer_path: /home/secure/myc/model/llama-3.1-8b
+    tokenizer_model: /home/secure/myc/model/llama-3.1-8b
+    make_vocab_size_divisible_by: 64
+    norm_init_weight: 1.0
+    use_rotary_position_embeddings: true
+    rotary_base: 500000
+    no_position_embedding: true
+    normalization: RMSNorm
+    norm_epsilon: 1.0e-05
+    swiglu: true
+    untie_embeddings_and_output_weights: true
+    attention_dropout: 0.0
+    hidden_dropout: 0.0
+    init_method_std: 0.02
+    transformer_impl: transformer_engine
+    peft_type: lora
+    lora_target_modules:
+    - linear_qkv
+    - linear_proj
+    - linear_fc1
+    - linear_fc2
+    lora_dim: 16
+    lora_alpha: 32
+    lora_dropout: 0.0
+  data:
+    data_path: null
+    split: 1,0,0
+    micro_batch_size: 1
+    global_batch_size: 1
+    mock_data: true
+  trainer:
+    train_iters: 1
+    lr: 0.0002
+    min_lr: 2.0e-05
+    lr_warmup_iters: 0
+    lr_decay_style: cosine
+    weight_decay: 0.1
+    clip_grad: 1.0
+    adam_beta1: 0.9
+    adam_beta2: 0.95
+    adam_eps: 1.0e-08
+    eval_iters: 0
+    eval_interval: 1000000000
+experiment:
+  envs:
+    TORCH_DEVICE_BACKEND_AUTOLOAD: '0'
+  cmds:
+    before_start: export TORCH_DEVICE_BACKEND_AUTOLOAD=0
+  exp_name: llama31_8b_memrift_act_only_ctx_2048
+  exp_dir: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_2048
+  task:
+    type: train
+    backend: megatron
+    entrypoint: flagscale/train/train_gpt.py
+  runner:
+    type: torchrun
+    nnodes: 1
+    nproc_per_node: 1
+action: run
+
+[2026-06-01 15:37:35,129 FlagScale logger.py:25 INFO] Run the local command: bash /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_2048/logs/scripts/host_0_localhost_run.sh
+   status : FAIL
+   exit   : 0
+   elapsed: 753s
+   host   : /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_2048/logs/host_0_localhost.output
+Llama-3.1-8B MemRift activation-only context bisect summary
+out_root=/home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect
+results_tsv=/home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/summary/results.tsv
+max_runnable_seq_length=<none>
+first_failed_seq_length_near_boundary=2048
+first_failed_status_near_boundary=FAIL
+
+Done.
+ Summary: /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/summary/final_result.txt
+ Trials : /home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/summary/results.tsv

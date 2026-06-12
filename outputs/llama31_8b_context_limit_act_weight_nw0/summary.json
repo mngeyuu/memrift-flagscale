@@ -1,0 +1,120 @@
+{
+  "metadata": {
+    "selected_gpu": "2",
+    "gpu_selection_mode": "arg",
+    "gpu_infos": [
+      {
+        "gpu_id": "0",
+        "used_mib": 858,
+        "total_mib": 65536
+      },
+      {
+        "gpu_id": "1",
+        "used_mib": 858,
+        "total_mib": 65536
+      },
+      {
+        "gpu_id": "2",
+        "used_mib": 46558,
+        "total_mib": 65536
+      },
+      {
+        "gpu_id": "3",
+        "used_mib": 858,
+        "total_mib": 65536
+      },
+      {
+        "gpu_id": "4",
+        "used_mib": 858,
+        "total_mib": 65536
+      },
+      {
+        "gpu_id": "5",
+        "used_mib": 858,
+        "total_mib": 65536
+      },
+      {
+        "gpu_id": "6",
+        "used_mib": 858,
+        "total_mib": 65536
+      },
+      {
+        "gpu_id": "7",
+        "used_mib": 858,
+        "total_mib": 65536
+      }
+    ],
+    "timeout_seconds": 1800,
+    "baseline_seq": 2048,
+    "coarse_seqs": [
+      3072,
+      4096,
+      5120,
+      6144
+    ],
+    "fine_step_256": 256,
+    "fine_step_128": 128,
+    "model_path": "/home/secure/myc/model/llama-3.1-8b",
+    "weight_dir": "/home/secure/myc/memrift-flagscale/memrift_weights/llama31_8b_zstd_level1",
+    "config_path": "examples/memrift/conf",
+    "config_name": "train_llama31_8b_mock",
+    "variant": "compare_act_weight"
+  },
+  "variants": {
+    "pure_lora": {
+      "variant": "pure_lora",
+      "label": "Pure LoRA",
+      "num_runs": 1,
+      "max_success_seq": null,
+      "max_success_elapsed_ms": null,
+      "max_success_max_allocated_mb": null,
+      "max_success_max_reserved_mb": null,
+      "first_failure_seq": null,
+      "first_failure_type": "",
+      "frontier_interval": null,
+      "runs": [
+        {
+          "variant": "pure_lora",
+          "seq_length": 2048,
+          "run_dir": "/home/secure/myc/memrift-flagscale/outputs/llama31_8b_context_limit_act_weight_nw0/pure_lora/seq_2048",
+          "log_file": "/home/secure/myc/memrift-flagscale/outputs/llama31_8b_context_limit_act_weight_nw0/pure_lora/seq_2048/train.log",
+          "command": [
+            "/opt/conda/bin/python",
+            "run.py",
+            "--config-path=examples/memrift/conf",
+            "--config-name=train_llama31_8b_mock",
+            "action=run",
+            "experiment.exp_dir=/home/secure/myc/memrift-flagscale/outputs/llama31_8b_context_limit_act_weight_nw0/pure_lora/seq_2048",
+            "experiment.exp_name=pure_lora_seq_2048",
+            "train.model.tokenizer_path=/home/secure/myc/model/llama-3.1-8b",
+            "train.model.tokenizer_model=/home/secure/myc/model/llama-3.1-8b",
+            "train.model.seq_length=2048",
+            "train.trainer.train_iters=1",
+            "train.trainer.lr_warmup_iters=0",
+            "+train.trainer.eval_iters=0",
+            "+train.trainer.eval_interval=2000000000",
+            "train.system.logging.log_interval=1",
+            "train.system.num_workers=0",
+            "train.system.memrift_enable=false",
+            "train.system.memrift_weight_enable=false",
+            "+train.system.init_model_with_meta_device=false"
+          ],
+          "return_code": 1,
+          "duration_sec": 1.6176414489746094,
+          "success": false,
+          "failure_type": "other",
+          "iteration_logged": false,
+          "memory_logged": false,
+          "elapsed_ms": null,
+          "allocated_mb": null,
+          "max_allocated_mb": null,
+          "reserved_mb": null,
+          "max_reserved_mb": null,
+          "timestamp": 1780050088.8793204,
+          "metrics_log_file": "/home/secure/myc/memrift-flagscale/outputs/llama31_8b_context_limit_act_weight_nw0/pure_lora/seq_2048/train.log"
+        }
+      ]
+    }
+  },
+  "difference_tokens": null
+}

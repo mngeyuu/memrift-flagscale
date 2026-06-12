@@ -1,0 +1,103 @@
+train:
+  system:
+    distributed_backend: flagcx
+    tensor_model_parallel_size: 1
+    pipeline_model_parallel_size: 1
+    context_parallel_size: 1
+    disable_bias_linear: true
+    use_flash_attn: true
+    sequence_parallel: false
+    no_rope_fusion: true
+    no_persist_layer_norm: true
+    use_distributed_optimizer: false
+    precision:
+      fp16: false
+      bf16: true
+    logging:
+      log_interval: 1
+      tensorboard_log_interval: 10
+      wandb_mode: disabled
+    checkpoint:
+      save_interval: 500
+    ckpt_format: torch
+    memrift_enable: true
+    memrift_weight_enable: true
+    memrift_compressed_weight_dir: /home/secure/myc/memrift-flagscale/memrift_weights/llama31_8b_zstd_level1
+    memrift_zstd_level: 3
+    memrift_prefetch_layers: 4
+    memrift_weight_async: true
+    memrift_activation_enable: true
+    memrift_act_async: true
+    memrift_decode_pool_workers: 48
+    memrift_compress_pool_workers: 8
+    memrift_print_debug: false
+    run_foreground: true
+    num_workers: 0
+  model:
+    num_layers: 32
+    hidden_size: 4096
+    ffn_hidden_size: 14336
+    num_attention_heads: 32
+    num_query_groups: 8
+    seq_length: 3328
+    max_position_embeddings: 131072
+    tokenizer_type: HuggingFaceTokenizer
+    tokenizer_path: /home/secure/myc/model/llama-3.1-8b
+    tokenizer_model: /home/secure/myc/model/llama-3.1-8b
+    make_vocab_size_divisible_by: 64
+    norm_init_weight: 1.0
+    use_rotary_position_embeddings: true
+    rotary_base: 500000
+    no_position_embedding: true
+    normalization: RMSNorm
+    norm_epsilon: 1.0e-05
+    swiglu: true
+    untie_embeddings_and_output_weights: true
+    attention_dropout: 0.0
+    hidden_dropout: 0.0
+    init_method_std: 0.02
+    transformer_impl: local
+    peft_type: lora
+    lora_target_modules:
+    - linear_qkv
+    - linear_proj
+    - linear_fc1
+    - linear_fc2
+    lora_dim: 16
+    lora_alpha: 32
+    lora_dropout: 0.0
+  data:
+    data_path: null
+    split: 1,0,0
+    micro_batch_size: 1
+    global_batch_size: 8
+    mock_data: true
+  trainer:
+    train_iters: 1
+    lr: 0.0002
+    min_lr: 2.0e-05
+    lr_warmup_iters: 0
+    lr_decay_style: cosine
+    weight_decay: 0.1
+    clip_grad: 1.0
+    adam_beta1: 0.9
+    adam_beta2: 0.95
+    adam_eps: 1.0e-08
+    eval_iters: 0
+    eval_interval: 2000000000
+experiment:
+  envs:
+    TORCH_DEVICE_BACKEND_AUTOLOAD: '0'
+  cmds:
+    before_start: export TORCH_DEVICE_BACKEND_AUTOLOAD=0
+  exp_name: act_weight_seq_3328
+  exp_dir: /home/secure/myc/memrift-flagscale/outputs/llama31_8b_context_limit_act_weight_nw0p/act_weight/seq_3328
+  task:
+    type: train
+    backend: megatron
+    entrypoint: flagscale/train/train_gpt.py
+  runner:
+    type: torchrun
+    nnodes: 1
+    nproc_per_node: 1
+action: run

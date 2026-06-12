@@ -1,0 +1,1540 @@
+/opt/conda/lib/python3.10/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[default0]:/opt/conda/lib/python3.10/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[default0]:  import pynvml  # type: ignore[import]
+[default0]:W0606 09:26:44.979000 308983 site-packages/torch/utils/cpp_extension.py:2527] TORCH_CUDA_ARCH_LIST is not set, all archs for visible cards are included for compilation. 
+[default0]:W0606 09:26:44.979000 308983 site-packages/torch/utils/cpp_extension.py:2527] If this is not desired, please set os.environ['TORCH_CUDA_ARCH_LIST'] to specific architectures.
+[default0]:Skipping import of cpp extensions due to incompatible torch version 2.8.0+metax3.3.0.2 for torchao version 0.16.0             Please see https://github.com/pytorch/ao/issues/2919 for more info
+[default0]:/opt/conda/lib/python3.10/site-packages/modelopt/torch/utils/logging.py:115: UserWarning: Failed to import diffusers plugin due to: RuntimeError("Failed to import diffusers.models.modeling_utils because of the following error (look up to see its traceback):\nname 'logger' is not defined"). You may ignore this warning if you do not need this plugin.
+[default0]:  warnings.warn(message, *args, **kwargs)
+[default0]:/opt/conda/lib/python3.10/site-packages/xformers/ops/swiglu_op.py:107: FutureWarning: `torch.cuda.amp.custom_fwd(args...)` is deprecated. Please use `torch.amp.custom_fwd(args..., device_type='cuda')` instead.
+[default0]:  def forward(cls, ctx, x, w1, b1, w2, b2, w3, b3):
+[default0]:/opt/conda/lib/python3.10/site-packages/xformers/ops/swiglu_op.py:128: FutureWarning: `torch.cuda.amp.custom_bwd(args...)` is deprecated. Please use `torch.amp.custom_bwd(args..., device_type='cuda')` instead.
+[default0]:  def backward(cls, ctx, dx5):
+[default0]:/opt/conda/lib/python3.10/site-packages/torchvision/datapoints/__init__.py:12: UserWarning: The torchvision.datapoints and torchvision.transforms.v2 namespaces are still Beta. While we do not expect major breaking changes, some APIs may still change according to user feedback. Please submit any feedback you may have in this issue: https://github.com/pytorch/vision/issues/6753, and you can also check out https://github.com/pytorch/vision/issues/7319 to learn more about the APIs that we suspect might involve future changes. You can silence this warning by calling torchvision.disable_beta_transforms_warning().
+[default0]:  warnings.warn(_BETA_TRANSFORMS_WARNING)
+[default0]:/opt/conda/lib/python3.10/site-packages/torchvision/transforms/v2/__init__.py:54: UserWarning: The torchvision.datapoints and torchvision.transforms.v2 namespaces are still Beta. While we do not expect major breaking changes, some APIs may still change according to user feedback. Please submit any feedback you may have in this issue: https://github.com/pytorch/vision/issues/6753, and you can also check out https://github.com/pytorch/vision/issues/7319 to learn more about the APIs that we suspect might involve future changes. You can silence this warning by calling torchvision.disable_beta_transforms_warning().
+[default0]:  warnings.warn(_BETA_TRANSFORMS_WARNING)
+[default0]:/opt/conda/lib/python3.10/site-packages/modelopt/torch/utils/logging.py:115: UserWarning: Failed to import diffusers plugin due to: RuntimeError("Failed to import diffusers.loaders.single_file_model because of the following error (look up to see its traceback):\nname 'logger' is not defined"). You may ignore this warning if you do not need this plugin.
+[default0]:  warnings.warn(message, *args, **kwargs)
+[default0]:/opt/conda/lib/python3.10/site-packages/modelopt/torch/utils/logging.py:115: UserWarning: Failed to import vllm plugin due to: AttributeError("module 'vllm.attention' has no attribute 'Attention'"). You may ignore this warning if you do not need this plugin.
+[default0]:  warnings.warn(message, *args, **kwargs)
+[default0]:Megatron-LM-FL Platform: cpu Registered
+[default0]:Megatron-LM-FL Platform: cuda Registered
+[default0]:Megatron-LM-FL Platform: cuda Selected
+[default0]:CUDA vendor backend skipped (CUDA build was disabled at build time)
+[default0]:[CUDA] Disabled: CUDA was skipped at build time
+[default0]:[Metax] Successfully loaded Metax libs
+[default0]:[2026-06-06 09:26:44,598 TE-FL manager.py:122 INFO] OpManager initialized: 110 ops with 179 implementations
+[default0]:[2026-06-06 09:26:44,598 TE-FL manager.py:155 INFO] Registered impl_ids: ['default.flagos', 'reference.torch', 'vendor.metax']
+[default0]:INFO 06-06 09:26:50 [__init__.py:43] Available plugins for group vllm.platform_plugins:
+[default0]:INFO 06-06 09:26:50 [__init__.py:45] - fl -> vllm_fl:register
+[default0]:INFO 06-06 09:26:50 [__init__.py:48] All plugins in this group will be loaded. Set `VLLM_PLUGINS` to control which plugins to load.
+[default0]:INFO 06-06 09:26:50 [__init__.py:43] Available plugins for group vllm.platform_plugins:
+[default0]:INFO 06-06 09:26:50 [__init__.py:45] - fl -> vllm_fl:register
+[default0]:INFO 06-06 09:26:50 [__init__.py:48] All plugins in this group will be loaded. Set `VLLM_PLUGINS` to control which plugins to load.
+[default0]:INFO 06-06 09:26:50 [__init__.py:217] Platform plugin fl is activated
+[default0]:INFO Print the version information of mcoplib during compilation.
+[default0]:
+[default0]:Version info:Mcoplib_Version = '0.3.1'
+[default0]:Build_Maca_Version = '3.3.0.15'
+[default0]:GIT_BRANCH = 'HEAD'
+[default0]:GIT_COMMIT = '836541d'
+[default0]:Vllm Op Version = 0.13.0
+[default0]:SGlang Op Version  = 0.5.7 
+[default0]:
+[default0]:INFO Staring Check the current MACA version of the operating environment.
+[default0]:
+[default0]:INFO: Release major.minor matching,  successful:3.3. 
+[default0]:
+[default0]:ERROR 06-06 09:26:51 [config.py:32] Failed to import Triton kernels. Please make sure your triton version is compatible. Error: No module named 'triton.language.target_info'
+[default0]:> initializing torch distributed ...
+[default0]:using world size: 1, data-parallel size: 1, context-parallel size: 1, hierarchical context-parallel sizes: None, tensor-model-parallel size: 1, pipeline-model-parallel size: 1
+[default0]:WARNING: overriding default arguments for tokenizer_type:GPT2BPETokenizer                        with tokenizer_type:HuggingFaceTokenizer
+[default0]:WARNING: overriding default arguments for enable_hetero:False                        with enable_hetero:False
+[default0]:WARNING: overriding default arguments for standalone_embedding_stage:False                        with standalone_embedding_stage:False
+[default0]:Number of virtual stages per pipeline stage: None
+[default0]:accumulate and all-reduce gradients in fp32 for bfloat16 data type.
+[default0]:using torch.bfloat16 for parameters ...
+[default0]:------------------------ arguments ------------------------
+[default0]:  account_for_embedding_in_pipeline_split ......... False
+[default0]:  account_for_loss_in_pipeline_split .............. False
+[default0]:  accumulate_allreduce_grads_in_fp32 .............. True
+[default0]:  activation_func_clamp_value ..................... None
+[default0]:  adam_beta1 ...................................... 0.9
+[default0]:  adam_beta2 ...................................... 0.95
+[default0]:  adam_eps ........................................ 1e-08
+[default0]:  add_bias_linear ................................. False
+[default0]:  add_position_embedding .......................... False
+[default0]:  add_qkv_bias .................................... False
+[default0]:  adlr_autoresume ................................. False
+[default0]:  adlr_autoresume_interval ........................ 1000
+[default0]:  align_grad_reduce ............................... True
+[default0]:  align_param_gather .............................. False
+[default0]:  allow_ambiguous_pad_tokens ...................... False
+[default0]:  app_tag_run_name ................................ None
+[default0]:  app_tag_run_version ............................. 0.0.0
+[default0]:  apply_layernorm_1p .............................. False
+[default0]:  apply_query_key_layer_scaling ................... False
+[default0]:  apply_residual_connection_post_layernorm ........ False
+[default0]:  apply_rope_fusion ............................... True
+[default0]:  apply_sft_dataset_separated_loss_mask_if_existed  False
+[default0]:  async_save ...................................... None
+[default0]:  async_tensor_model_parallel_allreduce ........... True
+[default0]:  attention_backend ............................... AttnBackend.auto
+[default0]:  attention_dropout ............................... 0.0
+[default0]:  attention_softmax_in_fp32 ....................... False
+[default0]:  auto_detect_ckpt_format ......................... False
+[default0]:  auto_skip_spiky_loss ............................ False
+[default0]:  auto_tune ....................................... False
+[default0]:  barrier_with_L1_time ............................ True
+[default0]:  bert_binary_head ................................ True
+[default0]:  bert_embedder_type .............................. megatron
+[default0]:  bert_load ....................................... None
+[default0]:  bf16 ............................................ True
+[default0]:  bias_dropout_fusion ............................. True
+[default0]:  bias_gelu_fusion ................................ False
+[default0]:  bias_swiglu_fusion .............................. True
+[default0]:  biencoder_projection_dim ........................ 0
+[default0]:  biencoder_shared_query_context_model ............ False
+[default0]:  block_data_path ................................. None
+[default0]:  cache_mla_latents ............................... False
+[default0]:  calc_ft_timeouts ................................ False
+[default0]:  calculate_per_token_loss ........................ False
+[default0]:  check_for_large_grads ........................... False
+[default0]:  check_for_nan_in_loss_and_grad .................. True
+[default0]:  check_for_spiky_loss ............................ False
+[default0]:  check_weight_hash_across_dp_replicas_interval ... None
+[default0]:  ckpt_assume_constant_structure .................. False
+[default0]:  ckpt_convert_format ............................. None
+[default0]:  ckpt_convert_save ............................... None
+[default0]:  ckpt_convert_update_legacy_dist_opt_format ...... False
+[default0]:  ckpt_format ..................................... torch
+[default0]:  ckpt_fully_parallel_load ........................ False
+[default0]:  ckpt_fully_parallel_save ........................ True
+[default0]:  ckpt_fully_parallel_save_deprecated ............. False
+[default0]:  ckpt_step ....................................... None
+[default0]:  classes_fraction ................................ 1.0
+[default0]:  clip_grad ....................................... 1.0
+[default0]:  clone_scatter_output_in_embedding ............... True
+[default0]:  config_logger_dir ............................... 
+[default0]:  consumed_train_samples .......................... 0
+[default0]:  consumed_valid_samples .......................... 0
+[default0]:  context_parallel_size ........................... 1
+[default0]:  cp_comm_type .................................... ['p2p']
+[default0]:  cpu_offloading_num_layers ....................... 0
+[default0]:  create_attention_mask_in_dataloader ............. True
+[default0]:  cross_entropy_fusion_impl ....................... native
+[default0]:  cross_entropy_loss_fusion ....................... False
+[default0]:  cuda_graph_impl ................................. none
+[default0]:  cuda_graph_scope ................................ full
+[default0]:  cuda_graph_warmup_steps ......................... 3
+[default0]:  data_args_path .................................. None
+[default0]:  data_cache_path ................................. None
+[default0]:  data_parallel_random_init ....................... False
+[default0]:  data_parallel_sharding_strategy ................. no_shard
+[default0]:  data_parallel_size .............................. 1
+[default0]:  data_path ....................................... None
+[default0]:  data_per_class_fraction ......................... 1.0
+[default0]:  data_sharding ................................... True
+[default0]:  dataloader_type ................................. single
+[default0]:  ddp_average_in_collective ....................... False
+[default0]:  ddp_bucket_size ................................. None
+[default0]:  ddp_num_buckets ................................. None
+[default0]:  ddp_pad_buckets_for_high_nccl_busbw ............. False
+[default0]:  ddp_reduce_scatter_with_fp32_accumulation ....... False
+[default0]:  decode_only_cuda_graphs ......................... False
+[default0]:  decoder_first_pipeline_num_layers ............... None
+[default0]:  decoder_last_pipeline_num_layers ................ None
+[default0]:  decoder_num_layers .............................. None
+[default0]:  decoder_seq_length .............................. None
+[default0]:  decoupled_lr .................................... None
+[default0]:  decoupled_min_lr ................................ None
+[default0]:  decrease_batch_size_if_needed ................... False
+[default0]:  defer_embedding_wgrad_compute ................... False
+[default0]:  delay_wgrad_compute ............................. False
+[default0]:  deprecated_use_mcore_models ..................... False
+[default0]:  deterministic_mode .............................. False
+[default0]:  dino_bottleneck_size ............................ 256
+[default0]:  dino_freeze_last_layer .......................... 1
+[default0]:  dino_head_hidden_size ........................... 2048
+[default0]:  dino_local_crops_number ......................... 10
+[default0]:  dino_local_img_size ............................. 96
+[default0]:  dino_norm_last_layer ............................ False
+[default0]:  dino_teacher_temp ............................... 0.07
+[default0]:  dino_warmup_teacher_temp ........................ 0.04
+[default0]:  dino_warmup_teacher_temp_epochs ................. 30
+[default0]:  disable_bf16_reduced_precision_matmul ........... False
+[default0]:  disable_chunked_prefill ......................... False
+[default0]:  disable_mamba_mem_eff_path ...................... False
+[default0]:  disable_straggler_on_startup .................... False
+[default0]:  disable_symmetric_registration .................. False
+[default0]:  dist_ckpt_format_deprecated ..................... None
+[default0]:  dist_ckpt_optim_fully_reshardable ............... False
+[default0]:  dist_ckpt_save_pre_mcore_014 .................... False
+[default0]:  dist_ckpt_strictness ............................ assume_ok_unexpected
+[default0]:  distrib_optim_fully_reshardable_mem_efficient ... False
+[default0]:  distribute_saved_activations .................... False
+[default0]:  distributed_backend ............................. nccl
+[default0]:  distributed_timeout_minutes ..................... 10
+[default0]:  distributed_timeout_seconds_after_init .......... None
+[default0]:  dump_param_to_param_group_map ................... None
+[default0]:  embedding_init_method_std ....................... None
+[default0]:  embedding_path .................................. None
+[default0]:  empty_unused_memory_level ....................... 0
+[default0]:  enable_cuda_graph ............................... False
+[default0]:  enable_experimental ............................. False
+[default0]:  enable_flag_gems ................................ False
+[default0]:  enable_ft_package ............................... False
+[default0]:  enable_full_sharding_in_hsdp .................... False
+[default0]:  enable_gloo_process_groups ...................... True
+[default0]:  enable_hetero ................................... False
+[default0]:  enable_msc ...................................... True
+[default0]:  enable_one_logger ............................... True
+[default0]:  encoder_num_layers .............................. 32
+[default0]:  encoder_seq_length .............................. 2048
+[default0]:  end_weight_decay ................................ 0.1
+[default0]:  eod_mask_loss ................................... False
+[default0]:  error_injection_rate ............................ 0
+[default0]:  error_injection_type ............................ transient_error
+[default0]:  eval_interval ................................... 1000
+[default0]:  eval_iters ...................................... 100
+[default0]:  evidence_data_path .............................. None
+[default0]:  exit_duration_in_mins ........................... None
+[default0]:  exit_interval ................................... None
+[default0]:  exit_on_missing_checkpoint ...................... False
+[default0]:  exit_signal ..................................... SIGTERM
+[default0]:  exit_signal_handler ............................. False
+[default0]:  exp_avg_dtype ................................... torch.float32
+[default0]:  exp_avg_sq_dtype ................................ torch.float32
+[default0]:  expert_model_parallel_size ...................... 1
+[default0]:  expert_tensor_parallel_size ..................... 1
+[default0]:  expert_tensor_parallel_size_per_process_mesh .... None
+[default0]:  external_cuda_graph ............................. False
+[default0]:  extra_eval_interval ............................. None
+[default0]:  extra_valid_data_path ........................... None
+[default0]:  fake_process_group .............................. False
+[default0]:  ffn_hidden_size ................................. 14336
+[default0]:  fim_data ........................................ False
+[default0]:  fim_eod_token ................................... <|endoftext|>
+[default0]:  fim_fragment_rate ............................... None
+[default0]:  fim_middle_token ................................ <fim_middle>
+[default0]:  fim_no_prefix ................................... None
+[default0]:  fim_pad_token ................................... <fim_pad>
+[default0]:  fim_prefix_token ................................ <fim_prefix>
+[default0]:  fim_rate ........................................ 0.5
+[default0]:  fim_split_sample ................................ None
+[default0]:  fim_spm_rate .................................... 0.5
+[default0]:  fim_suffix_token ................................ <fim_suffix>
+[default0]:  finetune ........................................ False
+[default0]:  finetune_dataset_type ........................... None
+[default0]:  first_last_layers_bf16 .......................... False
+[default0]:  flag_gems_log_path .............................. None
+[default0]:  flag_gems_unused ................................ None
+[default0]:  flash_decode .................................... False
+[default0]:  fp16 ............................................ False
+[default0]:  fp16_lm_cross_entropy ........................... False
+[default0]:  fp32_residual_connection ........................ False
+[default0]:  fp4 ............................................. None
+[default0]:  fp4_param ....................................... False
+[default0]:  fp4_quantizer_factory ........................... None
+[default0]:  fp4_recipe ...................................... nvfp4
+[default0]:  fp8 ............................................. None
+[default0]:  fp8_amax_compute_algo ........................... most_recent
+[default0]:  fp8_amax_history_len ............................ 1
+[default0]:  fp8_interval .................................... 1
+[default0]:  fp8_margin ...................................... 0
+[default0]:  fp8_param_gather ................................ False
+[default0]:  fp8_quantizer_factory ........................... None
+[default0]:  fp8_recipe ...................................... delayed
+[default0]:  fp8_wgrad ....................................... True
+[default0]:  fsdp_double_buffer .............................. False
+[default0]:  full_validation ................................. False
+[default0]:  global_batch_size ............................... 8
+[default0]:  glu_linear_offset ............................... 0.0
+[default0]:  grad_reduce_in_bf16 ............................. False
+[default0]:  gradient_accumulation_fusion .................... True
+[default0]:  gradient_reduce_div_fusion ...................... True
+[default0]:  group_query_attention ........................... False
+[default0]:  grpo_clamp_eps_lower ............................ 0.01
+[default0]:  grpo_clamp_eps_upper ............................ 0.01
+[default0]:  grpo_default_temperature ........................ 1.0
+[default0]:  grpo_default_top_p .............................. 0
+[default0]:  grpo_entropy_term_weight ........................ 0.0
+[default0]:  grpo_filter_groups_with_same_reward ............. False
+[default0]:  grpo_group_size ................................. 2
+[default0]:  grpo_iterations ................................. 2
+[default0]:  grpo_kl_beta .................................... 0.001
+[default0]:  grpo_prompts_per_step ........................... 32
+[default0]:  head_lr_mult .................................... 1.0
+[default0]:  hetero_current_device_type ...................... None
+[default0]:  hetero_device_types ............................. None
+[default0]:  hetero_pipeline_layer_split ..................... None
+[default0]:  hetero_process_meshes ........................... None
+[default0]:  hetero_use_cpu_communication .................... False
+[default0]:  heterogeneous_layers_config_encoded_json ........ None
+[default0]:  heterogeneous_layers_config_path ................ None
+[default0]:  hidden_dim_multiplier ........................... None
+[default0]:  hidden_dropout .................................. 0.0
+[default0]:  hidden_size ..................................... 4096
+[default0]:  hierarchical_context_parallel_sizes ............. None
+[default0]:  high_priority_stream_groups ..................... []
+[default0]:  hybrid_attention_ratio .......................... 0.0
+[default0]:  hybrid_mlp_ratio ................................ 0.0
+[default0]:  hybrid_override_pattern ......................... None
+[default0]:  hysteresis ...................................... 2
+[default0]:  ict_head_size ................................... None
+[default0]:  ict_load ........................................ None
+[default0]:  img_h ........................................... 224
+[default0]:  img_w ........................................... 224
+[default0]:  indexer_batch_size .............................. 128
+[default0]:  indexer_log_interval ............................ 1000
+[default0]:  inference_batch_times_seqlen_threshold .......... -1
+[default0]:  inference_coordinator_port ...................... 12346
+[default0]:  inference_dynamic_batching ...................... False
+[default0]:  inference_dynamic_batching_block_size ........... 256
+[default0]:  inference_dynamic_batching_buffer_size_gb ....... 40.0
+[default0]:  inference_dynamic_batching_cuda_graph_max_tokens  16384
+[default0]:  inference_dynamic_batching_cuda_graph_mixed_prefill_count  16
+[default0]:  inference_dynamic_batching_max_tokens ........... None
+[default0]:  inference_dynamic_batching_num_cuda_graphs ...... 16
+[default0]:  inference_dynamic_batching_track_paused_request_events  False
+[default0]:  inference_dynamic_batching_unified_memory_level . 1
+[default0]:  inference_max_batch_size ........................ 8
+[default0]:  inference_max_seq_length ........................ 2560
+[default0]:  inference_rng_tracker ........................... False
+[default0]:  inference_wandb_logging_step_interval ........... 0
+[default0]:  init_method_std ................................. 0.02
+[default0]:  init_method_xavier_uniform ...................... False
+[default0]:  init_model_with_meta_device ..................... False
+[default0]:  initial_loss_scale .............................. 4294967296
+[default0]:  inprocess_active_world_size ..................... 1
+[default0]:  inprocess_barrier_timeout ....................... 120
+[default0]:  inprocess_completion_timeout .................... 120
+[default0]:  inprocess_empty_cuda_cache ...................... False
+[default0]:  inprocess_granularity ........................... node
+[default0]:  inprocess_hard_timeout .......................... 90
+[default0]:  inprocess_heartbeat_interval .................... 30
+[default0]:  inprocess_heartbeat_timeout ..................... 60
+[default0]:  inprocess_last_call_wait ........................ 1
+[default0]:  inprocess_max_iterations ........................ None
+[default0]:  inprocess_monitor_process_interval .............. 1.0
+[default0]:  inprocess_monitor_thread_interval ............... 1.0
+[default0]:  inprocess_progress_watchdog_interval ............ 1.0
+[default0]:  inprocess_restart ............................... False
+[default0]:  inprocess_soft_timeout .......................... 60
+[default0]:  inprocess_termination_grace_time ................ 1
+[default0]:  is_hybrid_model ................................. False
+[default0]:  iter_per_epoch .................................. 1250
+[default0]:  iterations_to_skip .............................. []
+[default0]:  keep_fp8_transpose_cache ........................ False
+[default0]:  kitchen_config_file ............................. None
+[default0]:  kitchen_recipe_number ........................... None
+[default0]:  kv_channels ..................................... 128
+[default0]:  kv_lora_rank .................................... 32
+[default0]:  langrl_env_config ............................... None
+[default0]:  langrl_external_server .......................... False
+[default0]:  langrl_inference_server_conversation_template ... None
+[default0]:  langrl_inference_server_type .................... inplace_megatron
+[default0]:  lazy_mpu_init ................................... None
+[default0]:  legacy_tokenizer ................................ False
+[default0]:  load ............................................ /root/.config/superpowers/worktrees/memrift-flagscale/memrift-split-copy-benchmark/outputs/end2end_copy_te_gems_skipfused/run/checkpoints
+[default0]:  load_main_params_from_ckpt ...................... None
+[default0]:  local_rank ...................................... 0
+[default0]:  log_energy ...................................... False
+[default0]:  log_interval .................................... 1
+[default0]:  log_loss_scale_to_tensorboard ................... True
+[default0]:  log_memory_to_tensorboard ....................... False
+[default0]:  log_num_zeros_in_grad ........................... False
+[default0]:  log_params_norm ................................. False
+[default0]:  log_progress .................................... False
+[default0]:  log_straggler ................................... False
+[default0]:  log_throughput .................................. False
+[default0]:  log_timers_to_tensorboard ....................... False
+[default0]:  log_validation_ppl_to_tensorboard ............... False
+[default0]:  log_world_size_to_tensorboard ................... False
+[default0]:  logging_level ................................... None
+[default0]:  lora_alpha ...................................... 32
+[default0]:  lora_dim ........................................ 16
+[default0]:  lora_dropout .................................... 0.0
+[default0]:  lora_dropout_position ........................... pre
+[default0]:  lora_in_init_method ............................. xavier
+[default0]:  lora_out_init_method ............................ zero
+[default0]:  lora_target_modules ............................. ['linear_qkv', 'linear_proj', 'linear_fc1', 'linear_fc2']
+[default0]:  loss_scale ...................................... None
+[default0]:  loss_scale_window ............................... 1000
+[default0]:  lr .............................................. 0.0002
+[default0]:  lr_decay_iters .................................. None
+[default0]:  lr_decay_samples ................................ None
+[default0]:  lr_decay_stablelm2_alpha ........................ 1.0
+[default0]:  lr_decay_stablelm2_beta ......................... 0.0
+[default0]:  lr_decay_stablelm2_cosine_max_lr ................ None
+[default0]:  lr_decay_stablelm2_cosine_period_samples ........ 0
+[default0]:  lr_decay_stablelm2_cosine_samples ............... 0
+[default0]:  lr_decay_stablelm2_decay_samples ................ 0
+[default0]:  lr_decay_stablelm2_rsqrt_samples ................ 0
+[default0]:  lr_decay_style .................................. cosine
+[default0]:  lr_warmup_fraction .............................. None
+[default0]:  lr_warmup_init .................................. 0.0
+[default0]:  lr_warmup_iters ................................. 0
+[default0]:  lr_warmup_samples ............................... 0
+[default0]:  lr_wsd_decay_iters .............................. None
+[default0]:  lr_wsd_decay_samples ............................ None
+[default0]:  lr_wsd_decay_style .............................. exponential
+[default0]:  main_grads_dtype ................................ torch.float32
+[default0]:  main_params_dtype ............................... torch.float32
+[default0]:  make_vocab_size_divisible_by .................... 64
+[default0]:  mamba_head_dim .................................. 64
+[default0]:  mamba_num_groups ................................ 8
+[default0]:  mamba_num_heads ................................. None
+[default0]:  mamba_state_dim ................................. 128
+[default0]:  manual_gc ....................................... False
+[default0]:  manual_gc_eval .................................. True
+[default0]:  manual_gc_interval .............................. 0
+[default0]:  mask_factor ..................................... 1.0
+[default0]:  mask_prob ....................................... 0.15
+[default0]:  mask_type ....................................... random
+[default0]:  masked_softmax_fusion ........................... True
+[default0]:  max_position_embeddings ......................... 131072
+[default0]:  max_tokens_to_oom ............................... 12000
+[default0]:  memory_snapshot_path ............................ snapshot.pickle
+[default0]:  memrift_act_async ............................... True
+[default0]:  memrift_activation_enable ....................... True
+[default0]:  memrift_compress_pool_workers ................... 8
+[default0]:  memrift_compressed_weight_dir ................... /MXC550/share/myc/memrift-flagscale/memrift_weights/llama31_8b_zstd_level18
+[default0]:  memrift_decode_pool_workers ..................... 48
+[default0]:  memrift_enable .................................. True
+[default0]:  memrift_prefetch_layers ......................... 12
+[default0]:  memrift_print_debug ............................. False
+[default0]:  memrift_profile_memory .......................... False
+[default0]:  memrift_weight_async ............................ True
+[default0]:  memrift_weight_enable ........................... True
+[default0]:  memrift_zstd_level .............................. 3
+[default0]:  merge_file ...................................... None
+[default0]:  micro_batch_size ................................ 1
+[default0]:  microbatch_group_size_per_vp_stage .............. None
+[default0]:  mid_level_dataset_surplus ....................... 0.005
+[default0]:  min_loss_scale .................................. 1.0
+[default0]:  min_lr .......................................... 2e-05
+[default0]:  mlp_chunks_for_prefill .......................... 1
+[default0]:  mmap_bin_files .................................. True
+[default0]:  mock_data ....................................... True
+[default0]:  moe_apply_probs_on_input ........................ False
+[default0]:  moe_aux_loss_coeff .............................. 0.0
+[default0]:  moe_deepep_num_sms .............................. 20
+[default0]:  moe_enable_deepep ............................... False
+[default0]:  moe_expert_capacity_factor ...................... None
+[default0]:  moe_extended_tp ................................. False
+[default0]:  moe_fb_overlap .................................. False
+[default0]:  moe_ffn_hidden_size ............................. None
+[default0]:  moe_flex_dispatcher_backend ..................... deepep
+[default0]:  moe_grouped_gemm ................................ False
+[default0]:  moe_hybridep_num_sms ............................ 16
+[default0]:  moe_input_jitter_eps ............................ None
+[default0]:  moe_layer_freq .................................. 1
+[default0]:  moe_layer_recompute ............................. False
+[default0]:  moe_pad_expert_input_to_capacity ................ False
+[default0]:  moe_pad_experts_for_cuda_graph_inference ........ False
+[default0]:  moe_per_layer_logging ........................... False
+[default0]:  moe_permute_fusion .............................. False
+[default0]:  moe_router_bias_update_rate ..................... 0.001
+[default0]:  moe_router_dtype ................................ None
+[default0]:  moe_router_enable_expert_bias ................... False
+[default0]:  moe_router_force_load_balancing ................. False
+[default0]:  moe_router_fusion ............................... False
+[default0]:  moe_router_group_topk ........................... None
+[default0]:  moe_router_load_balancing_type .................. aux_loss
+[default0]:  moe_router_num_groups ........................... None
+[default0]:  moe_router_padding_for_fp8 ...................... False
+[default0]:  moe_router_padding_for_quantization ............. False
+[default0]:  moe_router_pre_softmax .......................... False
+[default0]:  moe_router_score_function ....................... softmax
+[default0]:  moe_router_topk ................................. 2
+[default0]:  moe_router_topk_scaling_factor .................. None
+[default0]:  moe_shared_expert_intermediate_size ............. None
+[default0]:  moe_shared_expert_overlap ....................... False
+[default0]:  moe_token_dispatcher_type ....................... allgather
+[default0]:  moe_token_drop_policy ........................... probs
+[default0]:  moe_upcycling_granularity ....................... 1
+[default0]:  moe_use_legacy_grouped_gemm ..................... False
+[default0]:  moe_use_upcycling ............................... False
+[default0]:  moe_z_loss_coeff ................................ None
+[default0]:  mrope_section ................................... None
+[default0]:  mscale .......................................... 1.0
+[default0]:  mscale_all_dim .................................. 0.0
+[default0]:  mtp_loss_scaling_factor ......................... 0.1
+[default0]:  mtp_num_layers .................................. None
+[default0]:  multi_latent_attention .......................... False
+[default0]:  multiple_of ..................................... None
+[default0]:  multiple_validation_sets ........................ False
+[default0]:  muon_matched_adamw_rms .......................... 0.2
+[default0]:  muon_momentum ................................... 0.95
+[default0]:  muon_nesterov ................................... True
+[default0]:  muon_ns_steps ................................... 5
+[default0]:  nccl_all_reduce_for_prefill ..................... False
+[default0]:  nccl_communicator_config_path ................... None
+[default0]:  nccl_ub ......................................... False
+[default0]:  no_load_optim ................................... None
+[default0]:  no_load_rng ..................................... None
+[default0]:  no_persist_layer_norm ........................... False
+[default0]:  no_rope_freq .................................... None
+[default0]:  no_save_optim ................................... None
+[default0]:  no_save_rng ..................................... None
+[default0]:  no_shared_fs .................................... False
+[default0]:  non_persistent_ckpt_type ........................ None
+[default0]:  non_persistent_global_ckpt_dir .................. None
+[default0]:  non_persistent_local_ckpt_algo .................. fully_parallel
+[default0]:  non_persistent_local_ckpt_dir ................... None
+[default0]:  non_persistent_save_interval .................... None
+[default0]:  norm_epsilon .................................... 1e-05
+[default0]:  norm_init_weight ................................ 1.0
+[default0]:  normalization ................................... RMSNorm
+[default0]:  num_attention_heads ............................. 32
+[default0]:  num_channels .................................... 3
+[default0]:  num_classes ..................................... 1000
+[default0]:  num_dataset_builder_threads ..................... 1
+[default0]:  num_distributed_optimizer_instances ............. 1
+[default0]:  num_experts ..................................... None
+[default0]:  num_layers ...................................... 32
+[default0]:  num_layers_at_end_in_bf16 ....................... 1
+[default0]:  num_layers_at_start_in_bf16 ..................... 1
+[default0]:  num_layers_per_virtual_pipeline_stage ........... None
+[default0]:  num_query_groups ................................ 8
+[default0]:  num_virtual_stages_per_pipeline_rank ............ None
+[default0]:  num_workers ..................................... 2
+[default0]:  object_storage_cache_path ....................... None
+[default0]:  one_logger_async ................................ False
+[default0]:  one_logger_project .............................. megatron-lm
+[default0]:  one_logger_run_name ............................. None
+[default0]:  onnx_safe ....................................... None
+[default0]:  openai_gelu ..................................... False
+[default0]:  optimizer ....................................... adam
+[default0]:  optimizer_cpu_offload ........................... False
+[default0]:  optimizer_offload_fraction ...................... 1.0
+[default0]:  output_bert_embeddings .......................... False
+[default0]:  overlap_cpu_optimizer_d2h_h2d ................... False
+[default0]:  overlap_grad_reduce ............................. False
+[default0]:  overlap_moe_expert_parallel_comm ................ False
+[default0]:  overlap_p2p_comm ................................ False
+[default0]:  overlap_p2p_comm_warmup_flush ................... False
+[default0]:  overlap_param_gather ............................ False
+[default0]:  overlap_param_gather_with_optimizer_step ........ False
+[default0]:  override_opt_param_scheduler .................... False
+[default0]:  padded_vocab_size ............................... None
+[default0]:  params_dtype .................................... torch.bfloat16
+[default0]:  patch_dim ....................................... 16
+[default0]:  peft_type ....................................... lora
+[default0]:  per_split_data_args_path ........................ None
+[default0]:  perform_initialization .......................... True
+[default0]:  perform_rl_step ................................. False
+[default0]:  pin_cpu_grads ................................... True
+[default0]:  pin_cpu_params .................................. True
+[default0]:  pipeline_model_parallel_comm_backend ............ None
+[default0]:  pipeline_model_parallel_layout .................. None
+[default0]:  pipeline_model_parallel_size .................... 1
+[default0]:  position_embedding_type ......................... rope
+[default0]:  pretrained_checkpoint ........................... None
+[default0]:  profile ......................................... False
+[default0]:  profile_ranks ................................... [0]
+[default0]:  profile_step_end ................................ 12
+[default0]:  profile_step_start .............................. 10
+[default0]:  q_lora_rank ..................................... None
+[default0]:  qk_head_dim ..................................... 128
+[default0]:  qk_l2_norm ...................................... False
+[default0]:  qk_layernorm .................................... False
+[default0]:  qk_layernorm_hidden_dim ......................... False
+[default0]:  qk_pos_emb_head_dim ............................. 64
+[default0]:  query_in_block_prob ............................. 0.1
+[default0]:  quick_geglu ..................................... False
+[default0]:  rampup_batch_size ............................... None
+[default0]:  rampup_save_interval ............................ None
+[default0]:  rank ............................................ 0
+[default0]:  recompute_granularity ........................... None
+[default0]:  recompute_granularity_per_stage_micro_batch ..... None
+[default0]:  recompute_method ................................ None
+[default0]:  recompute_method_per_stage_micro_batch .......... None
+[default0]:  recompute_modules ............................... None
+[default0]:  recompute_num_layers ............................ None
+[default0]:  recompute_num_layers_per_stage_micro_batch ...... None
+[default0]:  record_memory_history ........................... False
+[default0]:  relative_attention_max_distance ................. 128
+[default0]:  relative_attention_num_buckets .................. 32
+[default0]:  replication ..................................... False
+[default0]:  replication_factor .............................. 2
+[default0]:  replication_jump ................................ None
+[default0]:  rerun_mode ...................................... validate_results
+[default0]:  reset_attention_mask ............................ False
+[default0]:  reset_position_ids .............................. False
+[default0]:  result_rejected_tracker_filename ................ None
+[default0]:  retriever_report_topk_accuracies ................ []
+[default0]:  retriever_score_scaling ......................... False
+[default0]:  retriever_seq_length ............................ 256
+[default0]:  retro_add_retriever ............................. False
+[default0]:  retro_attention_gate ............................ 1
+[default0]:  retro_cyclic_train_iters ........................ None
+[default0]:  retro_encoder_attention_dropout ................. 0.1
+[default0]:  retro_encoder_hidden_dropout .................... 0.1
+[default0]:  retro_encoder_layers ............................ 2
+[default0]:  retro_num_neighbors ............................. 2
+[default0]:  retro_num_retrieved_chunks ...................... 2
+[default0]:  retro_project_dir ............................... None
+[default0]:  retro_verify_neighbor_count ..................... True
+[default0]:  reuse_grad_buf_for_mxfp8_param_ag ............... False
+[default0]:  rl_calculate_intra_group_similarity ............. False
+[default0]:  rl_importance_sampling_truncation_coef .......... None
+[default0]:  rl_inference_logprobs_is_correction ............. False
+[default0]:  rl_offload_kv_cache_during_training ............. False
+[default0]:  rl_offload_optimizer_during_inference ........... False
+[default0]:  rl_partial_rollouts ............................. False
+[default0]:  rl_prompts_per_eval ............................. 32
+[default0]:  rl_remove_kv_cache_during_training .............. False
+[default0]:  rl_reset_cuda_graphs ............................ False
+[default0]:  rl_sequence_packing_algo ........................ fifo
+[default0]:  rl_sequence_packing_bin_size .................... 8192
+[default0]:  rl_use_sequence_packing ......................... False
+[default0]:  rope_scaling_factor ............................. 8.0
+[default0]:  rope_type ....................................... None
+[default0]:  rotary_base ..................................... 500000
+[default0]:  rotary_interleaved .............................. False
+[default0]:  rotary_percent .................................. 1.0
+[default0]:  rotary_scaling_factor ........................... 1.0
+[default0]:  rotary_seq_len_interpolation_factor ............. None
+[default0]:  run_workload_inspector_server ................... False
+[default0]:  sample_rate ..................................... 1.0
+[default0]:  save ............................................ /root/.config/superpowers/worktrees/memrift-flagscale/memrift-split-copy-benchmark/outputs/end2end_copy_te_gems_skipfused/run/checkpoints
+[default0]:  save_interval ................................... 500
+[default0]:  save_retain_interval ............................ None
+[default0]:  save_when_num_microbatches_change ............... False
+[default0]:  scatter_gather_tensors_in_pipeline .............. True
+[default0]:  seed ............................................ 1234
+[default0]:  seq_length ...................................... 2048
+[default0]:  sequence_parallel ............................... False
+[default0]:  sft ............................................. False
+[default0]:  sft_tokenizer_prompt_format ..................... nemotron-h-aligned
+[default0]:  sgd_momentum .................................... 0.9
+[default0]:  sharp_enabled_group ............................. None
+[default0]:  short_seq_prob .................................. 0.1
+[default0]:  skip_iters_range ................................ None
+[default0]:  skip_samples_range .............................. None
+[default0]:  skip_train ...................................... False
+[default0]:  skipped_train_samples ........................... 0
+[default0]:  softmax_type .................................... vanilla
+[default0]:  spec ............................................ None
+[default0]:  special_tokens_file ............................. None
+[default0]:  spiky_loss_threshold ............................ 0.2
+[default0]:  split ........................................... 1,0,0
+[default0]:  squared_relu .................................... False
+[default0]:  standalone_embedding_stage ...................... False
+[default0]:  start_weight_decay .............................. 0.1
+[default0]:  straggler_ctrlr_port ............................ 65535
+[default0]:  straggler_minmax_count .......................... 1
+[default0]:  strict_fsdp_dtensor_load ........................ True
+[default0]:  suggested_communication_unit_size ............... None
+[default0]:  swiglu .......................................... True
+[default0]:  swin_backbone_type .............................. tiny
+[default0]:  symmetric_ar_type ............................... None
+[default0]:  te_fl_allow_vendors ............................. None
+[default0]:  te_fl_deny_vendors .............................. None
+[default0]:  te_fl_per_op .................................... None
+[default0]:  te_fl_prefer .................................... vendor
+[default0]:  te_rng_tracker .................................. False
+[default0]:  tensor_model_parallel_size ...................... 1
+[default0]:  tensorboard_dir ................................. /root/.config/superpowers/worktrees/memrift-flagscale/memrift-split-copy-benchmark/outputs/end2end_copy_te_gems_skipfused/run/tensorboard
+[default0]:  tensorboard_log_interval ........................ 10
+[default0]:  tensorboard_queue_size .......................... 1000
+[default0]:  test_data_path .................................. None
+[default0]:  test_mode ....................................... False
+[default0]:  tiktoken_num_special_tokens ..................... 1000
+[default0]:  tiktoken_pattern ................................ None
+[default0]:  tiktoken_special_tokens ......................... None
+[default0]:  timing_log_level ................................ 0
+[default0]:  timing_log_option ............................... minmax
+[default0]:  titles_data_path ................................ None
+[default0]:  tokenizer_metadata .............................. None
+[default0]:  tokenizer_model ................................. /MXC550/share/myc/model/llama-3.1-8b
+[default0]:  tokenizer_path .................................. /MXC550/share/myc/model/llama-3.1-8b
+[default0]:  tokenizer_type .................................. HuggingFaceTokenizer
+[default0]:  torch_fsdp2_reshard_after_forward ............... True
+[default0]:  tp_comm_bootstrap_backend ....................... nccl
+[default0]:  tp_comm_bulk_dgrad .............................. True
+[default0]:  tp_comm_bulk_wgrad .............................. True
+[default0]:  tp_comm_overlap ................................. False
+[default0]:  tp_comm_overlap_ag .............................. True
+[default0]:  tp_comm_overlap_cfg ............................. None
+[default0]:  tp_comm_overlap_rs .............................. True
+[default0]:  tp_comm_overlap_rs_dgrad ........................ False
+[default0]:  tp_comm_split_ag ................................ True
+[default0]:  tp_comm_split_rs ................................ True
+[default0]:  train_data_path ................................. None
+[default0]:  train_iters ..................................... 1
+[default0]:  train_samples ................................... None
+[default0]:  train_sync_interval ............................. None
+[default0]:  transformer_impl ................................ transformer_engine
+[default0]:  transformer_pipeline_model_parallel_size ........ 1
+[default0]:  trust_remote_code ............................... False
+[default0]:  untie_embeddings_and_output_weights ............. True
+[default0]:  use_checkpoint_args ............................. False
+[default0]:  use_checkpoint_opt_param_scheduler .............. False
+[default0]:  use_cpu_initialization .......................... None
+[default0]:  use_dist_ckpt ................................... False
+[default0]:  use_dist_ckpt_deprecated ........................ False
+[default0]:  use_distributed_optimizer ....................... False
+[default0]:  use_dualpipev ................................... False
+[default0]:  use_flash_attn .................................. True
+[default0]:  use_fused_weighted_squared_relu ................. False
+[default0]:  use_legacy_models ............................... False
+[default0]:  use_legacy_static_engine ........................ False
+[default0]:  use_megatron_fsdp ............................... False
+[default0]:  use_mp_args_from_checkpoint_args ................ False
+[default0]:  use_one_sent_docs ............................... False
+[default0]:  use_partial_reduce_for_shared_embedding ......... False
+[default0]:  use_persistent_ckpt_worker ...................... False
+[default0]:  use_precision_aware_optimizer ................... False
+[default0]:  use_pytorch_profiler ............................ False
+[default0]:  use_ring_exchange_p2p ........................... False
+[default0]:  use_rope_scaling ................................ False
+[default0]:  use_rotary_position_embeddings .................. True
+[default0]:  use_sharp ....................................... False
+[default0]:  use_te_activation_func .......................... False
+[default0]:  use_tokenizer_model_from_checkpoint_args ........ True
+[default0]:  use_torch_fsdp2 ................................. False
+[default0]:  use_torch_optimizer_for_cpu_offload ............. False
+[default0]:  use_tp_pp_dp_mapping ............................ False
+[default0]:  v_head_dim ...................................... 128
+[default0]:  valid_data_path ................................. None
+[default0]:  variable_seq_lengths ............................ False
+[default0]:  virtual_pipeline_model_parallel_size ............ None
+[default0]:  vision_backbone_type ............................ vit
+[default0]:  vision_pretraining .............................. False
+[default0]:  vision_pretraining_type ......................... classify
+[default0]:  vocab_extra_ids ................................. 0
+[default0]:  vocab_file ...................................... None
+[default0]:  vocab_size ...................................... None
+[default0]:  wandb_api_key ................................... 
+[default0]:  wandb_entity .................................... 
+[default0]:  wandb_exp_name .................................. 
+[default0]:  wandb_log_model ................................. False
+[default0]:  wandb_log_model_interval ........................ 1000
+[default0]:  wandb_mode ...................................... disabled
+[default0]:  wandb_project ................................... 
+[default0]:  wandb_save_dir .................................. /root/.config/superpowers/worktrees/memrift-flagscale/memrift-split-copy-benchmark/outputs/end2end_copy_te_gems_skipfused/run/wandb
+[default0]:  weight_decay .................................... 0.1
+[default0]:  weight_decay_incr_style ......................... constant
+[default0]:  wgrad_deferral_limit ............................ 0
+[default0]:/opt/conda/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:5383: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+[default0]:  warnings.warn(  # warn only once
+[default0]:/root/.config/superpowers/worktrees/memrift-flagscale/memrift-split-copy-benchmark/flagscale/compress/memrift/megatron_dynamic_loader.py:597: UserWarning: The given NumPy array is not writable, and PyTorch does not support non-writable tensors. This means writing to this tensor will result in undefined behavior. You may want to copy the array to protect its data or make it writable before converting it to a tensor. This type of warning will be suppressed for the rest of this program. (Triggered internally at /workspace/framework/mcPytorch/torch/csrc/utils/tensor_numpy.cpp:203.)
+[default0]:  sm_pinned = torch.from_numpy(sm_bytes).pin_memory()
+[default0]:  window_attn_skip_freq ........................... None
+[default0]:  window_size ..................................... None
+[default0]:  world_size ...................................... 1
+[default0]:  yaml_cfg ........................................ None
+[default0]:-------------------- end of arguments ---------------------
+[default0]:INFO:megatron.core.num_microbatches_calculator:setting number of microbatches to constant 8
+[default0]:> building HuggingFaceTokenizer tokenizer ...
+[default0]:WARNING:megatron.core.datasets.megatron_tokenizer:You’re using the legacy tokenizer system, which is deprecated and will be removed in a future release. Please migrate to the new tokenizer system (`megatron.core.tokenizers.MegatronTokenizer`).
+[default0]: > padded vocab (size: 128256) with 0 dummy tokens (new size: 128256)
+[default0]:WARNING:megatron.core.rerun_state_machine:RerunStateMachine initialized in mode validate_results
+[default0]:torch distributed is already initialized, skipping initialization ...
+[default0]:[Gloo] Rank 0 is connected to 0 peer ranks. Expected number of connected peer ranks is : 0
+[default0]:[Gloo] Rank 0 is connected to 0 peer ranks. Expected number of connected peer ranks is : 0
+[default0]:[Gloo] Rank 0 is connected to 0 peer ranks. Expected number of connected peer ranks is : 0
+[default0]:> initialized tensor model parallel with size 1
+[default0]:> initialized pipeline model parallel with size 1
+[default0]:> setting random seeds to 1234 ...
+[default0]:> setting tensorboard ...
+[default0]:WARNING: one_logger package is required to enable e2e metrics tracking. please go to https://confluence.nvidia.com/display/MLWFO/Package+Repositories for details to install it
+[default0]:> compiling dataset index builder ...
+[default0]:make: Entering directory '/opt/conda/lib/python3.10/site-packages/megatron/core/datasets'
+[default0]:make: Nothing to be done for 'default'.
+[default0]:make: Leaving directory '/opt/conda/lib/python3.10/site-packages/megatron/core/datasets'
+[default0]:>>> done with dataset index builder. Compilation time: 0.058 seconds
+[default0]:> compiling and loading fused kernels ...
+[default0]:> skipping fused kernel build: nvcc not found under CUDA_HOME='/opt/maca/tools/cu-bridge'
+[default0]:>>> done with compiling and loading fused kernels. Compilation time: 0.003 seconds
+[default0]:time to initialize megatron (seconds): 5.088
+[default0]:[after megatron is initialized] datetime: 2026-06-06 09:26:56 
+[default0]:> Number of attn parameters in a transformer block in billions:  0.07
+[default0]:> Number of dense mlp parameters in a transformer block in billions:  0.18
+[default0]:> Number of sparse mlp parameters in a transformer block in billions:  0.00
+[default0]:> Number of parameters in transformer block in billions:  7.79
+[default0]:> Number of parameters in mtp transformer block in billions:  0.00
+[default0]:> Number of parameters in embedding layers in billions: 1.05
+[default0]:> Total number of parameters in billions: 8.84
+[default0]:> Number of parameters in most loaded shard in billions: 8.8358
+[default0]:> Activation memory footprint per dense transformer layer: 312.0 MB
+[default0]:>>> [FS] Theoretical memory footprints: weight and optimizer=151677.14 MB, activation=11026.02 MB, total=162703.16 MB
+[default0]:
+[default0]:building GPT model ...
+[default0]:[2026-06-06 09:26:56,523 TE-FL manager.py:439 INFO] Op 'get_cudnn_version' using 'vendor.metax' (kind=vendor, vendor=METAX)
+[default0]:[2026-06-06 09:26:56,524 TE-FL manager.py:439 INFO] Op 'get_flash_attention_class' using 'vendor.metax' (kind=vendor, vendor=METAX)
+[default0]:INFO:megatron.plugin.decorators:Registered override method: LanguageModule._is_in_embd_group
+[default0]:INFO:megatron.plugin.decorators:Registered override method: LanguageModule.setup_embeddings_and_output_layer
+[default0]: > number of parameters on (tensor, pipeline) model parallel rank (0, 0): 1333006336
+[default0]:INFO:megatron.core.distributed.distributed_data_parallel:Setting up DistributedDataParallel with config DistributedDataParallelConfig(grad_reduce_in_fp32=True, overlap_grad_reduce=False, overlap_param_gather=False, align_param_gather=False, use_distributed_optimizer=False, num_distributed_optimizer_instances=1, check_for_nan_in_grad=True, check_for_large_grads=False, bucket_size=None, pad_buckets_for_high_nccl_busbw=False, reduce_scatter_with_fp32_accumulation=False, average_in_collective=False, fp8_param_gather=False, reuse_grad_buf_for_mxfp8_param_ag=False, use_megatron_fsdp=False, use_custom_fsdp=False, data_parallel_sharding_strategy='no_shard', gradient_reduce_div_fusion=True, suggested_communication_unit_size=None, preserve_fp32_weights=True, keep_fp8_transpose_cache=False, nccl_ub=False, fsdp_double_buffer=False, outer_dp_sharding_strategy='no_shard', disable_symmetric_registration=False, delay_wgrad_compute=False, use_partial_reduce_for_shared_embedding=False)
+[default0]:INFO:megatron.core.distributed.param_and_grad_buffer:Number of buckets for gradient all-reduce / reduce-scatter: 1
+[default0]:Params for bucket 1 (38797312 elements, 38797312 padded size):
+[default0]:	module.decoder.layers.30.layer.self_attention.linear_proj.adapter.linear_out.weight
+[default0]:	module.decoder.layers.26.layer.mlp.linear_fc1.adapter.linear_out.weight
+[default0]:	module.decoder.layers.25.layer.mlp.linear_fc1.adapter.linear_out.weight
+[default0]:	module.decoder.layers.24.layer.mlp.linear_fc1.adapter.linear_out.weight
+[default0]:	module.decoder.layers.27.layer.self_attention.linear_proj.adapter.linear_out.weight
+[default0]:	module.decoder.layers.23.layer.self_attention.linear_qkv.adapter.linear_out.weight
+[default0]:	module.decoder.layers.16.layer.self_attention.linear_qkv.adapter.linear_in.weight
+[default0]:	module.decoder.layers.8.layer.mlp.linear_fc2.adapter.linear_out.weight
+[default0]:	module.decoder.layers.30.layer.mlp.linear_fc2.adapter.linear_out.weight
+[default0]:	module.decoder.layers.29.layer.mlp.linear_fc2.adapter.linear_out.weight
+[default0]:	module.decoder.layers.23.layer.self_attention.linear_proj.adapter.linear_in.weight
+[default0]:	module.decoder.layers.22.layer.self_attention.linear_proj.adapter.linear_in.weight
+[default0]:	module.decoder.layers.21.layer.self_attention.linear_proj.adapter.linear_in.weight
+[default0]:	module.decoder.layers.17.layer.self_attention.linear_proj.adapter.linear_in.weight
+[default0]:	module.decoder.layers.16.layer.mlp.linear_fc1.adapter.linear_out.weight
+[default0]:	module.decoder.layers.11.layer.self_attention.linear_qkv.adapter.linear_in.weight
+[default0]:	module.decoder.layers.10.layer.self_attention.linear_qkv.adapter.linear_in.weight
+[default0]:	module.decoder.layers.5.layer.self_attention.linear_qkv.adapter.linear_in.weight
+[default0]:	module.decoder.layers.3.layer.mlp.linear_fc2.adapter.linear_in.weight
+[default0]:	module.decoder.layers.31.layer.self_attention.linear_qkv.adapter.linear_out.weight
+[default0]:	module.decoder.layers.26.layer.mlp.linear_fc2.adapter.linear_out.weight
+[default0]:	module.decoder.layers.15.layer.self_attention.linear_proj.adapter.linear_in.weight
+[default0]:	module.decoder.layers.14.layer.self_attention.linear_proj.adapter.linear_in.weight
+[default0]:	module.decoder.layers.13.layer.self_attention.linear_proj.adapter.linear_in.weight
+[default0]:	module.decoder.layers.12.layer.self_attention.linear_proj.adapter.linear_in.weight
+[default0]:	module.decoder.layers.11.layer.self_attention.linear_proj.adapter.linear_in.weight
+[default0]:	module.decoder.layers.22.layer.mlp.linear_fc2.adapter.linear_in.weight
+[default0]:	module.decoder.layers.29.layer.self_attention.linear_qkv.adapter.linear_out.weight
+[default0]:	module.decoder.layers.28.layer.self_attention.linear_qkv.adapter.linear_out.weight
+[default0]:	module.decoder.layers.27.layer.self_attention.linear_qkv.adapter.linear_out.weight
+[default0]:	module.decoder.layers.21.layer.mlp.linear_fc2.adapter.linear_in.weight
+[default0]:	module.decoder.layers.20.layer.mlp.linear_fc2.adapter.linear_in.weight
+[default0]:	module.decoder.layers.4.layer.mlp.linear_fc1.adapter.linear_out.weight
+[default0]:	module.decoder.layers.23.layer.mlp.linear_fc1.adapter.linear_out.weight
+[default0]:	module.decoder.layers.22.layer.self_attention.linear_qkv.adapter.linear_in.weight
+[default0]:	module.decoder.layers.21.layer.self_attention.linear_qkv.adapter.linear_in.weight
+[default0]:	module.decoder.layers.17.layer.self_attention.linear_qkv.adapter.linear_in.weight
+[default0]:	module.decoder.layers.15.layer.mlp.linear_fc2.adapter.linear_in.weight
+[default0]:	module.decoder.layers.14.layer.mlp.linear_fc2.adapter.linear_in.weight
+[default0]:	module.decoder.layers.13.layer.mlp.linear_fc2.adapter.linear_in.weight
+[default0]:	module.decoder.layers.12.layer.mlp.linear_fc2.adapter.linear_in.weight
+[default0]:	module.decoder.layers.11.layer.mlp.linear_fc2.adapter.linear_in.weight
+[default0]:	module.decoder.layers.10.layer.mlp.linear_fc2.adapter.linear_in.weight
+[default0]:	module.decoder.layers.24.layer.self_attention.linear_proj.adapter.linear_out.weight
+[default0]:	module.decoder.layers.22.layer.mlp.linear_fc1.adapter.linear_out.weight
+[default0]:	module.decoder.layers.31.layer.mlp.linear_fc1.adapter.linear_in.weight
+[default0]:	module.decoder.layers.26.layer.self_attention.linear_proj.adapter.linear_out.weight
+[default0]:	module.decoder.layers.25.layer.self_attention.linear_proj.adapter.linear_out.weight
+[default0]:	module.decoder.layers.21.layer.mlp.linear_fc1.adapter.linear_out.weight
+[default0]:	module.decoder.layers.15.layer.self_attention.linear_qkv.adapter.linear_in.weight
+[default0]:	module.decoder.layers.14.layer.self_attention.linear_qkv.adapter.linear_in.weight
+[default0]:	module.decoder.layers.13.layer.self_attention.linear_qkv.adapter.linear_in.weight
+[default0]:	module.decoder.layers.12.layer.self_attention.linear_qkv.adapter.linear_in.weight
+[default0]:	module.decoder.layers.5.layer.mlp.linear_fc1.adapter.linear_in.weight
+[default0]:	module.decoder.layers.2.layer.mlp.linear_fc1.adapter.linear_out.weight
+[default0]:	module.decoder.layers.29.layer.mlp.linear_fc1.adapter.linear_in.weight
+[default0]:	module.decoder.layers.28.layer.mlp.linear_fc1.adapter.linear_in.weight
+[default0]:	module.decoder.layers.27.layer.mlp.linear_fc1.adapter.linear_in.weight
+[default0]:	module.decoder.layers.20.layer.self_attention.linear_proj.adapter.linear_in.weight
+[default0]:	module.decoder.layers.19.layer.self_attention.linear_proj.adapter.linear_in.weight
+[default0]:	module.decoder.layers.18.layer.self_attention.linear_proj.adapter.linear_in.weight
+[default0]:	module.decoder.layers.15.layer.mlp.linear_fc1.adapter.linear_out.weight
+[default0]:	module.decoder.layers.14.layer.mlp.linear_fc1.adapter.linear_out.weight
+[default0]:	module.decoder.layers.13.layer.mlp.linear_fc1.adapter.linear_out.weight
+[default0]:	module.decoder.layers.12.layer.mlp.linear_fc1.adapter.linear_out.weight
+[default0]:	module.decoder.layers.30.layer.self_attention.linear_qkv.adapter.linear_out.weight
+[default0]:	module.decoder.layers.25.layer.mlp.linear_fc2.adapter.linear_out.weight
+[default0]:	module.decoder.layers.24.layer.mlp.linear_fc2.adapter.linear_out.weight
+[default0]:	module.decoder.layers.23.layer.mlp.linear_fc2.adapter.linear_out.weight
+[default0]:	module.decoder.layers.16.layer.self_attention.linear_proj.adapter.linear_out.weight
+[default0]:	module.decoder.layers.3.layer.self_attention.linear_qkv.adapter.linear_in.weight
+[default0]:	module.decoder.layers.2.layer.self_attention.linear_qkv.adapter.linear_in.weight
+[default0]:	module.decoder.layers.19.layer.mlp.linear_fc2.adapter.linear_in.weight
+[default0]:	module.decoder.layers.18.layer.mlp.linear_fc2.adapter.linear_in.weight
+[default0]:	module.decoder.layers.17.layer.mlp.linear_fc2.adapter.linear_in.weight
+[default0]:	module.decoder.layers.10.layer.self_attention.linear_proj.adapter.linear_out.weight
+[default0]:	module.decoder.layers.11.layer.mlp.linear_fc1.adapter.linear_out.weight
+[default0]:	module.decoder.layers.9.layer.self_attention.linear_proj.adapter.linear_in.weight
+[default0]:	module.decoder.layers.8.layer.self_attention.linear_proj.adapter.linear_in.weight
+[default0]:	module.decoder.layers.7.layer.self_attention.linear_proj.adapter.linear_in.weight
+[default0]:	module.decoder.layers.6.layer.self_attention.linear_proj.adapter.linear_in.weight
+[default0]:	module.decoder.layers.5.layer.self_attention.linear_proj.adapter.linear_in.weight
+[default0]:	module.decoder.layers.20.layer.self_attention.linear_qkv.adapter.linear_in.weight
+[default0]:	module.decoder.layers.19.layer.self_attention.linear_qkv.adapter.linear_in.weight
+[default0]:	module.decoder.layers.18.layer.self_attention.linear_qkv.adapter.linear_in.weight
+[default0]:	module.decoder.layers.1.layer.self_attention.linear_proj.adapter.linear_in.weight
+[default0]:	module.decoder.layers.1.layer.mlp.linear_fc2.adapter.linear_out.weight
+[default0]:	module.decoder.layers.30.layer.mlp.linear_fc1.adapter.linear_in.weight
+[default0]:	module.decoder.layers.20.layer.mlp.linear_fc1.adapter.linear_out.weight
+[default0]:	module.decoder.layers.19.layer.mlp.linear_fc1.adapter.linear_out.weight
+[default0]:	module.decoder.layers.18.layer.mlp.linear_fc1.adapter.linear_out.weight
+[default0]:	module.decoder.layers.17.layer.mlp.linear_fc1.adapter.linear_out.weight
+[default0]:	module.decoder.layers.9.layer.mlp.linear_fc2.adapter.linear_in.weight
+[default0]:	module.decoder.layers.8.layer.mlp.linear_fc2.adapter.linear_in.weight
+[default0]:	module.decoder.layers.7.layer.mlp.linear_fc2.adapter.linear_in.weight
+[default0]:	module.decoder.layers.6.layer.mlp.linear_fc2.adapter.linear_in.weight
+[default0]:	module.decoder.layers.5.layer.mlp.linear_fc2.adapter.linear_in.weight
+[default0]:	module.decoder.layers.3.layer.mlp.linear_fc1.adapter.linear_out.weight
+[default0]:	module.decoder.layers.23.layer.self_attention.linear_proj.adapter.linear_out.weight
+[default0]:	module.decoder.layers.22.layer.self_attention.linear_proj.adapter.linear_out.weight
+[default0]:	module.decoder.layers.21.layer.self_attention.linear_proj.adapter.linear_out.weight
+[default0]:	module.decoder.layers.17.layer.self_attention.linear_proj.adapter.linear_out.weight
+[default0]:	module.decoder.layers.16.layer.mlp.linear_fc2.adapter.linear_out.weight
+[default0]:	module.decoder.layers.10.layer.mlp.linear_fc1.adapter.linear_out.weight
+[default0]:	module.decoder.layers.9.layer.self_attention.linear_qkv.adapter.linear_in.weight
+[default0]:	module.decoder.layers.8.layer.self_attention.linear_qkv.adapter.linear_in.weight
+[default0]:	module.decoder.layers.7.layer.self_attention.linear_qkv.adapter.linear_in.weight
+[default0]:	module.decoder.layers.6.layer.self_attention.linear_qkv.adapter.linear_in.weight
+[default0]:	module.decoder.layers.0.layer.mlp.linear_fc2.adapter.linear_in.weight
+[default0]:	module.decoder.layers.15.layer.self_attention.linear_proj.adapter.linear_out.weight
+[default0]:	module.decoder.layers.14.layer.self_attention.linear_proj.adapter.linear_out.weight
+[default0]:	module.decoder.layers.13.layer.self_attention.linear_proj.adapter.linear_out.weight
+[default0]:	module.decoder.layers.12.layer.self_attention.linear_proj.adapter.linear_out.weight
+[default0]:	module.decoder.layers.11.layer.self_attention.linear_proj.adapter.linear_out.weight
+[default0]:	module.decoder.layers.9.layer.mlp.linear_fc1.adapter.linear_out.weight
+[default0]:	module.decoder.layers.8.layer.mlp.linear_fc1.adapter.linear_out.weight
+[default0]:	module.decoder.layers.7.layer.mlp.linear_fc1.adapter.linear_out.weight
+[default0]:	module.decoder.layers.6.layer.mlp.linear_fc1.adapter.linear_out.weight
+[default0]:	module.decoder.layers.5.layer.mlp.linear_fc1.adapter.linear_out.weight
+[default0]:	module.decoder.layers.4.layer.mlp.linear_fc2.adapter.linear_out.weight
+[default0]:	module.decoder.layers.25.layer.self_attention.linear_qkv.adapter.linear_out.weight
+[default0]:	module.decoder.layers.24.layer.self_attention.linear_qkv.adapter.linear_out.weight
+[default0]:	module.decoder.layers.22.layer.mlp.linear_fc2.adapter.linear_out.weight
+[default0]:	module.decoder.layers.26.layer.self_attention.linear_qkv.adapter.linear_out.weight
+[default0]:	module.decoder.layers.21.layer.mlp.linear_fc2.adapter.linear_out.weight
+[default0]:	module.decoder.layers.20.layer.mlp.linear_fc2.adapter.linear_out.weight
+[default0]:	module.decoder.layers.1.layer.mlp.linear_fc1.adapter.linear_out.weight
+[default0]:	module.decoder.layers.0.layer.mlp.linear_fc1.adapter.linear_out.weight
+[default0]:	module.decoder.layers.15.layer.mlp.linear_fc2.adapter.linear_out.weight
+[default0]:	module.decoder.layers.14.layer.mlp.linear_fc2.adapter.linear_out.weight
+[default0]:	module.decoder.layers.13.layer.mlp.linear_fc2.adapter.linear_out.weight
+[default0]:	module.decoder.layers.12.layer.mlp.linear_fc2.adapter.linear_out.weight
+[default0]:	module.decoder.layers.11.layer.mlp.linear_fc2.adapter.linear_out.weight
+[default0]:	module.decoder.layers.10.layer.mlp.linear_fc2.adapter.linear_out.weight
+[default0]:	module.decoder.layers.3.layer.self_attention.linear_proj.adapter.linear_out.weight
+[default0]:	module.decoder.layers.2.layer.self_attention.linear_proj.adapter.linear_out.weight
+[default0]:	module.decoder.layers.2.layer.self_attention.linear_proj.adapter.linear_in.weight
+[default0]:	module.decoder.layers.2.layer.mlp.linear_fc2.adapter.linear_out.weight
+[default0]:	module.decoder.layers.16.layer.self_attention.linear_qkv.adapter.linear_out.weight
+[default0]:	module.decoder.layers.31.layer.self_attention.linear_proj.adapter.linear_in.weight
+[default0]:	module.decoder.layers.29.layer.mlp.linear_fc2.adapter.linear_in.weight
+[default0]:	module.decoder.layers.26.layer.mlp.linear_fc1.adapter.linear_in.weight
+[default0]:	module.decoder.layers.25.layer.mlp.linear_fc1.adapter.linear_in.weight
+[default0]:	module.decoder.layers.24.layer.mlp.linear_fc1.adapter.linear_in.weight
+[default0]:	module.decoder.layers.20.layer.self_attention.linear_proj.adapter.linear_out.weight
+[default0]:	module.decoder.layers.19.layer.self_attention.linear_proj.adapter.linear_out.weight
+[default0]:	module.decoder.layers.18.layer.self_attention.linear_proj.adapter.linear_out.weight
+[default0]:	module.decoder.layers.10.layer.self_attention.linear_qkv.adapter.linear_out.weight
+[default0]:	module.decoder.layers.3.layer.mlp.linear_fc2.adapter.linear_out.weight
+[default0]:	module.decoder.layers.29.layer.self_attention.linear_proj.adapter.linear_in.weight
+[default0]:	module.decoder.layers.28.layer.self_attention.linear_proj.adapter.linear_in.weight
+[default0]:	module.decoder.layers.0.layer.self_attention.linear_qkv.adapter.linear_in.weight
+[default0]:	module.decoder.layers.5.layer.mlp.linear_fc2.adapter.linear_out.weight
+[default0]:	module.decoder.layers.31.layer.mlp.linear_fc2.adapter.linear_in.weight
+[default0]:	module.decoder.layers.19.layer.mlp.linear_fc2.adapter.linear_out.weight
+[default0]:	module.decoder.layers.18.layer.mlp.linear_fc2.adapter.linear_out.weight
+[default0]:	module.decoder.layers.17.layer.mlp.linear_fc2.adapter.linear_out.weight
+[default0]:	module.decoder.layers.16.layer.mlp.linear_fc1.adapter.linear_in.weight
+[default0]:	module.decoder.layers.9.layer.self_attention.linear_proj.adapter.linear_out.weight
+[default0]:	module.decoder.layers.8.layer.self_attention.linear_proj.adapter.linear_out.weight
+[default0]:	module.decoder.layers.7.layer.self_attention.linear_proj.adapter.linear_out.weight
+[default0]:	module.decoder.layers.6.layer.self_attention.linear_proj.adapter.linear_out.weight
+[default0]:	module.decoder.layers.5.layer.self_attention.linear_proj.adapter.linear_out.weight
+[default0]:	module.decoder.layers.1.layer.self_attention.linear_qkv.adapter.linear_in.weight
+[default0]:	module.decoder.layers.31.layer.self_attention.linear_qkv.adapter.linear_in.weight
+[default0]:	module.decoder.layers.28.layer.mlp.linear_fc2.adapter.linear_in.weight
+[default0]:	module.decoder.layers.27.layer.mlp.linear_fc2.adapter.linear_in.weight
+[default0]:	module.decoder.layers.22.layer.self_attention.linear_qkv.adapter.linear_out.weight
+[default0]:	module.decoder.layers.21.layer.self_attention.linear_qkv.adapter.linear_out.weight
+[default0]:	module.decoder.layers.3.layer.self_attention.linear_proj.adapter.linear_in.weight
+[default0]:	module.decoder.layers.1.layer.self_attention.linear_proj.adapter.linear_out.weight
+[default0]:	module.decoder.layers.0.layer.self_attention.linear_proj.adapter.linear_out.weight
+[default0]:	module.decoder.layers.31.layer.mlp.linear_fc1.adapter.linear_out.weight
+[default0]:	module.decoder.layers.29.layer.self_attention.linear_qkv.adapter.linear_in.weight
+[default0]:	module.decoder.layers.28.layer.self_attention.linear_qkv.adapter.linear_in.weight
+[default0]:	module.decoder.layers.27.layer.self_attention.linear_qkv.adapter.linear_in.weight
+[default0]:	module.decoder.layers.15.layer.self_attention.linear_qkv.adapter.linear_out.weight
+[default0]:	module.decoder.layers.14.layer.self_attention.linear_qkv.adapter.linear_out.weight
+[default0]:	module.decoder.layers.13.layer.self_attention.linear_qkv.adapter.linear_out.weight
+[default0]:	module.decoder.layers.12.layer.self_attention.linear_qkv.adapter.linear_out.weight
+[default0]:	module.decoder.layers.11.layer.self_attention.linear_qkv.adapter.linear_out.weight
+[default0]:	module.decoder.layers.9.layer.mlp.linear_fc2.adapter.linear_out.weight
+[default0]:	module.decoder.layers.30.layer.self_attention.linear_proj.adapter.linear_in.weight
+[default0]:	module.decoder.layers.29.layer.mlp.linear_fc1.adapter.linear_out.weight
+[default0]:	module.decoder.layers.28.layer.mlp.linear_fc1.adapter.linear_out.weight
+[default0]:	module.decoder.layers.27.layer.mlp.linear_fc1.adapter.linear_out.weight
+[default0]:	module.decoder.layers.23.layer.mlp.linear_fc1.adapter.linear_in.weight
+[default0]:	module.decoder.layers.4.layer.self_attention.linear_proj.adapter.linear_out.weight
+[default0]:	module.decoder.layers.0.layer.mlp.linear_fc2.adapter.linear_out.weight
+[default0]:	module.decoder.layers.27.layer.self_attention.linear_proj.adapter.linear_in.weight
+[default0]:	module.decoder.layers.22.layer.mlp.linear_fc1.adapter.linear_in.weight
+[default0]:	module.decoder.layers.21.layer.mlp.linear_fc1.adapter.linear_in.weight
+[default0]:	module.decoder.layers.3.layer.self_attention.linear_qkv.adapter.linear_out.weight
+[default0]:	module.decoder.layers.2.layer.self_attention.linear_qkv.adapter.linear_out.weight
+[default0]:	module.decoder.layers.0.layer.self_attention.linear_proj.adapter.linear_in.weight
+[default0]:	module.decoder.layers.6.layer.mlp.linear_fc2.adapter.linear_out.weight
+[default0]:	module.decoder.layers.30.layer.mlp.linear_fc2.adapter.linear_in.weight
+[default0]:	module.decoder.layers.15.layer.mlp.linear_fc1.adapter.linear_in.weight
+[default0]:	module.decoder.layers.14.layer.mlp.linear_fc1.adapter.linear_in.weight
+[default0]:	module.decoder.layers.13.layer.mlp.linear_fc1.adapter.linear_in.weight
+[default0]:	module.decoder.layers.12.layer.mlp.linear_fc1.adapter.linear_in.weight
+[default0]:	module.decoder.layers.11.layer.mlp.linear_fc1.adapter.linear_in.weight
+[default0]:	module.decoder.layers.1.layer.mlp.linear_fc2.adapter.linear_in.weight
+[default0]:	module.decoder.layers.30.layer.self_attention.linear_qkv.adapter.linear_in.weight
+[default0]:	module.decoder.layers.26.layer.mlp.linear_fc2.adapter.linear_in.weight
+[default0]:	module.decoder.layers.20.layer.self_attention.linear_qkv.adapter.linear_out.weight
+[default0]:	module.decoder.layers.19.layer.self_attention.linear_qkv.adapter.linear_out.weight
+[default0]:	module.decoder.layers.18.layer.self_attention.linear_qkv.adapter.linear_out.weight
+[default0]:	module.decoder.layers.17.layer.self_attention.linear_qkv.adapter.linear_out.weight
+[default0]:	module.decoder.layers.4.layer.mlp.linear_fc1.adapter.linear_in.weight
+[default0]:	module.decoder.layers.0.layer.self_attention.linear_qkv.adapter.linear_out.weight
+[default0]:	module.decoder.layers.30.layer.mlp.linear_fc1.adapter.linear_out.weight
+[default0]:	module.decoder.layers.3.layer.mlp.linear_fc1.adapter.linear_in.weight
+[default0]:	module.decoder.layers.2.layer.mlp.linear_fc1.adapter.linear_in.weight
+[default0]:	module.decoder.layers.31.layer.self_attention.linear_proj.adapter.linear_out.weight
+[default0]:	module.decoder.layers.23.layer.self_attention.linear_qkv.adapter.linear_in.weight
+[default0]:	module.decoder.layers.16.layer.mlp.linear_fc2.adapter.linear_in.weight
+[default0]:	module.decoder.layers.9.layer.self_attention.linear_qkv.adapter.linear_out.weight
+[default0]:	module.decoder.layers.8.layer.self_attention.linear_qkv.adapter.linear_out.weight
+[default0]:	module.decoder.layers.7.layer.self_attention.linear_qkv.adapter.linear_out.weight
+[default0]:	module.decoder.layers.6.layer.self_attention.linear_qkv.adapter.linear_out.weight
+[default0]:	module.decoder.layers.5.layer.self_attention.linear_qkv.adapter.linear_out.weight
+[default0]:	module.decoder.layers.4.layer.mlp.linear_fc2.adapter.linear_in.weight
+[default0]:	module.decoder.layers.4.layer.self_attention.linear_qkv.adapter.linear_out.weight
+[default0]:	module.decoder.layers.29.layer.self_attention.linear_proj.adapter.linear_out.weight
+[default0]:	module.decoder.layers.28.layer.self_attention.linear_proj.adapter.linear_out.weight
+[default0]:	module.decoder.layers.26.layer.self_attention.linear_proj.adapter.linear_in.weight
+[default0]:	module.decoder.layers.25.layer.self_attention.linear_proj.adapter.linear_in.weight
+[default0]:	module.decoder.layers.24.layer.self_attention.linear_proj.adapter.linear_in.weight
+[default0]:	module.decoder.layers.20.layer.mlp.linear_fc1.adapter.linear_in.weight
+[default0]:	module.decoder.layers.19.layer.mlp.linear_fc1.adapter.linear_in.weight
+[default0]:	module.decoder.layers.18.layer.mlp.linear_fc1.adapter.linear_in.weight
+[default0]:	module.decoder.layers.17.layer.mlp.linear_fc1.adapter.linear_in.weight
+[default0]:	module.decoder.layers.1.layer.self_attention.linear_qkv.adapter.linear_out.weight
+[default0]:	module.decoder.layers.7.layer.mlp.linear_fc2.adapter.linear_out.weight
+[default0]:	module.decoder.layers.31.layer.mlp.linear_fc2.adapter.linear_out.weight
+[default0]:	module.decoder.layers.10.layer.mlp.linear_fc1.adapter.linear_in.weight
+[default0]:	module.decoder.layers.2.layer.mlp.linear_fc2.adapter.linear_in.weight
+[default0]:	module.decoder.layers.4.layer.self_attention.linear_qkv.adapter.linear_in.weight
+[default0]:	module.decoder.layers.4.layer.self_attention.linear_proj.adapter.linear_in.weight
+[default0]:	module.decoder.layers.23.layer.mlp.linear_fc2.adapter.linear_in.weight
+[default0]:	module.decoder.layers.28.layer.mlp.linear_fc2.adapter.linear_out.weight
+[default0]:	module.decoder.layers.27.layer.mlp.linear_fc2.adapter.linear_out.weight
+[default0]:	module.decoder.layers.25.layer.mlp.linear_fc2.adapter.linear_in.weight
+[default0]:	module.decoder.layers.24.layer.mlp.linear_fc2.adapter.linear_in.weight
+[default0]:	module.decoder.layers.16.layer.self_attention.linear_proj.adapter.linear_in.weight
+[default0]:	module.decoder.layers.9.layer.mlp.linear_fc1.adapter.linear_in.weight
+[default0]:	module.decoder.layers.8.layer.mlp.linear_fc1.adapter.linear_in.weight
+[default0]:	module.decoder.layers.7.layer.mlp.linear_fc1.adapter.linear_in.weight
+[default0]:	module.decoder.layers.6.layer.mlp.linear_fc1.adapter.linear_in.weight
+[default0]:	module.decoder.layers.26.layer.self_attention.linear_qkv.adapter.linear_in.weight
+[default0]:	module.decoder.layers.25.layer.self_attention.linear_qkv.adapter.linear_in.weight
+[default0]:	module.decoder.layers.24.layer.self_attention.linear_qkv.adapter.linear_in.weight
+[default0]:	module.decoder.layers.10.layer.self_attention.linear_proj.adapter.linear_in.weight
+[default0]:	module.decoder.layers.1.layer.mlp.linear_fc1.adapter.linear_in.weight
+[default0]:	module.decoder.layers.0.layer.mlp.linear_fc1.adapter.linear_in.weight
+[default0]:INFO:megatron.core.optimizer:Setting up optimizer with config AdamOptimizerConfig(lr=0.0002, min_lr=2e-05, weight_decay=0.1, fp8_recipe='delayed', fp16=False, bf16=True, reuse_grad_buf_for_mxfp8_param_ag=False, params_dtype=torch.bfloat16, use_precision_aware_optimizer=False, store_param_remainders=True, main_grads_dtype=torch.float32, main_params_dtype=torch.float32, exp_avg_dtype=torch.float32, exp_avg_sq_dtype=torch.float32, optimizer='adam', loss_scale=None, initial_loss_scale=4294967296, min_loss_scale=1.0, loss_scale_window=1000, hysteresis=2, adam_beta1=0.9, adam_beta2=0.95, adam_eps=1e-08, decoupled_weight_decay=True, sgd_momentum=0.9, use_distributed_optimizer=False, overlap_param_gather=False, overlap_param_gather_with_optimizer_step=False, optimizer_cpu_offload=False, optimizer_offload_fraction=1.0, use_torch_optimizer_for_cpu_offload=False, overlap_cpu_optimizer_d2h_h2d=False, pin_cpu_grads=True, pin_cpu_params=True, clip_grad=1.0, log_num_zeros_in_grad=False, barrier_with_L1_time=True, timers=<megatron.core.timers.Timers object at 0x14dc83e09780>, config_logger_dir='', vision_ration=1.0)
+[default0]:INFO:megatron.plugin.decorators:Registered override method: OptimizerParamScheduler.get_lr
+[default0]:INFO:megatron.core.optimizer_param_scheduler:> learning rate decay style: cosine
+[default0]:WARNING: could not find the metadata file /root/.config/superpowers/worktrees/memrift-flagscale/memrift-split-copy-benchmark/outputs/end2end_copy_te_gems_skipfused/run/checkpoints/latest_checkpointed_iteration.txt
+[default0]:    will not load any checkpoints and will start from random
+[default0]:INFO:megatron.core.timers:(min, max) time across ranks (ms):
+[default0]:    load-checkpoint ................................: (5.85, 5.85)
+[default0]:[after model, optimizer, and learning rate scheduler are built] datetime: 2026-06-06 09:27:16 
+[default0]:> building train, validation, and test datasets ...
+[default0]: > datasets target sizes (minimum size):
+[default0]:    train:      8
+[default0]:    validation: 800
+[default0]:    test:       800
+[default0]:INFO:megatron.core.datasets.blended_megatron_dataset_config:Let mock = True, as both blend and blend_per_split are None
+[default0]:INFO:megatron.core.datasets.blended_megatron_dataset_config:Let split = 1,1,1, an arbitrarily even split, as mock is True
+[default0]:INFO:megatron.core.datasets.blended_megatron_dataset_config:Let split_matrix = [(0, 0.3333333333333333), (0.3333333333333333, 0.6666666666666666), (0.6666666666666666, 1.0)]
+[default0]:> building train, validation, and test datasets for GPT ...
+[default0]:INFO:megatron.core.datasets.blended_megatron_dataset_builder:Building MockGPTDataset splits with sizes=(8, 800, 800) and config=GPTDatasetConfig(random_seed=1234, sequence_length=2048, blend=None, blend_per_split=None, multiple_validation_sets=False, full_validation=False, split='1,1,1', split_matrix=[(0, 0.3333333333333333), (0.3333333333333333, 0.6666666666666666), (0.6666666666666666, 1.0)], num_dataset_builder_threads=1, path_to_cache=None, mmap_bin_files=True, mock=True, tokenizer=<megatron.core.tokenizers.text.models.default_tokenizer.DefaultTokenizerText object at 0x14dc24115ed0>, mid_level_dataset_surplus=0.005, allow_ambiguous_pad_tokens=False, reset_position_ids=False, reset_attention_mask=False, eod_mask_loss=False, create_attention_mask=True, drop_last_partial_validation_sequence=True, add_extra_token_to_sequence=True, object_storage_cache_path=None)
+[default0]:INFO:megatron.core.datasets.gpt_dataset:Build and save the MockGPTDataset train indices
+[default0]:WARNING:megatron.core.datasets.gpt_dataset:Unable to save MockGPTDataset indexes because path_to_cache is None
+[default0]:INFO:megatron.core.datasets.gpt_dataset:> total number of samples: 33296
+[default0]:INFO:megatron.core.datasets.gpt_dataset:> total number of epochs: 1
+[default0]:INFO:megatron.core.datasets.gpt_dataset:Build and save the MockGPTDataset valid indices
+[default0]:WARNING:megatron.core.datasets.gpt_dataset:Unable to save MockGPTDataset indexes because path_to_cache is None
+[default0]:INFO:megatron.core.datasets.gpt_dataset:> total number of samples: 33281
+[default0]:INFO:megatron.core.datasets.gpt_dataset:> total number of epochs: 1
+[default0]:INFO:megatron.core.datasets.gpt_dataset:Build and save the MockGPTDataset test indices
+[default0]:WARNING:megatron.core.datasets.gpt_dataset:Unable to save MockGPTDataset indexes because path_to_cache is None
+[default0]:INFO:megatron.core.datasets.gpt_dataset:> total number of samples: 33343
+[default0]:INFO:megatron.core.datasets.gpt_dataset:> total number of epochs: 1
+[default0]:> finished creating GPT datasets ...
+[default0]:/opt/conda/lib/python3.10/site-packages/torch/nn/functional.py:1422: UserWarning: Unsupported unwinding pattern: Address not in range (Triggered internally at /workspace/framework/mcPytorch/torch/csrc/profiler/unwind/unwind.cpp:219.)
+[default0]:  _VF.dropout_(input, p, training) if inplace else _VF.dropout(input, p, training)
+[default0]:[after dataloaders are built] datetime: 2026-06-06 09:27:18 
+[default0]:done with setup ...
+[default0]:INFO:megatron.core.timers:(min, max) time across ranks (ms):
+[default0]:    model-and-optimizer-setup ......................: (20398.22, 20398.22)
+[default0]:    train/valid/test-data-iterators-setup ..........: (1513.17, 1513.17)
+[default0]:training ...
+[default0]:Overwriting rerun_state_machine.current_iteration from -1 to 0...
+[default0]:[before the start of training step] datetime: 2026-06-06 09:27:18 
+[default0]:[2026-06-06 09:27:18,696 TE-FL manager.py:439 INFO] Op 'rmsnorm_fwd' using 'vendor.metax' (kind=vendor, vendor=METAX)
+[default0]:[2026-06-06 09:27:19,598 TE-FL manager.py:439 INFO] Op 'generic_gemm' using 'vendor.metax' (kind=vendor, vendor=METAX)
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.452ms wait=0.103ms cuda_event=0.617ms numpy=0.102ms zstd=1.064ms
+[default0]:[2026-06-06 09:27:19,613 TE-FL manager.py:439 INFO] Op 'fused_rope_forward' using 'vendor.metax' (kind=vendor, vendor=METAX)
+[default0]:Warning: FP16/BF16 fused attention is supported by cuDNN 8.9.0+. Please upgrade your cuDNN version if possible.
+[default0]:[2026-06-06 09:27:19,669 TE-FL manager.py:439 INFO] Op 'get_attention_backend' using 'vendor.metax' (kind=vendor, vendor=METAX)
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.175ms wait=0.087ms cuda_event=0.146ms numpy=0.048ms zstd=8.367ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.780ms wait=0.107ms cuda_event=1.161ms numpy=0.103ms zstd=78.903ms[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.843ms wait=0.117ms cuda_event=1.226ms numpy=0.098ms zstd=77.461ms
+[default0]:
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.972ms wait=0.738ms cuda_event=1.323ms numpy=0.021ms zstd=106.754ms[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.763ms wait=0.119ms cuda_event=0.850ms numpy=0.061ms zstd=105.961ms
+[default0]:
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.055ms wait=1.661ms cuda_event=0.075ms numpy=0.110ms zstd=0.855ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.106ms wait=2.523ms cuda_event=0.395ms numpy=0.043ms zstd=108.932ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.163ms wait=0.013ms cuda_event=0.137ms numpy=0.021ms zstd=1.668ms[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 28672]) dtype=torch.bfloat16 numel=58720256 submit=7.393ms wait=1.919ms cuda_event=9.529ms numpy=0.117ms zstd=1392.523ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 14336]) dtype=torch.bfloat16 numel=29360128 submit=4.147ms wait=0.023ms cuda_event=5.244ms numpy=0.066ms zstd=1372.308ms
+[default0]:
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.282ms wait=0.165ms cuda_event=0.264ms numpy=0.077ms zstd=1.273ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.293ms wait=0.369ms cuda_event=0.298ms numpy=0.317ms zstd=1.738ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.526ms wait=0.052ms cuda_event=0.552ms numpy=0.046ms zstd=113.955ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.060ms wait=5.372ms cuda_event=0.168ms numpy=0.070ms zstd=0.854ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.100ms wait=0.111ms cuda_event=0.102ms numpy=0.143ms zstd=1.249ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=1.271ms wait=0.202ms cuda_event=1.585ms numpy=0.130ms zstd=86.981ms[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.479ms wait=1.801ms cuda_event=0.784ms numpy=0.035ms zstd=87.400ms
+[default0]:
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.116ms wait=0.204ms cuda_event=0.104ms numpy=0.015ms zstd=0.611ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.282ms wait=0.489ms cuda_event=0.404ms numpy=0.115ms zstd=111.874ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.127ms wait=0.321ms cuda_event=0.357ms numpy=0.041ms zstd=115.119ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.070ms wait=5.084ms cuda_event=1.706ms numpy=0.023ms zstd=105.556ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.537ms wait=0.007ms cuda_event=0.403ms numpy=0.026ms zstd=0.272ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=1.116ms wait=0.009ms cuda_event=1.194ms numpy=0.058ms zstd=38.540ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.087ms wait=0.008ms cuda_event=0.048ms numpy=0.026ms zstd=0.333ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=1.449ms wait=0.008ms cuda_event=0.838ms numpy=0.080ms zstd=69.362ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=1.013ms wait=0.008ms cuda_event=1.109ms numpy=0.010ms zstd=70.791ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.483ms wait=0.007ms cuda_event=0.488ms numpy=0.014ms zstd=0.331ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=1.387ms wait=0.012ms cuda_event=1.466ms numpy=0.014ms zstd=54.802ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=1.149ms wait=0.014ms cuda_event=1.577ms numpy=0.028ms zstd=121.621ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.066ms wait=0.004ms cuda_event=0.376ms numpy=0.007ms zstd=82.941ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.165ms wait=0.015ms cuda_event=0.065ms numpy=0.030ms zstd=0.314ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.103ms wait=1.018ms cuda_event=0.391ms numpy=0.028ms zstd=50.618ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.182ms wait=1.561ms cuda_event=0.752ms numpy=0.051ms zstd=93.945ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.159ms wait=0.014ms cuda_event=0.133ms numpy=0.080ms zstd=0.277ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.899ms wait=0.006ms cuda_event=0.963ms numpy=0.019ms zstd=38.383ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.135ms wait=0.007ms cuda_event=0.112ms numpy=0.022ms zstd=0.293ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.100ms wait=0.605ms cuda_event=0.610ms numpy=0.012ms zstd=91.960ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.189ms wait=0.416ms cuda_event=0.572ms numpy=0.022ms zstd=101.117ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.148ms wait=0.010ms cuda_event=0.125ms numpy=0.014ms zstd=0.445ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 14336]) dtype=torch.bfloat16 numel=29360128 submit=0.778ms wait=0.009ms cuda_event=1.382ms numpy=0.018ms zstd=349.381ms[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.557ms wait=0.004ms cuda_event=0.406ms numpy=0.007ms zstd=68.992ms
+[default0]:
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.133ms wait=0.016ms cuda_event=0.057ms numpy=0.052ms zstd=0.364ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.130ms wait=1.346ms cuda_event=0.507ms numpy=0.083ms zstd=73.785ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.123ms wait=0.021ms cuda_event=0.454ms numpy=0.086ms zstd=65.152ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.114ms wait=0.011ms cuda_event=0.472ms numpy=0.011ms zstd=72.374ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.195ms wait=0.011ms cuda_event=0.187ms numpy=0.010ms zstd=0.297ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 14336]) dtype=torch.bfloat16 numel=29360128 submit=3.736ms wait=0.015ms cuda_event=5.046ms numpy=0.083ms zstd=302.788ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.124ms wait=0.014ms cuda_event=0.108ms numpy=0.076ms zstd=0.299ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.346ms wait=0.011ms cuda_event=0.527ms numpy=0.055ms zstd=36.566ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.671ms wait=0.017ms cuda_event=0.493ms numpy=0.039ms zstd=51.684ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.148ms wait=0.019ms cuda_event=0.130ms numpy=0.057ms zstd=0.337ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.179ms wait=0.005ms cuda_event=0.443ms numpy=0.009ms zstd=84.712ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.136ms wait=0.019ms cuda_event=0.107ms numpy=0.087ms zstd=0.509ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.138ms wait=0.562ms cuda_event=0.453ms numpy=0.013ms zstd=74.212ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 28672]) dtype=torch.bfloat16 numel=58720256 submit=0.555ms wait=0.004ms cuda_event=3.021ms numpy=0.008ms zstd=458.705ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 28672]) dtype=torch.bfloat16 numel=58720256 submit=1.020ms wait=3.733ms cuda_event=2.676ms numpy=0.276ms zstd=584.416ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.183ms wait=0.004ms cuda_event=0.407ms numpy=0.009ms zstd=72.846ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.178ms wait=0.014ms cuda_event=0.136ms numpy=0.013ms zstd=1.109ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.332ms wait=0.007ms cuda_event=0.620ms numpy=0.016ms zstd=71.854ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.103ms wait=0.018ms cuda_event=0.069ms numpy=0.086ms zstd=0.315ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.713ms wait=0.013ms cuda_event=0.721ms numpy=0.055ms zstd=33.925ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 14336]) dtype=torch.bfloat16 numel=29360128 submit=5.415ms wait=0.005ms cuda_event=6.594ms numpy=0.012ms zstd=337.838ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.313ms wait=0.011ms cuda_event=0.288ms numpy=0.055ms zstd=0.291ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.134ms wait=0.017ms cuda_event=0.721ms numpy=0.068ms zstd=44.308ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.140ms wait=0.012ms cuda_event=0.112ms numpy=0.050ms zstd=0.309ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.183ms wait=0.006ms cuda_event=0.423ms numpy=0.010ms zstd=77.232ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.624ms wait=0.004ms cuda_event=0.403ms numpy=0.008ms zstd=62.905ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.133ms wait=0.004ms cuda_event=0.659ms numpy=0.007ms zstd=76.218ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 14336]) dtype=torch.bfloat16 numel=29360128 submit=0.640ms wait=0.015ms cuda_event=1.795ms numpy=0.058ms zstd=279.966ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.638ms wait=0.012ms cuda_event=0.826ms numpy=0.029ms zstd=33.218ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.655ms wait=0.021ms cuda_event=0.378ms numpy=0.084ms zstd=0.355ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.145ms wait=0.006ms cuda_event=0.115ms numpy=0.008ms zstd=0.263ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.449ms wait=0.015ms cuda_event=0.749ms numpy=0.014ms zstd=47.545ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.304ms wait=0.014ms cuda_event=0.419ms numpy=0.068ms zstd=77.216ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.152ms wait=0.018ms cuda_event=0.144ms numpy=0.064ms zstd=0.358ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.154ms wait=0.006ms cuda_event=0.658ms numpy=0.016ms zstd=75.990ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.106ms wait=0.013ms cuda_event=0.082ms numpy=0.027ms zstd=0.744ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.120ms wait=0.005ms cuda_event=0.396ms numpy=0.009ms zstd=79.284ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 28672]) dtype=torch.bfloat16 numel=58720256 submit=0.539ms wait=0.003ms cuda_event=2.756ms numpy=0.007ms zstd=561.293ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.165ms wait=0.004ms cuda_event=0.445ms numpy=0.008ms zstd=70.434ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.093ms wait=0.012ms cuda_event=0.431ms numpy=0.052ms zstd=49.880ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.097ms wait=0.018ms cuda_event=0.394ms numpy=0.059ms zstd=72.586ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.309ms wait=0.019ms cuda_event=0.293ms numpy=0.052ms zstd=0.235ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.129ms wait=0.005ms cuda_event=0.113ms numpy=0.007ms zstd=0.278ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 28672]) dtype=torch.bfloat16 numel=58720256 submit=0.623ms wait=0.004ms cuda_event=3.088ms numpy=0.007ms zstd=466.488ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.164ms wait=0.006ms cuda_event=0.394ms numpy=0.013ms zstd=31.065ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.232ms wait=0.007ms cuda_event=0.195ms numpy=0.019ms zstd=0.409ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 14336]) dtype=torch.bfloat16 numel=29360128 submit=0.612ms wait=0.005ms cuda_event=1.831ms numpy=0.017ms zstd=327.268ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.110ms wait=0.012ms cuda_event=0.056ms numpy=0.056ms zstd=0.454ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.522ms wait=0.008ms cuda_event=0.487ms numpy=0.026ms zstd=77.224ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.258ms wait=0.004ms cuda_event=0.682ms numpy=0.008ms zstd=75.799ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.136ms wait=0.003ms cuda_event=0.376ms numpy=0.008ms zstd=71.345ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.098ms wait=0.010ms cuda_event=0.423ms numpy=0.022ms zstd=49.237ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.149ms wait=0.007ms cuda_event=0.130ms numpy=0.019ms zstd=0.274ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.110ms wait=0.019ms cuda_event=0.359ms numpy=0.072ms zstd=70.462ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.121ms wait=0.016ms cuda_event=0.110ms numpy=0.082ms zstd=0.367ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=2.523ms wait=0.007ms cuda_event=2.270ms numpy=0.026ms zstd=36.343ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 14336]) dtype=torch.bfloat16 numel=29360128 submit=6.588ms wait=0.019ms cuda_event=13.149ms numpy=0.084ms zstd=338.833ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.119ms wait=0.015ms cuda_event=0.109ms numpy=0.083ms zstd=0.359ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.412ms wait=0.003ms cuda_event=0.420ms numpy=0.007ms zstd=79.818ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.104ms wait=0.007ms cuda_event=0.054ms numpy=0.020ms zstd=0.273ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.117ms wait=0.004ms cuda_event=0.475ms numpy=0.009ms zstd=79.424ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 28672]) dtype=torch.bfloat16 numel=58720256 submit=8.567ms wait=0.004ms cuda_event=10.615ms numpy=0.009ms zstd=553.220ms[default0]:
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 14336]) dtype=torch.bfloat16 numel=29360128 submit=0.877ms wait=0.015ms cuda_event=1.774ms numpy=0.083ms zstd=280.591ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.152ms wait=0.003ms cuda_event=0.607ms numpy=0.006ms zstd=75.743ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.141ms wait=0.009ms cuda_event=0.123ms numpy=0.027ms zstd=0.271ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.088ms wait=0.010ms cuda_event=0.461ms numpy=0.026ms zstd=28.710ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.158ms wait=0.009ms cuda_event=0.135ms numpy=0.019ms zstd=0.264ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.098ms wait=0.018ms cuda_event=0.392ms numpy=0.088ms zstd=47.950ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.092ms wait=0.019ms cuda_event=0.387ms numpy=0.081ms zstd=70.270ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.109ms wait=0.024ms cuda_event=0.051ms numpy=0.084ms zstd=0.342ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 28672]) dtype=torch.bfloat16 numel=58720256 submit=0.499ms wait=0.004ms cuda_event=3.244ms numpy=0.006ms zstd=525.173ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.120ms wait=0.018ms cuda_event=0.098ms numpy=0.087ms zstd=0.341ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=1.508ms wait=0.003ms cuda_event=1.096ms numpy=0.006ms zstd=68.710ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.139ms wait=0.010ms cuda_event=0.517ms numpy=0.009ms zstd=65.586ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.117ms wait=0.007ms cuda_event=0.429ms numpy=0.019ms zstd=62.789ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.137ms wait=0.004ms cuda_event=0.361ms numpy=0.007ms zstd=72.888ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.139ms wait=0.018ms cuda_event=0.118ms numpy=0.064ms zstd=0.966ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.114ms wait=0.015ms cuda_event=0.528ms numpy=0.080ms zstd=45.231ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.129ms wait=0.009ms cuda_event=0.104ms numpy=0.014ms zstd=0.678ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.632ms wait=0.011ms cuda_event=0.401ms numpy=0.027ms zstd=28.958ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 14336]) dtype=torch.bfloat16 numel=29360128 submit=0.629ms wait=0.009ms cuda_event=1.603ms numpy=0.026ms zstd=338.770ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.231ms wait=0.013ms cuda_event=0.055ms numpy=0.058ms zstd=0.400ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=1.513ms wait=0.010ms cuda_event=1.043ms numpy=0.011ms zstd=82.217ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.128ms wait=0.017ms cuda_event=0.049ms numpy=0.082ms zstd=0.333ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 28672]) dtype=torch.bfloat16 numel=58720256 submit=0.842ms wait=0.003ms cuda_event=3.542ms numpy=0.008ms zstd=544.885ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.130ms wait=0.005ms cuda_event=0.692ms numpy=0.008ms zstd=76.644ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.136ms wait=0.004ms cuda_event=0.396ms numpy=0.008ms zstd=72.476ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.138ms wait=0.013ms cuda_event=0.466ms numpy=0.053ms zstd=70.811ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.162ms wait=0.009ms cuda_event=0.127ms numpy=0.039ms zstd=0.275ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.106ms wait=0.013ms cuda_event=0.388ms numpy=0.025ms zstd=51.371ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.132ms wait=0.006ms cuda_event=0.045ms numpy=0.018ms zstd=0.325ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.107ms wait=0.020ms cuda_event=0.489ms numpy=0.072ms zstd=29.535ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 14336]) dtype=torch.bfloat16 numel=29360128 submit=0.377ms wait=0.016ms cuda_event=1.412ms numpy=0.054ms zstd=312.275ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.122ms wait=0.010ms cuda_event=0.046ms numpy=0.062ms zstd=0.380ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.113ms wait=0.003ms cuda_event=0.512ms numpy=0.008ms zstd=75.999ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.145ms wait=0.008ms cuda_event=0.109ms numpy=0.037ms zstd=0.284ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 28672]) dtype=torch.bfloat16 numel=58720256 submit=0.865ms wait=0.003ms cuda_event=3.164ms numpy=0.007ms zstd=551.768ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.176ms wait=0.004ms cuda_event=0.538ms numpy=0.008ms zstd=75.527ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 14336]) dtype=torch.bfloat16 numel=29360128 submit=0.791ms wait=0.006ms cuda_event=1.376ms numpy=0.011ms zstd=273.929ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.095ms wait=0.015ms cuda_event=0.389ms numpy=0.017ms zstd=48.499ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.164ms wait=0.017ms cuda_event=0.146ms numpy=0.084ms zstd=0.373ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.285ms wait=0.003ms cuda_event=0.473ms numpy=0.009ms zstd=74.277ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 28672]) dtype=torch.bfloat16 numel=58720256 submit=0.314ms wait=0.004ms cuda_event=2.533ms numpy=0.007ms zstd=456.699ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.137ms wait=0.012ms cuda_event=0.124ms numpy=0.026ms zstd=0.487ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.104ms wait=0.012ms cuda_event=0.417ms numpy=0.050ms zstd=29.734ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.180ms wait=0.010ms cuda_event=0.158ms numpy=0.027ms zstd=0.396ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.119ms wait=0.013ms cuda_event=0.427ms numpy=0.071ms zstd=71.400ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.124ms wait=0.018ms cuda_event=0.104ms numpy=0.061ms zstd=0.385ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=1.344ms wait=0.004ms cuda_event=1.109ms numpy=0.009ms zstd=77.762ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.113ms wait=0.005ms cuda_event=0.487ms numpy=0.008ms zstd=64.663ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.129ms wait=0.006ms cuda_event=0.398ms numpy=0.010ms zstd=72.098ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=1.098ms wait=0.015ms cuda_event=1.257ms numpy=0.028ms zstd=33.062ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.136ms wait=0.014ms cuda_event=0.121ms numpy=0.039ms zstd=0.321ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=1.385ms wait=0.007ms cuda_event=1.477ms numpy=0.019ms zstd=46.715ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.696ms wait=0.007ms cuda_event=0.673ms numpy=0.017ms zstd=0.261ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 28672]) dtype=torch.bfloat16 numel=58720256 submit=0.668ms wait=0.011ms cuda_event=3.428ms numpy=0.009ms zstd=455.580ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.113ms wait=0.012ms cuda_event=0.397ms numpy=0.065ms zstd=69.784ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.140ms wait=0.014ms cuda_event=0.058ms numpy=0.018ms zstd=0.591ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=1.238ms wait=0.008ms cuda_event=0.895ms numpy=0.008ms zstd=82.792ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.109ms wait=0.010ms cuda_event=0.062ms numpy=0.047ms zstd=0.315ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 14336]) dtype=torch.bfloat16 numel=29360128 submit=0.404ms wait=0.017ms cuda_event=1.322ms numpy=0.075ms zstd=339.712ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.142ms wait=0.007ms cuda_event=0.774ms numpy=0.010ms zstd=71.953ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.114ms wait=0.011ms cuda_event=0.433ms numpy=0.056ms zstd=49.476ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.518ms wait=0.004ms cuda_event=1.226ms numpy=0.008ms zstd=72.392ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.388ms wait=0.018ms cuda_event=0.364ms numpy=0.088ms zstd=0.265ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.227ms wait=0.019ms cuda_event=0.413ms numpy=0.090ms zstd=72.219ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.112ms wait=0.015ms cuda_event=0.050ms numpy=0.047ms zstd=1.417ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.136ms wait=0.019ms cuda_event=0.413ms numpy=0.029ms zstd=28.704ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 14336]) dtype=torch.bfloat16 numel=29360128 submit=4.393ms wait=0.009ms cuda_event=5.537ms numpy=0.009ms zstd=344.146ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.126ms wait=0.008ms cuda_event=0.053ms numpy=0.041ms zstd=0.292ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.110ms wait=0.010ms cuda_event=0.406ms numpy=0.009ms zstd=77.269ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.162ms wait=0.016ms cuda_event=0.053ms numpy=0.084ms zstd=0.318ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 14336]) dtype=torch.bfloat16 numel=29360128 submit=0.605ms wait=0.035ms cuda_event=1.609ms numpy=0.083ms zstd=264.490ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 28672]) dtype=torch.bfloat16 numel=58720256 submit=0.632ms wait=0.003ms cuda_event=3.100ms numpy=0.009ms zstd=540.683ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.122ms wait=0.004ms cuda_event=0.486ms numpy=0.007ms zstd=75.112ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.162ms wait=0.004ms cuda_event=0.709ms numpy=0.008ms zstd=71.816ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.131ms wait=0.017ms cuda_event=0.118ms numpy=0.083ms zstd=0.360ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.230ms wait=0.013ms cuda_event=0.431ms numpy=0.059ms zstd=51.490ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.232ms wait=0.011ms cuda_event=0.397ms numpy=0.039ms zstd=29.646ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.122ms wait=0.015ms cuda_event=0.092ms numpy=0.034ms zstd=0.887ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 28672]) dtype=torch.bfloat16 numel=58720256 submit=0.591ms wait=0.021ms cuda_event=2.839ms numpy=0.099ms zstd=452.218ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.350ms wait=0.019ms cuda_event=0.053ms numpy=0.084ms zstd=0.678ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.417ms wait=0.021ms cuda_event=0.525ms numpy=0.015ms zstd=61.748ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.110ms wait=0.014ms cuda_event=0.059ms numpy=0.062ms zstd=1.040ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.329ms wait=0.004ms cuda_event=0.413ms numpy=0.010ms zstd=77.670ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.130ms wait=0.006ms cuda_event=0.595ms numpy=0.011ms zstd=66.288ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.108ms wait=0.009ms cuda_event=0.441ms numpy=0.011ms zstd=61.406ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=1.288ms wait=0.010ms cuda_event=0.527ms numpy=0.014ms zstd=30.052ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.142ms wait=0.008ms cuda_event=0.118ms numpy=0.014ms zstd=0.243ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 28672]) dtype=torch.bfloat16 numel=58720256 submit=0.667ms wait=0.003ms cuda_event=3.110ms numpy=0.006ms zstd=448.591ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.119ms wait=0.013ms cuda_event=0.105ms numpy=0.049ms zstd=0.271ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.215ms wait=0.015ms cuda_event=0.358ms numpy=0.073ms zstd=43.615ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.087ms wait=0.015ms cuda_event=0.423ms numpy=0.067ms zstd=80.560ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.185ms wait=0.022ms cuda_event=0.158ms numpy=0.088ms zstd=1.098ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 14336]) dtype=torch.bfloat16 numel=29360128 submit=0.646ms wait=0.016ms cuda_event=1.736ms numpy=0.080ms zstd=312.178ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.109ms wait=0.023ms cuda_event=0.050ms numpy=0.085ms zstd=0.348ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=1.264ms wait=0.005ms cuda_event=0.483ms numpy=0.007ms zstd=68.551ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.151ms wait=0.007ms cuda_event=0.803ms numpy=0.012ms zstd=76.139ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.178ms wait=0.008ms cuda_event=0.405ms numpy=0.009ms zstd=68.188ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=1.382ms wait=0.010ms cuda_event=1.692ms numpy=0.049ms zstd=67.904ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.251ms wait=0.011ms cuda_event=0.243ms numpy=0.057ms zstd=0.298ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=1.120ms wait=0.025ms cuda_event=1.305ms numpy=0.084ms zstd=33.352ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.131ms wait=0.017ms cuda_event=0.071ms numpy=0.074ms zstd=0.329ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=1.199ms wait=0.014ms cuda_event=1.462ms numpy=0.026ms zstd=56.203ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.116ms wait=0.004ms cuda_event=0.720ms numpy=0.007ms zstd=66.326ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.148ms wait=0.016ms cuda_event=0.058ms numpy=0.102ms zstd=1.001ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 28672]) dtype=torch.bfloat16 numel=58720256 submit=0.119ms wait=0.009ms cuda_event=2.423ms numpy=0.018ms zstd=495.370ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.113ms wait=0.024ms cuda_event=0.058ms numpy=0.094ms zstd=0.660ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 14336]) dtype=torch.bfloat16 numel=29360128 submit=0.388ms wait=0.005ms cuda_event=1.403ms numpy=0.009ms zstd=325.783ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.166ms wait=0.011ms cuda_event=0.444ms numpy=0.009ms zstd=63.049ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.184ms wait=0.008ms cuda_event=0.402ms numpy=0.011ms zstd=62.819ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.113ms wait=0.016ms cuda_event=0.693ms numpy=0.059ms zstd=72.343ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.157ms wait=0.007ms cuda_event=0.132ms numpy=0.028ms zstd=0.286ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 14336]) dtype=torch.bfloat16 numel=29360128 submit=4.052ms wait=0.011ms cuda_event=4.981ms numpy=0.053ms zstd=289.774ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.146ms wait=0.011ms cuda_event=0.176ms numpy=0.062ms zstd=0.295ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=1.482ms wait=0.018ms cuda_event=1.718ms numpy=0.086ms zstd=29.745ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.532ms wait=0.823ms cuda_event=0.362ms numpy=0.056ms zstd=42.932ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.113ms wait=0.010ms cuda_event=0.056ms numpy=0.023ms zstd=0.277ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=1.600ms wait=0.003ms cuda_event=1.071ms numpy=0.007ms zstd=80.434ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.106ms wait=0.012ms cuda_event=0.054ms numpy=0.030ms zstd=0.282ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.121ms wait=0.004ms cuda_event=0.554ms numpy=0.007ms zstd=64.519ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 28672]) dtype=torch.bfloat16 numel=58720256 submit=0.445ms wait=0.010ms cuda_event=2.703ms numpy=0.037ms zstd=549.304ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=1.320ms wait=0.016ms cuda_event=1.580ms numpy=0.045ms zstd=66.321ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.179ms wait=0.003ms cuda_event=0.409ms numpy=0.007ms zstd=70.904ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.307ms wait=0.013ms cuda_event=0.272ms numpy=0.027ms zstd=0.340ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=1.035ms wait=0.016ms cuda_event=1.219ms numpy=0.059ms zstd=31.343ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.112ms wait=0.008ms cuda_event=0.052ms numpy=0.016ms zstd=0.439ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 28672]) dtype=torch.bfloat16 numel=58720256 submit=0.302ms wait=0.004ms cuda_event=2.810ms numpy=0.006ms zstd=477.584ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 14336]) dtype=torch.bfloat16 numel=29360128 submit=0.381ms wait=0.009ms cuda_event=1.648ms numpy=0.020ms zstd=335.922ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.160ms wait=0.016ms cuda_event=0.109ms numpy=0.078ms zstd=0.306ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=1.067ms wait=0.019ms cuda_event=1.257ms numpy=0.090ms zstd=55.975ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.126ms wait=0.009ms cuda_event=0.054ms numpy=0.028ms zstd=0.287ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.116ms wait=0.003ms cuda_event=0.507ms numpy=0.008ms zstd=78.181ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.134ms wait=0.003ms cuda_event=0.694ms numpy=0.007ms zstd=68.366ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.147ms wait=0.005ms cuda_event=0.436ms numpy=0.008ms zstd=76.719ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.409ms wait=0.006ms cuda_event=0.567ms numpy=0.017ms zstd=71.564ms[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 14336]) dtype=torch.bfloat16 numel=29360128 submit=0.538ms wait=0.017ms cuda_event=1.371ms numpy=0.077ms zstd=288.538ms
+[default0]:
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.201ms wait=0.023ms cuda_event=0.273ms numpy=0.015ms zstd=0.364ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.154ms wait=0.011ms cuda_event=0.064ms numpy=0.009ms zstd=0.279ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=1.206ms wait=0.012ms cuda_event=1.294ms numpy=0.041ms zstd=34.615ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=1.350ms wait=0.013ms cuda_event=1.557ms numpy=0.044ms zstd=48.689ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.333ms wait=0.015ms cuda_event=0.319ms numpy=0.039ms zstd=0.673ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 28672]) dtype=torch.bfloat16 numel=58720256 submit=0.329ms wait=0.005ms cuda_event=2.832ms numpy=0.011ms zstd=520.458ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.107ms wait=0.018ms cuda_event=0.060ms numpy=0.097ms zstd=0.324ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.108ms wait=0.008ms cuda_event=0.709ms numpy=0.021ms zstd=75.283ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.138ms wait=0.010ms cuda_event=0.450ms numpy=0.010ms zstd=68.932ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.149ms wait=0.005ms cuda_event=0.693ms numpy=0.009ms zstd=67.399ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=1.464ms wait=0.007ms cuda_event=2.100ms numpy=0.020ms zstd=55.431ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.152ms wait=0.009ms cuda_event=0.128ms numpy=0.030ms zstd=0.287ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.112ms wait=0.012ms cuda_event=1.854ms numpy=0.028ms zstd=71.428ms[default0]:
+[default0]:/opt/conda/lib/python3.10/site-packages/megatron/core/tensor_parallel/layers.py:346: UserWarning: Attempting to run cuBLAS, but there was no current CUDA context! Attempting to set the primary context... (Triggered internally at /workspace/framework/mcPytorch/aten/src/ATen/cuda/CublasHandlePool.cpp:183.)
+[default0]:  grad_input = grad_output.matmul(weight)
+[default0]:sys:1: UserWarning: Full backward hook is firing when gradients are computed with respect to module outputs since no inputs require gradients. See https://docs.pytorch.org/docs/main/generated/torch.nn.Module.html#torch.nn.Module.register_full_backward_hook for more details.
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.107ms wait=0.008ms cuda_event=0.075ms numpy=0.025ms zstd=0.321ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 14336]) dtype=torch.bfloat16 numel=29360128 submit=0.483ms wait=0.012ms cuda_event=1.587ms numpy=0.052ms zstd=278.479ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 28672]) dtype=torch.bfloat16 numel=58720256 submit=0.488ms wait=0.004ms cuda_event=2.971ms numpy=0.007ms zstd=465.102ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.217ms wait=0.017ms cuda_event=0.183ms numpy=0.084ms zstd=0.327ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=1.037ms wait=0.019ms cuda_event=0.599ms numpy=0.084ms zstd=32.052ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.141ms wait=0.017ms cuda_event=0.056ms numpy=0.073ms zstd=0.318ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.323ms wait=0.008ms cuda_event=0.774ms numpy=0.010ms zstd=75.415ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.143ms wait=0.004ms cuda_event=0.477ms numpy=0.008ms zstd=64.968ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.161ms wait=0.005ms cuda_event=0.872ms numpy=0.011ms zstd=66.557ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=1.333ms wait=0.018ms cuda_event=1.564ms numpy=0.081ms zstd=33.152ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.227ms wait=0.026ms cuda_event=0.214ms numpy=0.085ms zstd=2.166ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=1.419ms wait=0.018ms cuda_event=1.618ms numpy=0.082ms zstd=46.817ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.160ms wait=0.014ms cuda_event=0.065ms numpy=0.059ms zstd=0.368ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=1.257ms wait=0.012ms cuda_event=1.187ms numpy=0.042ms zstd=75.164ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.122ms wait=0.013ms cuda_event=0.610ms numpy=0.012ms zstd=72.700ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.140ms wait=0.012ms cuda_event=0.055ms numpy=0.069ms zstd=0.438ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 14336]) dtype=torch.bfloat16 numel=29360128 submit=4.221ms wait=0.014ms cuda_event=3.620ms numpy=0.039ms zstd=349.521ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.104ms wait=0.020ms cuda_event=0.052ms numpy=0.088ms zstd=0.303ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 28672]) dtype=torch.bfloat16 numel=58720256 submit=0.394ms wait=0.173ms cuda_event=2.485ms numpy=0.010ms zstd=516.490ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.135ms wait=0.005ms cuda_event=0.577ms numpy=0.008ms zstd=71.701ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.135ms wait=0.004ms cuda_event=0.703ms numpy=0.008ms zstd=70.957ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.465ms wait=0.016ms cuda_event=0.410ms numpy=0.084ms zstd=62.423ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 14336]) dtype=torch.bfloat16 numel=29360128 submit=3.956ms wait=0.012ms cuda_event=4.816ms numpy=0.049ms zstd=294.470ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.143ms wait=0.017ms cuda_event=0.124ms numpy=0.053ms zstd=0.270ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.118ms wait=0.006ms cuda_event=0.103ms numpy=0.009ms zstd=0.258ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 28672]) dtype=torch.bfloat16 numel=58720256 submit=0.534ms wait=0.008ms cuda_event=2.766ms numpy=0.009ms zstd=462.950ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.477ms wait=0.008ms cuda_event=0.404ms numpy=0.035ms zstd=47.656ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.320ms wait=0.009ms cuda_event=0.056ms numpy=0.030ms zstd=0.311ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=1.335ms wait=0.012ms cuda_event=1.750ms numpy=0.043ms zstd=36.829ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.147ms wait=0.012ms cuda_event=0.136ms numpy=0.030ms zstd=0.291ms
+[default0]:WARNING:megatron.core.rerun_state_machine:Result validation enabled
+[default0]:[2026-06-06 09:27:37,965 TE-FL manager.py:439 INFO] Op 'rmsnorm_bwd' using 'vendor.metax' (kind=vendor, vendor=METAX)
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=1.044ms wait=0.008ms cuda_event=0.896ms numpy=0.044ms zstd=79.265ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=1.514ms wait=0.004ms cuda_event=0.743ms numpy=0.008ms zstd=70.641ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=1.319ms wait=0.004ms cuda_event=1.730ms numpy=0.008ms zstd=77.737ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=1.157ms wait=0.012ms cuda_event=1.336ms numpy=0.041ms zstd=33.893ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.194ms wait=0.009ms cuda_event=0.163ms numpy=0.023ms zstd=0.291ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=1.082ms wait=0.013ms cuda_event=1.246ms numpy=0.044ms zstd=47.712ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.143ms wait=0.010ms cuda_event=0.081ms numpy=0.031ms zstd=0.266ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=1.043ms wait=0.009ms cuda_event=1.316ms numpy=0.030ms zstd=70.972ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 14336]) dtype=torch.bfloat16 numel=29360128 submit=0.689ms wait=0.018ms cuda_event=1.466ms numpy=0.077ms zstd=340.774ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.209ms wait=0.018ms cuda_event=0.182ms numpy=0.077ms zstd=0.451ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.111ms wait=0.005ms cuda_event=0.401ms numpy=0.009ms zstd=70.848ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.103ms wait=0.011ms cuda_event=0.048ms numpy=0.038ms zstd=0.310ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 28672]) dtype=torch.bfloat16 numel=58720256 submit=0.380ms wait=0.004ms cuda_event=2.913ms numpy=0.007ms zstd=546.232ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.123ms wait=0.004ms cuda_event=0.571ms numpy=0.009ms zstd=74.776ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.158ms wait=0.004ms cuda_event=0.406ms numpy=0.009ms zstd=65.408ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 28672]) dtype=torch.bfloat16 numel=58720256 submit=0.637ms wait=0.011ms cuda_event=3.534ms numpy=0.010ms zstd=457.136ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.137ms wait=0.016ms cuda_event=0.109ms numpy=0.084ms zstd=0.271ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 14336]) dtype=torch.bfloat16 numel=29360128 submit=0.137ms wait=0.016ms cuda_event=1.468ms numpy=0.083ms zstd=303.403ms[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=1.389ms wait=0.011ms cuda_event=1.668ms numpy=0.033ms zstd=46.214ms[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.107ms wait=0.011ms cuda_event=0.441ms numpy=0.055ms zstd=72.398ms[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.439ms wait=0.013ms cuda_event=0.362ms numpy=0.042ms zstd=51.851ms
+[default0]:
+[default0]:
+[default0]:
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.406ms wait=0.020ms cuda_event=0.382ms numpy=0.083ms zstd=0.435ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.193ms wait=0.016ms cuda_event=0.092ms numpy=0.041ms zstd=0.339ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.302ms wait=0.005ms cuda_event=0.390ms numpy=0.008ms zstd=0.304ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=1.154ms wait=0.004ms cuda_event=0.980ms numpy=0.007ms zstd=67.976ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.193ms wait=0.007ms cuda_event=0.412ms numpy=0.010ms zstd=69.296ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.170ms wait=0.003ms cuda_event=0.474ms numpy=0.007ms zstd=68.902ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.096ms wait=0.011ms cuda_event=0.677ms numpy=0.032ms zstd=59.894ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.182ms wait=0.013ms cuda_event=0.150ms numpy=0.037ms zstd=0.233ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=1.389ms wait=0.009ms cuda_event=1.066ms numpy=0.028ms zstd=35.042ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.233ms wait=0.007ms cuda_event=0.215ms numpy=0.023ms zstd=0.357ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.099ms wait=0.017ms cuda_event=0.441ms numpy=0.037ms zstd=50.216ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 28672]) dtype=torch.bfloat16 numel=58720256 submit=0.318ms wait=0.004ms cuda_event=2.596ms numpy=0.006ms zstd=439.437ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.206ms wait=0.017ms cuda_event=0.192ms numpy=0.077ms zstd=0.305ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=1.188ms wait=0.003ms cuda_event=0.646ms numpy=0.006ms zstd=67.650ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.119ms wait=0.009ms cuda_event=0.049ms numpy=0.033ms zstd=0.288ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 14336]) dtype=torch.bfloat16 numel=29360128 submit=4.607ms wait=0.011ms cuda_event=5.409ms numpy=0.032ms zstd=342.184ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.164ms wait=0.004ms cuda_event=0.489ms numpy=0.007ms zstd=63.616ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.188ms wait=0.004ms cuda_event=0.696ms numpy=0.007ms zstd=59.752ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=1.491ms wait=0.009ms cuda_event=1.299ms numpy=0.032ms zstd=46.330ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.163ms wait=0.010ms cuda_event=0.132ms numpy=0.031ms zstd=0.270ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.101ms wait=0.013ms cuda_event=0.402ms numpy=0.053ms zstd=69.025ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.150ms wait=0.014ms cuda_event=0.123ms numpy=0.067ms zstd=0.305ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=1.153ms wait=0.010ms cuda_event=1.359ms numpy=0.034ms zstd=31.434ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 28672]) dtype=torch.bfloat16 numel=58720256 submit=0.450ms wait=0.004ms cuda_event=3.440ms numpy=0.007ms zstd=463.400ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.171ms wait=0.015ms cuda_event=0.049ms numpy=0.083ms zstd=0.373ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=1.466ms wait=0.003ms cuda_event=0.946ms numpy=0.007ms zstd=66.972ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.853ms wait=0.011ms cuda_event=0.050ms numpy=0.033ms zstd=0.269ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 14336]) dtype=torch.bfloat16 numel=29360128 submit=0.434ms wait=0.016ms cuda_event=1.505ms numpy=0.029ms zstd=326.246ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.126ms wait=0.004ms cuda_event=1.544ms numpy=0.007ms zstd=65.548ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.256ms wait=0.003ms cuda_event=0.841ms numpy=0.007ms zstd=59.382ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.101ms wait=0.019ms cuda_event=0.712ms numpy=0.087ms zstd=66.127ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.139ms wait=0.011ms cuda_event=0.114ms numpy=0.047ms zstd=0.211ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.456ms wait=0.009ms cuda_event=0.643ms numpy=0.030ms zstd=29.043ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.136ms wait=0.010ms cuda_event=0.113ms numpy=0.025ms zstd=0.282ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.114ms wait=0.011ms cuda_event=0.668ms numpy=0.029ms zstd=44.272ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=1.225ms wait=0.003ms cuda_event=0.648ms numpy=0.007ms zstd=76.466ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.169ms wait=0.009ms cuda_event=0.131ms numpy=0.037ms zstd=0.326ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 14336]) dtype=torch.bfloat16 numel=29360128 submit=5.303ms wait=0.012ms cuda_event=6.219ms numpy=0.033ms zstd=357.223ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.116ms wait=0.019ms cuda_event=0.049ms numpy=0.084ms zstd=0.327ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 28672]) dtype=torch.bfloat16 numel=58720256 submit=0.317ms wait=0.020ms cuda_event=2.945ms numpy=0.045ms zstd=539.443ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 14336]) dtype=torch.bfloat16 numel=29360128 submit=0.404ms wait=0.010ms cuda_event=1.844ms numpy=0.024ms zstd=283.754ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.126ms wait=0.005ms cuda_event=0.878ms numpy=0.008ms zstd=71.720ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.111ms wait=0.004ms cuda_event=0.476ms numpy=0.008ms zstd=69.838ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.183ms wait=0.008ms cuda_event=0.154ms numpy=0.024ms zstd=0.323ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=1.261ms wait=0.010ms cuda_event=0.491ms numpy=0.040ms zstd=38.910ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.175ms wait=0.010ms cuda_event=0.147ms numpy=0.030ms zstd=0.307ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=1.198ms wait=0.016ms cuda_event=0.470ms numpy=0.080ms zstd=46.465ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=1.354ms wait=0.017ms cuda_event=0.449ms numpy=0.079ms zstd=72.379ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.269ms wait=0.013ms cuda_event=0.255ms numpy=0.052ms zstd=0.384ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=1.460ms wait=0.003ms cuda_event=0.847ms numpy=0.009ms zstd=80.322ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.113ms wait=0.013ms cuda_event=0.052ms numpy=0.047ms zstd=0.305ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 28672]) dtype=torch.bfloat16 numel=58720256 submit=0.736ms wait=0.003ms cuda_event=3.206ms numpy=0.008ms zstd=532.746ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.148ms wait=0.003ms cuda_event=0.860ms numpy=0.008ms zstd=75.964ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 14336]) dtype=torch.bfloat16 numel=29360128 submit=0.387ms wait=0.011ms cuda_event=1.571ms numpy=0.040ms zstd=296.719ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.170ms wait=0.004ms cuda_event=0.452ms numpy=0.009ms zstd=70.188ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.147ms wait=0.011ms cuda_event=0.114ms numpy=0.041ms zstd=0.279ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.123ms wait=0.012ms cuda_event=0.691ms numpy=0.056ms zstd=67.912ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.155ms wait=0.011ms cuda_event=0.128ms numpy=0.041ms zstd=0.327ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=1.529ms wait=0.017ms cuda_event=1.206ms numpy=0.079ms zstd=34.340ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.113ms wait=0.011ms cuda_event=0.410ms numpy=0.041ms zstd=50.233ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.122ms wait=0.013ms cuda_event=0.048ms numpy=0.038ms zstd=0.323ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 28672]) dtype=torch.bfloat16 numel=58720256 submit=0.484ms wait=0.004ms cuda_event=3.052ms numpy=0.008ms zstd=526.073ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.167ms wait=0.014ms cuda_event=0.088ms numpy=0.064ms zstd=0.304ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=1.319ms wait=0.003ms cuda_event=1.006ms numpy=0.008ms zstd=79.787ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=0.136ms wait=0.004ms cuda_event=0.631ms numpy=0.009ms zstd=76.393ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 28672]) dtype=torch.bfloat16 numel=58720256 submit=0.335ms wait=0.003ms cuda_event=2.806ms numpy=0.006ms zstd=446.722ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.161ms wait=0.004ms cuda_event=0.763ms numpy=0.007ms zstd=67.459ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.149ms wait=0.009ms cuda_event=0.120ms numpy=0.028ms zstd=0.241ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.109ms wait=0.011ms cuda_event=0.396ms numpy=0.033ms zstd=70.339ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.153ms wait=0.011ms cuda_event=0.125ms numpy=0.035ms zstd=0.447ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.732ms wait=0.012ms cuda_event=0.905ms numpy=0.040ms zstd=49.964ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([1, 2048, 32, 128]) dtype=torch.bfloat16 numel=8388608 submit=0.457ms wait=0.016ms cuda_event=0.963ms numpy=0.082ms zstd=32.363ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 16]) dtype=torch.bfloat16 numel=32768 submit=0.211ms wait=0.006ms cuda_event=0.184ms numpy=0.015ms zstd=0.373ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 14336]) dtype=torch.bfloat16 numel=29360128 submit=4.183ms wait=0.012ms cuda_event=4.665ms numpy=0.041ms zstd=298.488ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 4096]) dtype=torch.bfloat16 numel=8388608 submit=1.346ms wait=0.022ms cuda_event=0.796ms numpy=0.076ms zstd=82.297ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 14336]) dtype=torch.bfloat16 numel=29360128 submit=0.586ms wait=0.010ms cuda_event=1.605ms numpy=0.027ms zstd=298.792ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 28672]) dtype=torch.bfloat16 numel=58720256 submit=0.468ms wait=0.003ms cuda_event=3.533ms numpy=0.008ms zstd=514.415ms
+[default0]:[rank0]: Traceback (most recent call last):
+[default0]:[rank0]:   File "/opt/conda/lib/python3.10/site-packages/transformer_engine/plugin/core/manager.py", line 434, in call
+[default0]:[rank0]:     result = impl.fn(*args, **kwargs)
+[default0]:[rank0]:   File "/opt/conda/lib/python3.10/site-packages/transformer_engine/plugin/core/backends/reference/register_ops.py", line 23, in wrapper
+[default0]:[rank0]:     return fn(*args, **kwargs)
+[default0]:[rank0]:   File "/opt/conda/lib/python3.10/site-packages/transformer_engine/plugin/core/backends/reference/reference.py", line 127, in generic_gemm
+[default0]:[rank0]:     return general_gemm_torch(
+[default0]:[rank0]:   File "/opt/conda/lib/python3.10/site-packages/transformer_engine/plugin/core/backends/reference/impl/gemm.py", line 82, in general_gemm_torch
+[default0]:[rank0]:     out = torch.mm(B_comp, A_comp)
+[default0]:[rank0]: RuntimeError: mat2 must be a matrix
+[default0]:
+[default0]:[rank0]: The above exception was the direct cause of the following exception:
+[default0]:
+[default0]:[rank0]: Traceback (most recent call last):
+[default0]:[rank0]:   File "/root/.config/superpowers/worktrees/memrift-flagscale/memrift-split-copy-benchmark/flagscale/train/train_gpt.py", line 262, in <module>
+[default0]:[rank0]:     pretrain(
+[default0]:[rank0]:   File "/root/.config/superpowers/worktrees/memrift-flagscale/memrift-split-copy-benchmark/flagscale/train/train.py", line 1039, in pretrain
+[default0]:[rank0]:     iteration, num_floating_point_operations_so_far = train(
+[default0]:[rank0]:   File "/root/.config/superpowers/worktrees/memrift-flagscale/memrift-split-copy-benchmark/flagscale/train/train.py", line 2764, in train
+[default0]:[rank0]:     ) = train_step(
+[default0]:[rank0]:   File "/root/.config/superpowers/worktrees/memrift-flagscale/memrift-split-copy-benchmark/flagscale/train/train.py", line 1682, in train_step
+[default0]:[rank0]:     losses_reduced = forward_backward_func(
+[default0]:[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/pipeline_parallel/schedules.py", line 617, in forward_backward_no_pipelining
+[default0]:[rank0]:     backward_step(
+[default0]:[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/pipeline_parallel/schedules.py", line 473, in backward_step
+[default0]:[rank0]:     custom_backward(output_tensor[0], output_tensor_grad[0])
+[default0]:[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/pipeline_parallel/schedules.py", line 177, in custom_backward
+[default0]:[rank0]:     Variable._execution_engine.run_backward(
+[default0]:[rank0]:   File "/opt/conda/lib/python3.10/site-packages/torch/autograd/function.py", line 311, in apply
+[default0]:[rank0]:     return user_fn(self, *args)
+[default0]:[rank0]:   File "/opt/conda/lib/python3.10/site-packages/transformer_engine/pytorch/module/linear.py", line 896, in backward
+[default0]:[rank0]:     wgrad, grad_bias_ = wgrad_gemm(inputmat_total, grad_output)
+[default0]:[rank0]:   File "/opt/conda/lib/python3.10/site-packages/transformer_engine/pytorch/module/linear.py", line 876, in wgrad_gemm
+[default0]:[rank0]:     dw, db, *_ = general_gemm(x, dy, **wgrad_gemm_kwargs)
+[default0]:[rank0]:   File "/opt/conda/lib/python3.10/site-packages/transformer_engine/pytorch/cpp_extensions/gemm.py", line 152, in general_gemm
+[default0]:[rank0]:     out, bias_grad, gelu_input, extra_output = tex.generic_gemm(*args, **kwargs)
+[default0]:[rank0]:   File "/opt/conda/lib/python3.10/site-packages/transformer_engine/plugin/core/manager.py", line 468, in call
+[default0]:[rank0]:     raise RuntimeError(
+[default0]:[rank0]: RuntimeError: All 3 implementation(s) failed for op='generic_gemm'. Last error: mat2 must be a matrix
+[default0]:[rank0]:[W606 09:28:12.458033951 ProcessGroupNCCL.cpp:1544] Warning: WARNING: destroy_process_group() was not called before program exit, which can leak resources. For more info, please see https://pytorch.org/docs/stable/distributed.html#shutdown (function operator())
+E0606 09:28:20.442000 308896 site-packages/torch/distributed/elastic/multiprocessing/api.py:874] failed (exitcode: 1) local_rank: 0 (pid: 308983) of binary: /opt/conda/bin/python3.10
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 1, 14336]) dtype=torch.bfloat16 numel=29360128 submit=4.400ms wait=0.010ms cuda_event=5.265ms numpy=0.034ms zstd=364.139ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 28672]) dtype=torch.bfloat16 numel=58720256 submit=0.601ms wait=0.003ms cuda_event=3.425ms numpy=0.008ms zstd=539.503ms
+[default0]:[MemRiftSplitProfile] path=copy shape=torch.Size([2048, 28672]) dtype=torch.bfloat16 numel=58720256 submit=0.492ms wait=0.007ms cuda_event=2.777ms numpy=0.009ms zstd=547.968ms
+[default0]:[2026-06-06 09:27:40,910 TE-FL manager.py:396 WARNING] Cached implementation 'vendor.metax' failed for op 'generic_gemm': /workspace/code/TransformerEngine/transformer_engine_metax/pytorch/csrc/extensions/gemm.cpp:52 in function getGemmOutputShape: Assertion failed: (transa ? A1 : A0) == (transb ? B0 : B1). Invalid matrix dimensions for GEMM (A=(65536,128), transa=0, B=(2048,16), transb=1)
+[default0]:[2026-06-06 09:27:40,910 TE-FL manager.py:460 WARNING] Implementation 'vendor.metax' failed for op 'generic_gemm': /workspace/code/TransformerEngine/transformer_engine_metax/pytorch/csrc/extensions/gemm.cpp:52 in function getGemmOutputShape: Assertion failed: (transa ? A1 : A0) == (transb ? B0 : B1). Invalid matrix dimensions for GEMM (A=(65536,128), transa=0, B=(2048,16), transb=1)
+[default0]:[2026-06-06 09:27:40,911 TE-FL manager.py:460 WARNING] Implementation 'default.flagos' failed for op 'generic_gemm': incompatible dimensions
+[default0]:[2026-06-06 09:27:40,925 TE-FL manager.py:464 ERROR] Last implementation 'reference.torch' failed for op 'generic_gemm': mat2 must be a matrix
+Traceback (most recent call last):
+  File "/opt/conda/bin/torchrun", line 8, in <module>
+    sys.exit(main())
+  File "/opt/conda/lib/python3.10/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 357, in wrapper
+    return f(*args, **kwargs)
+  File "/opt/conda/lib/python3.10/site-packages/torch/distributed/run.py", line 901, in main
+    run(args)
+  File "/opt/conda/lib/python3.10/site-packages/torch/distributed/run.py", line 892, in run
+    elastic_launch(
+  File "/opt/conda/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 143, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+  File "/opt/conda/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 277, in launch_agent
+    raise ChildFailedError(
+torch.distributed.elastic.multiprocessing.errors.ChildFailedError: 
+============================================================
+flagscale/train/train_gpt.py FAILED
+------------------------------------------------------------
+Failures:
+  <NO_OTHER_FAILURES>
+------------------------------------------------------------
+Root Cause (first observed failure):
+[0]:
+  time      : 2026-06-06_09:28:20
+  host      : bm-turing-hz1-zone1-MC550-64G-1-14
+  rank      : 0 (local_rank: 0)
+  exitcode  : 1 (pid: 308983)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+============================================================

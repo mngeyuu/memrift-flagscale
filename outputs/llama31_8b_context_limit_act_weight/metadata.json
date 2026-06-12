@@ -1,0 +1,61 @@
+{
+  "selected_gpu": "2",
+  "gpu_selection_mode": "arg",
+  "gpu_infos": [
+    {
+      "gpu_id": "0",
+      "used_mib": 859,
+      "total_mib": 65536
+    },
+    {
+      "gpu_id": "1",
+      "used_mib": 859,
+      "total_mib": 65536
+    },
+    {
+      "gpu_id": "2",
+      "used_mib": 859,
+      "total_mib": 65536
+    },
+    {
+      "gpu_id": "3",
+      "used_mib": 859,
+      "total_mib": 65536
+    },
+    {
+      "gpu_id": "4",
+      "used_mib": 859,
+      "total_mib": 65536
+    },
+    {
+      "gpu_id": "5",
+      "used_mib": 859,
+      "total_mib": 65536
+    },
+    {
+      "gpu_id": "6",
+      "used_mib": 859,
+      "total_mib": 65536
+    },
+    {
+      "gpu_id": "7",
+      "used_mib": 859,
+      "total_mib": 65536
+    }
+  ],
+  "timeout_seconds": 1800,
+  "baseline_seq": 2048,
+  "coarse_seqs": [
+    3072,
+    4096,
+    5120,
+    6144
+  ],
+  "fine_step_256": 256,
+  "fine_step_128": 128,
+  "model_path": "/home/secure/myc/model/llama-3.1-8b",
+  "weight_dir": "/home/secure/myc/memrift-flagscale/memrift_weights/llama31_8b_zstd_level1",
+  "config_path": "examples/memrift/conf",
+  "config_name": "train_llama31_8b_mock",
+  "variant": "compare_act_weight"
+}

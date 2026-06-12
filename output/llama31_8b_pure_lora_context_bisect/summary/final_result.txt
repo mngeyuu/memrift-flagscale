@@ -1,0 +1,7 @@
+Llama-3.1-8B pure LoRA context bisect summary
+out_root=/home/secure/myc/memrift-flagscale/output/llama31_8b_pure_lora_context_bisect
+results_tsv=/home/secure/myc/memrift-flagscale/output/llama31_8b_pure_lora_context_bisect/summary/results.tsv
+max_runnable_seq_length=8448
+best_pass_host_log=/home/secure/myc/memrift-flagscale/output/llama31_8b_pure_lora_context_bisect/trials/seq_8448/logs/host_0_localhost.output
+first_failing_seq_length=8704
+failing_status=OOM

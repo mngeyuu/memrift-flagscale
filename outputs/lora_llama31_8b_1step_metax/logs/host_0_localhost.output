@@ -1,0 +1,98 @@
+/opt/conda/lib/python3.10/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[default0]:/opt/conda/lib/python3.10/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[default0]:  import pynvml  # type: ignore[import]
+[default0]:W0526 19:15:07.107000 295052 site-packages/torch/utils/cpp_extension.py:2527] TORCH_CUDA_ARCH_LIST is not set, all archs for visible cards are included for compilation. 
+[default0]:W0526 19:15:07.107000 295052 site-packages/torch/utils/cpp_extension.py:2527] If this is not desired, please set os.environ['TORCH_CUDA_ARCH_LIST'] to specific architectures.
+[default0]:Skipping import of cpp extensions due to incompatible torch version 2.8.0+metax3.3.0.2 for torchao version 0.16.0             Please see https://github.com/pytorch/ao/issues/2919 for more info
+[default0]:/opt/conda/lib/python3.10/site-packages/modelopt/torch/utils/logging.py:115: UserWarning: Failed to import diffusers plugin due to: RuntimeError("Failed to import diffusers.models.modeling_utils because of the following error (look up to see its traceback):\nname 'logger' is not defined"). You may ignore this warning if you do not need this plugin.
+[default0]:  warnings.warn(message, *args, **kwargs)
+[default0]:/opt/conda/lib/python3.10/site-packages/xformers/ops/swiglu_op.py:107: FutureWarning: `torch.cuda.amp.custom_fwd(args...)` is deprecated. Please use `torch.amp.custom_fwd(args..., device_type='cuda')` instead.
+[default0]:  def forward(cls, ctx, x, w1, b1, w2, b2, w3, b3):
+[default0]:/opt/conda/lib/python3.10/site-packages/xformers/ops/swiglu_op.py:128: FutureWarning: `torch.cuda.amp.custom_bwd(args...)` is deprecated. Please use `torch.amp.custom_bwd(args..., device_type='cuda')` instead.
+[default0]:  def backward(cls, ctx, dx5):
+[default0]:/opt/conda/lib/python3.10/site-packages/torchvision/datapoints/__init__.py:12: UserWarning: The torchvision.datapoints and torchvision.transforms.v2 namespaces are still Beta. While we do not expect major breaking changes, some APIs may still change according to user feedback. Please submit any feedback you may have in this issue: https://github.com/pytorch/vision/issues/6753, and you can also check out https://github.com/pytorch/vision/issues/7319 to learn more about the APIs that we suspect might involve future changes. You can silence this warning by calling torchvision.disable_beta_transforms_warning().
+[default0]:  warnings.warn(_BETA_TRANSFORMS_WARNING)
+[default0]:/opt/conda/lib/python3.10/site-packages/torchvision/transforms/v2/__init__.py:54: UserWarning: The torchvision.datapoints and torchvision.transforms.v2 namespaces are still Beta. While we do not expect major breaking changes, some APIs may still change according to user feedback. Please submit any feedback you may have in this issue: https://github.com/pytorch/vision/issues/6753, and you can also check out https://github.com/pytorch/vision/issues/7319 to learn more about the APIs that we suspect might involve future changes. You can silence this warning by calling torchvision.disable_beta_transforms_warning().
+[default0]:  warnings.warn(_BETA_TRANSFORMS_WARNING)
+[default0]:/opt/conda/lib/python3.10/site-packages/modelopt/torch/utils/logging.py:115: UserWarning: Failed to import diffusers plugin due to: RuntimeError("Failed to import diffusers.loaders.single_file_model because of the following error (look up to see its traceback):\nname 'logger' is not defined"). You may ignore this warning if you do not need this plugin.
+[default0]:  warnings.warn(message, *args, **kwargs)
+[default0]:/opt/conda/lib/python3.10/site-packages/modelopt/torch/utils/logging.py:115: UserWarning: Failed to import vllm plugin due to: AttributeError("module 'vllm.attention' has no attribute 'Attention'"). You may ignore this warning if you do not need this plugin.
+[default0]:  warnings.warn(message, *args, **kwargs)
+W0526 19:15:45.684000 294969 site-packages/torch/distributed/elastic/agent/server/api.py:723] Received Signals.SIGTERM death signal, shutting down workers
+W0526 19:15:45.686000 294969 site-packages/torch/distributed/elastic/multiprocessing/api.py:900] Sending process 295052 closing signal SIGTERM
+W0526 19:15:45.695000 294969 site-packages/torch/distributed/elastic/multiprocessing/api.py:900] Sending process 295052 closing signal SIGTERM
+[default0]:Megatron-LM-FL Platform: cpu Registered
+[default0]:Megatron-LM-FL Platform: cuda Registered
+[default0]:Megatron-LM-FL Platform: cuda Selected
+[default0]:CUDA vendor backend skipped (CUDA build was disabled at build time)
+[default0]:[CUDA] Disabled: CUDA was skipped at build time
+[default0]:[Metax] Successfully loaded Metax libs
+[default0]:[2026-05-26 19:15:06,730 TE-FL manager.py:122 INFO] OpManager initialized: 110 ops with 179 implementations
+[default0]:[2026-05-26 19:15:06,730 TE-FL manager.py:155 INFO] Registered impl_ids: ['default.flagos', 'reference.torch', 'vendor.metax']
+[default0]:INFO 05-26 19:15:13 [__init__.py:43] Available plugins for group vllm.platform_plugins:
+[default0]:INFO 05-26 19:15:13 [__init__.py:45] - fl -> vllm_fl:register
+[default0]:INFO 05-26 19:15:13 [__init__.py:48] All plugins in this group will be loaded. Set `VLLM_PLUGINS` to control which plugins to load.
+[default0]:INFO 05-26 19:15:13 [__init__.py:43] Available plugins for group vllm.platform_plugins:
+[default0]:INFO 05-26 19:15:13 [__init__.py:45] - fl -> vllm_fl:register
+[default0]:INFO 05-26 19:15:13 [__init__.py:48] All plugins in this group will be loaded. Set `VLLM_PLUGINS` to control which plugins to load.
+[default0]:INFO 05-26 19:15:13 [__init__.py:217] Platform plugin fl is activated
+[default0]:INFO Print the version information of mcoplib during compilation.
+[default0]:
+[default0]:Version info:Mcoplib_Version = '0.3.1'
+[default0]:Build_Maca_Version = '3.3.0.15'
+[default0]:GIT_BRANCH = 'HEAD'
+[default0]:GIT_COMMIT = '836541d'
+[default0]:Vllm Op Version = 0.13.0
+[default0]:SGlang Op Version  = 0.5.7 
+[default0]:
+[default0]:INFO Staring Check the current MACA version of the operating environment.
+[default0]:
+[default0]:INFO: Release major.minor matching,  successful:3.3. 
+[default0]:
+[default0]:ERROR 05-26 19:15:13 [config.py:32] Failed to import Triton kernels. Please make sure your triton version is compatible. Error: No module named 'triton.language.target_info'
+[default0]:> initializing torch distributed ...
+[default0]:[19:15:23.831][MXKW][E]queues.c                :826 : [mxkwCreateQueueBlock][Hint]ioctl create queue block timeout, gpu_id:15197 type:21. Retrying.
+[default0]:[19:15:34.071][MXKW][E]queues.c                :826 : [mxkwCreateQueueBlock][Hint]ioctl create queue block timeout, gpu_id:15197 type:21. Retrying.
+[default0]:[19:15:44.311][MXKW][E]queues.c                :826 : [mxkwCreateQueueBlock][Hint]ioctl create queue block timeout, gpu_id:15197 type:21. Retrying.
+Traceback (most recent call last):
+  File "/opt/conda/lib/python3.10/site-packages/torch/distributed/elastic/agent/server/api.py", line 715, in run
+    result = self._invoke_run(role)
+  File "/opt/conda/lib/python3.10/site-packages/torch/distributed/elastic/agent/server/api.py", line 879, in _invoke_run
+    time.sleep(monitor_interval)
+  File "/opt/conda/lib/python3.10/site-packages/torch/distributed/elastic/multiprocessing/api.py", line 84, in _terminate_process_handler
+    raise SignalException(f"Process {os.getpid()} got signal: {sigval}", sigval=sigval)
+torch.distributed.elastic.multiprocessing.api.SignalException: Process 294969 got signal: 15
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/opt/conda/bin/torchrun", line 8, in <module>
+    sys.exit(main())
+  File "/opt/conda/lib/python3.10/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 357, in wrapper
+    return f(*args, **kwargs)
+  File "/opt/conda/lib/python3.10/site-packages/torch/distributed/run.py", line 901, in main
+    run(args)
+  File "/opt/conda/lib/python3.10/site-packages/torch/distributed/run.py", line 892, in run
+    elastic_launch(
+  File "/opt/conda/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 143, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+  File "/opt/conda/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 268, in launch_agent
+    result = agent.run()
+  File "/opt/conda/lib/python3.10/site-packages/torch/distributed/elastic/metrics/api.py", line 138, in wrapper
+    result = f(*args, **kwargs)
+  File "/opt/conda/lib/python3.10/site-packages/torch/distributed/elastic/agent/server/api.py", line 724, in run
+    self._shutdown(e.sigval)
+  File "/opt/conda/lib/python3.10/site-packages/torch/distributed/elastic/agent/server/local_elastic_agent.py", line 368, in _shutdown
+    self._pcontext.close(death_sig)
+  File "/opt/conda/lib/python3.10/site-packages/torch/distributed/elastic/multiprocessing/api.py", line 577, in close
+    self._close(death_sig=death_sig, timeout=timeout)
+  File "/opt/conda/lib/python3.10/site-packages/torch/distributed/elastic/multiprocessing/api.py", line 912, in _close
+    handler.proc.wait(time_to_wait)
+  File "/opt/conda/lib/python3.10/subprocess.py", line 1209, in wait
+    return self._wait(timeout=timeout)
+  File "/opt/conda/lib/python3.10/subprocess.py", line 1937, in _wait
+    time.sleep(delay)
+  File "/opt/conda/lib/python3.10/site-packages/torch/distributed/elastic/multiprocessing/api.py", line 84, in _terminate_process_handler
+    raise SignalException(f"Process {os.getpid()} got signal: {sigval}", sigval=sigval)
+torch.distributed.elastic.multiprocessing.api.SignalException: Process 294969 got signal: 1

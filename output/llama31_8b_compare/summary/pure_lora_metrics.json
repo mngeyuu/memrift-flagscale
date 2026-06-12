@@ -1,0 +1,14 @@
+{
+  "max_allocated_mb": 28387.564453125,
+  "elapsed_ms_per_iter_all": [
+    17362.1,
+    3941.9,
+    3913.6,
+    3944.7,
+    3949.7
+  ],
+  "elapsed_ms_per_iter_mean": 6622.4,
+  "elapsed_ms_per_iter_last": 3949.7,
+  "num_time_samples": 5,
+  "source_log": "/home/secure/myc/memrift-flagscale/output/llama31_8b_compare/logs/pure_lora_host_0_localhost.output"
+}

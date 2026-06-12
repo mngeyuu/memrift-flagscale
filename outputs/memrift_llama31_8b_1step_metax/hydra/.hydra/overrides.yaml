@@ -1,0 +1,8 @@
+- action=run
+- experiment.exp_name=memrift_llama31_8b_1step_metax
+- experiment.exp_dir=./outputs/memrift_llama31_8b_1step_metax
+- train.trainer.train_iters=1
+- train.trainer.lr_warmup_iters=0
+- train.system.logging.log_interval=1
+- train.system.memrift_print_debug=true
+- train.system.memrift_compressed_weight_dir=/home/secure/myc/memrift-flagscale/memrift_weights/llama31_8b_zstd_level1

@@ -1,0 +1,11 @@
+/opt/conda/bin/python run.py --config-path=examples/memrift/conf --config-name=train_llama31_8b_mock action=run experiment.exp_dir=/home/secure/myc/memrift-flagscale/outputs/llama31_8b_context_limit_act_weight_nw0/pure_lora/seq_2048 experiment.exp_name=pure_lora_seq_2048 train.model.tokenizer_path=/home/secure/myc/model/llama-3.1-8b train.model.tokenizer_model=/home/secure/myc/model/llama-3.1-8b train.model.seq_length=2048 train.trainer.train_iters=1 train.trainer.lr_warmup_iters=0 +train.trainer.eval_iters=0 +train.trainer.eval_interval=2000000000 train.system.logging.log_interval=1 train.system.num_workers=0 train.system.memrift_enable=false train.system.memrift_weight_enable=false +train.system.init_model_with_meta_device=false
+
+/opt/conda/lib/python3.10/site-packages/hydra/_internal/defaults_list.py:251: UserWarning: In 'train_llama31_8b_mock': Defaults list is missing `_self_`. See https://hydra.cc/docs/1.2/upgrades/1.0_to_1.1/default_composition_order for more information
+  warnings.warn(msg, UserWarning)
+Could not override 'train.system.num_workers'.
+To append to your config use +train.system.num_workers=0
+Key 'num_workers' is not in struct
+    full_key: train.system.num_workers
+    object_type=dict
+
+Set the environment variable HYDRA_FULL_ERROR=1 for a complete stack trace.

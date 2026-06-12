@@ -1,0 +1,12 @@
+- action=run
+- experiment.exp_dir=/home/secure/myc/memrift-flagscale/outputs/memrift_llama31_8b_act_only_1step_sync_policy_max8m
+- experiment.exp_name=memrift_llama31_8b_act_only_1step_sync_policy_max8m
+- train.system.memrift_enable=true
+- train.system.memrift_weight_enable=false
+- train.system.memrift_activation_enable=true
+- train.system.memrift_weight_async=false
+- train.system.memrift_act_async=true
+- +train.system.init_model_with_meta_device=false
+- train.trainer.train_iters=1
+- train.trainer.lr_warmup_iters=0
+- train.system.logging.log_interval=1

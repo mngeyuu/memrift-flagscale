@@ -1,0 +1,15 @@
+- action=run
+- experiment.exp_dir=/home/secure/myc/memrift-flagscale/outputs/llama31_8b_context_limit_binary_bg/pure_lora/seq_3456
+- experiment.exp_name=pure_lora_seq_3456
+- train.model.tokenizer_path=/home/secure/myc/model/llama-3.1-8b
+- train.model.tokenizer_model=/home/secure/myc/model/llama-3.1-8b
+- train.model.seq_length=3456
+- train.trainer.train_iters=1
+- train.trainer.lr_warmup_iters=0
+- +train.trainer.eval_iters=0
+- +train.trainer.eval_interval=2000000000
+- train.system.logging.log_interval=1
+- +train.system.num_workers=0
+- train.system.memrift_enable=false
+- train.system.memrift_weight_enable=false
+- +train.system.init_model_with_meta_device=false

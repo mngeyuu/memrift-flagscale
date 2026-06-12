@@ -1,0 +1,33 @@
+Megatron-LM-FL Platform: cpu Registered
+Megatron-LM-FL Platform: cuda Registered
+Megatron-LM-FL Platform: cuda Selected
+CUDA vendor backend skipped (CUDA build was disabled at build time)
+[CUDA] Disabled: CUDA was skipped at build time
+[Metax] Successfully loaded Metax libs
+[2026-05-26 19:15:06,730 TE-FL manager.py:122 INFO] OpManager initialized: 110 ops with 179 implementations
+[2026-05-26 19:15:06,730 TE-FL manager.py:155 INFO] Registered impl_ids: ['default.flagos', 'reference.torch', 'vendor.metax']
+INFO 05-26 19:15:13 [__init__.py:43] Available plugins for group vllm.platform_plugins:
+INFO 05-26 19:15:13 [__init__.py:45] - fl -> vllm_fl:register
+INFO 05-26 19:15:13 [__init__.py:48] All plugins in this group will be loaded. Set `VLLM_PLUGINS` to control which plugins to load.
+INFO 05-26 19:15:13 [__init__.py:43] Available plugins for group vllm.platform_plugins:
+INFO 05-26 19:15:13 [__init__.py:45] - fl -> vllm_fl:register
+INFO 05-26 19:15:13 [__init__.py:48] All plugins in this group will be loaded. Set `VLLM_PLUGINS` to control which plugins to load.
+INFO 05-26 19:15:13 [__init__.py:217] Platform plugin fl is activated
+INFO Print the version information of mcoplib during compilation.
+
+Version info:Mcoplib_Version = '0.3.1'
+Build_Maca_Version = '3.3.0.15'
+GIT_BRANCH = 'HEAD'
+GIT_COMMIT = '836541d'
+Vllm Op Version = 0.13.0
+SGlang Op Version  = 0.5.7 
+
+INFO Staring Check the current MACA version of the operating environment.
+
+INFO: Release major.minor matching,  successful:3.3. 
+
+ERROR 05-26 19:15:13 [config.py:32] Failed to import Triton kernels. Please make sure your triton version is compatible. Error: No module named 'triton.language.target_info'
+> initializing torch distributed ...
+[19:15:23.831][MXKW][E]queues.c                :826 : [mxkwCreateQueueBlock][Hint]ioctl create queue block timeout, gpu_id:15197 type:21. Retrying.
+[19:15:34.071][MXKW][E]queues.c                :826 : [mxkwCreateQueueBlock][Hint]ioctl create queue block timeout, gpu_id:15197 type:21. Retrying.
+[19:15:44.311][MXKW][E]queues.c                :826 : [mxkwCreateQueueBlock][Hint]ioctl create queue block timeout, gpu_id:15197 type:21. Retrying.

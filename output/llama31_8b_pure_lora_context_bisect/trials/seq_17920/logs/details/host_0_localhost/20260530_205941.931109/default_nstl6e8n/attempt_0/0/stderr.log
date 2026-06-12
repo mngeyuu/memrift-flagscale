@@ -1,0 +1,129 @@
+/opt/conda/lib/python3.10/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+W0530 20:59:56.965000 170188 site-packages/torch/utils/cpp_extension.py:2527] TORCH_CUDA_ARCH_LIST is not set, all archs for visible cards are included for compilation. 
+W0530 20:59:56.965000 170188 site-packages/torch/utils/cpp_extension.py:2527] If this is not desired, please set os.environ['TORCH_CUDA_ARCH_LIST'] to specific architectures.
+Skipping import of cpp extensions due to incompatible torch version 2.8.0+metax3.3.0.2 for torchao version 0.16.0             Please see https://github.com/pytorch/ao/issues/2919 for more info
+/opt/conda/lib/python3.10/site-packages/modelopt/torch/utils/logging.py:115: UserWarning: Failed to import diffusers plugin due to: RuntimeError("Failed to import diffusers.models.modeling_utils because of the following error (look up to see its traceback):\nname 'logger' is not defined"). You may ignore this warning if you do not need this plugin.
+  warnings.warn(message, *args, **kwargs)
+/opt/conda/lib/python3.10/site-packages/xformers/ops/swiglu_op.py:107: FutureWarning: `torch.cuda.amp.custom_fwd(args...)` is deprecated. Please use `torch.amp.custom_fwd(args..., device_type='cuda')` instead.
+  def forward(cls, ctx, x, w1, b1, w2, b2, w3, b3):
+/opt/conda/lib/python3.10/site-packages/xformers/ops/swiglu_op.py:128: FutureWarning: `torch.cuda.amp.custom_bwd(args...)` is deprecated. Please use `torch.amp.custom_bwd(args..., device_type='cuda')` instead.
+  def backward(cls, ctx, dx5):
+/opt/conda/lib/python3.10/site-packages/torchvision/datapoints/__init__.py:12: UserWarning: The torchvision.datapoints and torchvision.transforms.v2 namespaces are still Beta. While we do not expect major breaking changes, some APIs may still change according to user feedback. Please submit any feedback you may have in this issue: https://github.com/pytorch/vision/issues/6753, and you can also check out https://github.com/pytorch/vision/issues/7319 to learn more about the APIs that we suspect might involve future changes. You can silence this warning by calling torchvision.disable_beta_transforms_warning().
+  warnings.warn(_BETA_TRANSFORMS_WARNING)
+/opt/conda/lib/python3.10/site-packages/torchvision/transforms/v2/__init__.py:54: UserWarning: The torchvision.datapoints and torchvision.transforms.v2 namespaces are still Beta. While we do not expect major breaking changes, some APIs may still change according to user feedback. Please submit any feedback you may have in this issue: https://github.com/pytorch/vision/issues/6753, and you can also check out https://github.com/pytorch/vision/issues/7319 to learn more about the APIs that we suspect might involve future changes. You can silence this warning by calling torchvision.disable_beta_transforms_warning().
+  warnings.warn(_BETA_TRANSFORMS_WARNING)
+/opt/conda/lib/python3.10/site-packages/modelopt/torch/utils/logging.py:115: UserWarning: Failed to import diffusers plugin due to: RuntimeError("Failed to import diffusers.loaders.single_file_model because of the following error (look up to see its traceback):\nname 'logger' is not defined"). You may ignore this warning if you do not need this plugin.
+  warnings.warn(message, *args, **kwargs)
+/opt/conda/lib/python3.10/site-packages/modelopt/torch/utils/logging.py:115: UserWarning: Failed to import vllm plugin due to: AttributeError("module 'vllm.attention' has no attribute 'Attention'"). You may ignore this warning if you do not need this plugin.
+  warnings.warn(message, *args, **kwargs)
+/opt/conda/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:5383: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+/opt/conda/lib/python3.10/site-packages/torch/nn/functional.py:1422: UserWarning: Unsupported unwinding pattern: Address not in range (Triggered internally at /workspace/framework/mcPytorch/torch/csrc/profiler/unwind/unwind.cpp:219.)
+  _VF.dropout_(input, p, training) if inplace else _VF.dropout(input, p, training)
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/transformer_engine/plugin/core/manager.py", line 434, in call
+[rank0]:     result = impl.fn(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/transformer_engine/plugin/core/backends/reference/register_ops.py", line 23, in wrapper
+[rank0]:     return fn(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/transformer_engine/plugin/core/backends/reference/reference.py", line 127, in generic_gemm
+[rank0]:     return general_gemm_torch(
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/transformer_engine/plugin/core/backends/reference/impl/gemm.py", line 82, in general_gemm_torch
+[rank0]:     out = torch.mm(B_comp, A_comp)
+[rank0]: torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 980.00 MiB. GPU 0 has a total capacity of 63.59 GiB of which 0 bytes is free. Of the allocated memory 62.26 GiB is allocated by PyTorch, and 223.41 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+
+[rank0]: The above exception was the direct cause of the following exception:
+
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "/home/secure/myc/memrift-flagscale/flagscale/train/train_gpt.py", line 262, in <module>
+[rank0]:     pretrain(
+[rank0]:   File "/home/secure/myc/memrift-flagscale/flagscale/train/train.py", line 1039, in pretrain
+[rank0]:     iteration, num_floating_point_operations_so_far = train(
+[rank0]:   File "/home/secure/myc/memrift-flagscale/flagscale/train/train.py", line 2764, in train
+[rank0]:     ) = train_step(
+[rank0]:   File "/home/secure/myc/memrift-flagscale/flagscale/train/train.py", line 1682, in train_step
+[rank0]:     losses_reduced = forward_backward_func(
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/pipeline_parallel/schedules.py", line 622, in forward_backward_no_pipelining
+[rank0]:     output_tensor, num_tokens = forward_step(
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/pipeline_parallel/schedules.py", line 409, in forward_step
+[rank0]:     output_tensor, loss_func = forward_step_func(data_iterator, model)
+[rank0]:   File "/home/secure/myc/memrift-flagscale/flagscale/train/train_gpt.py", line 157, in forward_step
+[rank0]:     output_tensor = model(
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1773, in _wrapped_call_impl
+[rank0]:     return self._call_impl(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1784, in _call_impl
+[rank0]:     return forward_call(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/distributed/data_parallel_base.py", line 22, in forward
+[rank0]:     return self.module(*inputs, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1773, in _wrapped_call_impl
+[rank0]:     return self._call_impl(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1784, in _call_impl
+[rank0]:     return forward_call(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/transformer/module.py", line 446, in forward
+[rank0]:     outputs = self.module(*inputs, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1773, in _wrapped_call_impl
+[rank0]:     return self._call_impl(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1784, in _call_impl
+[rank0]:     return forward_call(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/models/gpt/gpt_model.py", line 457, in forward
+[rank0]:     hidden_states = self.decoder(
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/transformer/transformer_block.py", line 570, in __call__
+[rank0]:     return super().__call__(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/transformer/module.py", line 308, in __call__
+[rank0]:     return super().__call__(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1773, in _wrapped_call_impl
+[rank0]:     return self._call_impl(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1784, in _call_impl
+[rank0]:     return forward_call(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/transformer/transformer_block.py", line 787, in forward
+[rank0]:     hidden_states, context = layer(
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/transformer/transformer_layer.py", line 925, in __call__
+[rank0]:     return super().__call__(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/transformer/module.py", line 308, in __call__
+[rank0]:     return super().__call__(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1773, in _wrapped_call_impl
+[rank0]:     return self._call_impl(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1784, in _call_impl
+[rank0]:     return forward_call(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/transformer/transformer_layer.py", line 508, in forward
+[rank0]:     output = self._forward_mlp(hidden_states, kwargs.get("inference_context", None))
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/transformer/transformer_layer.py", line 691, in _forward_mlp
+[rank0]:     mlp_output_with_bias = self.mlp(pre_mlp_layernorm_output)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1773, in _wrapped_call_impl
+[rank0]:     return self._call_impl(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1784, in _call_impl
+[rank0]:     return forward_call(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/transformer/mlp.py", line 147, in forward
+[rank0]:     intermediate_parallel, bias_parallel = self.linear_fc1(hidden_states)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1773, in _wrapped_call_impl
+[rank0]:     return self._call_impl(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1784, in _call_impl
+[rank0]:     return forward_call(*args, **kwargs)
+[rank0]:   File "/home/secure/myc/memrift-flagscale/flagscale/train/peft/lora.py", line 46, in forward
+[rank0]:     adapter_output = self.adapter(layernorm_output.contiguous())
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1773, in _wrapped_call_impl
+[rank0]:     return self._call_impl(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1784, in _call_impl
+[rank0]:     return forward_call(*args, **kwargs)
+[rank0]:   File "/home/secure/myc/memrift-flagscale/flagscale/train/peft/utils.py", line 241, in forward
+[rank0]:     x, _ = self.linear_out(x)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1773, in _wrapped_call_impl
+[rank0]:     return self._call_impl(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1784, in _call_impl
+[rank0]:     return forward_call(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/extensions/transformer_engine.py", line 429, in forward
+[rank0]:     out = super().forward(x, is_first_microbatch=_is_first_microbatch)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/torch/_dynamo/eval_frame.py", line 929, in _fn
+[rank0]:     return fn(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/transformer_engine/pytorch/module/linear.py", line 1495, in forward
+[rank0]:     out = linear_fn(*args)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/torch/autograd/function.py", line 576, in apply
+[rank0]:     return super().apply(*args, **kwargs)  # type: ignore[misc]
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/transformer_engine/pytorch/module/linear.py", line 310, in forward
+[rank0]:     gemm_out, *_, reduce_scatter_out = general_gemm(
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/transformer_engine/pytorch/cpp_extensions/gemm.py", line 152, in general_gemm
+[rank0]:     out, bias_grad, gelu_input, extra_output = tex.generic_gemm(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/transformer_engine/plugin/core/manager.py", line 468, in call
+[rank0]:     raise RuntimeError(
+[rank0]: RuntimeError: All 3 implementation(s) failed for op='generic_gemm'. Last error: CUDA out of memory. Tried to allocate 980.00 MiB. GPU 0 has a total capacity of 63.59 GiB of which 0 bytes is free. Of the allocated memory 62.26 GiB is allocated by PyTorch, and 223.41 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+[rank0]:[W530 21:00:28.738047319 ProcessGroupNCCL.cpp:1544] Warning: WARNING: destroy_process_group() was not called before program exit, which can leak resources. For more info, please see https://pytorch.org/docs/stable/distributed.html#shutdown (function operator())

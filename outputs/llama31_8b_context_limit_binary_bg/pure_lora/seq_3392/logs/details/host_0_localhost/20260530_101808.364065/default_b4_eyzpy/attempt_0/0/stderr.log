@@ -1,0 +1,43 @@
+/opt/conda/lib/python3.10/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+W0530 10:18:23.242000 600938 site-packages/torch/utils/cpp_extension.py:2527] TORCH_CUDA_ARCH_LIST is not set, all archs for visible cards are included for compilation. 
+W0530 10:18:23.242000 600938 site-packages/torch/utils/cpp_extension.py:2527] If this is not desired, please set os.environ['TORCH_CUDA_ARCH_LIST'] to specific architectures.
+Skipping import of cpp extensions due to incompatible torch version 2.8.0+metax3.3.0.2 for torchao version 0.16.0             Please see https://github.com/pytorch/ao/issues/2919 for more info
+/opt/conda/lib/python3.10/site-packages/modelopt/torch/utils/logging.py:115: UserWarning: Failed to import diffusers plugin due to: RuntimeError("Failed to import diffusers.models.modeling_utils because of the following error (look up to see its traceback):\nname 'logger' is not defined"). You may ignore this warning if you do not need this plugin.
+  warnings.warn(message, *args, **kwargs)
+/opt/conda/lib/python3.10/site-packages/xformers/ops/swiglu_op.py:107: FutureWarning: `torch.cuda.amp.custom_fwd(args...)` is deprecated. Please use `torch.amp.custom_fwd(args..., device_type='cuda')` instead.
+  def forward(cls, ctx, x, w1, b1, w2, b2, w3, b3):
+/opt/conda/lib/python3.10/site-packages/xformers/ops/swiglu_op.py:128: FutureWarning: `torch.cuda.amp.custom_bwd(args...)` is deprecated. Please use `torch.amp.custom_bwd(args..., device_type='cuda')` instead.
+  def backward(cls, ctx, dx5):
+/opt/conda/lib/python3.10/site-packages/torchvision/datapoints/__init__.py:12: UserWarning: The torchvision.datapoints and torchvision.transforms.v2 namespaces are still Beta. While we do not expect major breaking changes, some APIs may still change according to user feedback. Please submit any feedback you may have in this issue: https://github.com/pytorch/vision/issues/6753, and you can also check out https://github.com/pytorch/vision/issues/7319 to learn more about the APIs that we suspect might involve future changes. You can silence this warning by calling torchvision.disable_beta_transforms_warning().
+  warnings.warn(_BETA_TRANSFORMS_WARNING)
+/opt/conda/lib/python3.10/site-packages/torchvision/transforms/v2/__init__.py:54: UserWarning: The torchvision.datapoints and torchvision.transforms.v2 namespaces are still Beta. While we do not expect major breaking changes, some APIs may still change according to user feedback. Please submit any feedback you may have in this issue: https://github.com/pytorch/vision/issues/6753, and you can also check out https://github.com/pytorch/vision/issues/7319 to learn more about the APIs that we suspect might involve future changes. You can silence this warning by calling torchvision.disable_beta_transforms_warning().
+  warnings.warn(_BETA_TRANSFORMS_WARNING)
+/opt/conda/lib/python3.10/site-packages/modelopt/torch/utils/logging.py:115: UserWarning: Failed to import diffusers plugin due to: RuntimeError("Failed to import diffusers.loaders.single_file_model because of the following error (look up to see its traceback):\nname 'logger' is not defined"). You may ignore this warning if you do not need this plugin.
+  warnings.warn(message, *args, **kwargs)
+/opt/conda/lib/python3.10/site-packages/modelopt/torch/utils/logging.py:115: UserWarning: Failed to import vllm plugin due to: AttributeError("module 'vllm.attention' has no attribute 'Attention'"). You may ignore this warning if you do not need this plugin.
+  warnings.warn(message, *args, **kwargs)
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "/home/secure/myc/memrift-flagscale/flagscale/train/train_gpt.py", line 262, in <module>
+[rank0]:     pretrain(
+[rank0]:   File "/home/secure/myc/memrift-flagscale/flagscale/train/train.py", line 968, in pretrain
+[rank0]:     model, optimizer, opt_param_scheduler = setup_model_and_optimizer(
+[rank0]:   File "/home/secure/myc/memrift-flagscale/flagscale/train/train.py", line 1575, in setup_model_and_optimizer
+[rank0]:     args.iteration, args.num_floating_point_operations_so_far = load_checkpoint(
+[rank0]:   File "/home/secure/myc/memrift-flagscale/flagscale/train/megatron/training/checkpointing.py", line 1955, in load_checkpoint
+[rank0]:     raise e
+[rank0]:   File "/home/secure/myc/memrift-flagscale/flagscale/train/megatron/training/checkpointing.py", line 1918, in load_checkpoint
+[rank0]:     optimizer.load_state_dict(state_dict['optimizer'])
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/plugin/decorators.py", line 156, in wrapper
+[rank0]:     return plugin_impl(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/plugin/optimizer/optimizer.py", line 89, in load_state_dict
+[rank0]:     self.chained_optimizers[0].load_state_dict(state_dict)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/optimizer/optimizer.py", line 865, in load_state_dict
+[rank0]:     state_dict[optimizer_key]['param_groups'] = self._filter_and_reorder_param_groups(
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/optimizer/optimizer.py", line 403, in _filter_and_reorder_param_groups
+[rank0]:     needed_groups = [
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/optimizer/optimizer.py", line 405, in <listcomp>
+[rank0]:     tuple(g[key] if key in g else g[f"pre_{key}"] for key in param_group_identifier_keys)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/optimizer/optimizer.py", line 405, in <genexpr>
+[rank0]:     tuple(g[key] if key in g else g[f"pre_{key}"] for key in param_group_identifier_keys)
+[rank0]: KeyError: 'pre_use_muon'

@@ -1,0 +1,98 @@
+/opt/conda/lib/python3.10/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[default0]:/opt/conda/lib/python3.10/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[default0]:  import pynvml  # type: ignore[import]
+[default0]:Traceback (most recent call last):
+[default0]:  File "/opt/conda/lib/python3.10/site-packages/flag_gems/runtime/backend/device.py", line 72, in get_vendor
+[default0]:    return self._get_vendor_from_lib()
+[default0]:  File "/opt/conda/lib/python3.10/site-packages/flag_gems/runtime/backend/device.py", line 139, in _get_vendor_from_lib
+[default0]:    raise RuntimeError("The method is not implemented")
+[default0]:RuntimeError: The method is not implemented
+[default0]:
+[default0]:During handling of the above exception, another exception occurred:
+[default0]:
+[default0]:Traceback (most recent call last):
+[default0]:  File "/root/.config/superpowers/worktrees/memrift-flagscale/memrift-split-copy-benchmark/flagscale/train/train_gpt.py", line 9, in <module>
+[default0]:    from megatron.core import parallel_state
+[default0]:  File "/opt/conda/lib/python3.10/site-packages/megatron/core/__init__.py", line 3, in <module>
+[default0]:    import megatron.core.tensor_parallel
+[default0]:  File "/opt/conda/lib/python3.10/site-packages/megatron/core/tensor_parallel/__init__.py", line 2, in <module>
+[default0]:    from .cross_entropy import vocab_parallel_cross_entropy
+[default0]:  File "/opt/conda/lib/python3.10/site-packages/megatron/core/tensor_parallel/cross_entropy.py", line 7, in <module>
+[default0]:    from megatron.core.parallel_state import (
+[default0]:  File "/opt/conda/lib/python3.10/site-packages/megatron/core/parallel_state.py", line 14, in <module>
+[default0]:    from .utils import GlobalMemoryBuffer, is_torch_min_version
+[default0]:  File "/opt/conda/lib/python3.10/site-packages/megatron/core/utils.py", line 44, in <module>
+[default0]:    from megatron.core.dist_checkpointing.mapping import ShardedTensor
+[default0]:  File "/opt/conda/lib/python3.10/site-packages/megatron/core/dist_checkpointing/__init__.py", line 5, in <module>
+[default0]:    from .serialization import (
+[default0]:  File "/opt/conda/lib/python3.10/site-packages/megatron/core/dist_checkpointing/serialization.py", line 30, in <module>
+[default0]:    from .state_dict_utils import load_preprocess, save_preprocess
+[default0]:  File "/opt/conda/lib/python3.10/site-packages/megatron/core/dist_checkpointing/state_dict_utils.py", line 17, in <module>
+[default0]:    from .validation import determine_global_metadata, validate_sharding_integrity
+[default0]:  File "/opt/conda/lib/python3.10/site-packages/megatron/core/dist_checkpointing/validation.py", line 26, in <module>
+[default0]:    from megatron.core.dist_checkpointing.strategies.base import (
+[default0]:  File "/opt/conda/lib/python3.10/site-packages/megatron/core/dist_checkpointing/strategies/__init__.py", line 4, in <module>
+[default0]:    from megatron.core.dist_checkpointing.strategies.common import register_default_common_strategies
+[default0]:  File "/opt/conda/lib/python3.10/site-packages/megatron/core/dist_checkpointing/strategies/common.py", line 13, in <module>
+[default0]:    from megatron.core.dist_checkpointing.strategies.base import (
+[default0]:  File "/opt/conda/lib/python3.10/site-packages/megatron/core/dist_checkpointing/strategies/base.py", line 12, in <module>
+[default0]:    from .async_utils import AsyncCallsQueue, AsyncRequest
+[default0]:  File "/opt/conda/lib/python3.10/site-packages/megatron/core/dist_checkpointing/strategies/async_utils.py", line 23, in <module>
+[default0]:    from megatron.plugin.platform import get_platform
+[default0]:  File "/opt/conda/lib/python3.10/site-packages/megatron/plugin/platform/__init__.py", line 7, in <module>
+[default0]:    register_platforms()
+[default0]:  File "/opt/conda/lib/python3.10/site-packages/megatron/plugin/platform/platform_register.py", line 35, in register_platforms
+[default0]:    from .platform_txda import PlatformTXDA
+[default0]:  File "/opt/conda/lib/python3.10/site-packages/megatron/plugin/platform/platform_txda.py", line 10, in <module>
+[default0]:    import flag_gems
+[default0]:  File "/opt/conda/lib/python3.10/site-packages/flag_gems/__init__.py", line 6, in <module>
+[default0]:    from flag_gems import testing  # noqa: F401
+[default0]:  File "/opt/conda/lib/python3.10/site-packages/flag_gems/testing/__init__.py", line 3, in <module>
+[default0]:    from flag_gems import runtime
+[default0]:  File "/opt/conda/lib/python3.10/site-packages/flag_gems/runtime/__init__.py", line 5, in <module>
+[default0]:    config_loader = ConfigLoader()
+[default0]:  File "/opt/conda/lib/python3.10/site-packages/flag_gems/runtime/configloader.py", line 21, in __init__
+[default0]:    self.device = DeviceDetector()
+[default0]:  File "/opt/conda/lib/python3.10/site-packages/flag_gems/runtime/backend/device.py", line 43, in __init__
+[default0]:    self.info = self.get_vendor(vendor_name)
+[default0]:  File "/opt/conda/lib/python3.10/site-packages/flag_gems/runtime/backend/device.py", line 74, in get_vendor
+[default0]:    return self._get_vendor_from_sys()
+[default0]:  File "/opt/conda/lib/python3.10/site-packages/flag_gems/runtime/backend/device.py", line 125, in _get_vendor_from_sys
+[default0]:    error.device_not_found()
+[default0]:  File "/opt/conda/lib/python3.10/site-packages/flag_gems/runtime/error.py", line 6, in device_not_found
+[default0]:    raise RuntimeError(
+[default0]:RuntimeError: No device were detected on your machine ! 
+[default0]: Please check that your driver is complete. 
+E0606 09:17:42.678000 301250 site-packages/torch/distributed/elastic/multiprocessing/api.py:874] failed (exitcode: 1) local_rank: 0 (pid: 301337) of binary: /opt/conda/bin/python3.10
+[default0]:Megatron-LM-FL Platform: cpu Registered
+[default0]:Megatron-LM-FL Platform: cuda Registered
+Traceback (most recent call last):
+  File "/opt/conda/bin/torchrun", line 8, in <module>
+    sys.exit(main())
+  File "/opt/conda/lib/python3.10/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 357, in wrapper
+    return f(*args, **kwargs)
+  File "/opt/conda/lib/python3.10/site-packages/torch/distributed/run.py", line 901, in main
+    run(args)
+  File "/opt/conda/lib/python3.10/site-packages/torch/distributed/run.py", line 892, in run
+    elastic_launch(
+  File "/opt/conda/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 143, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+  File "/opt/conda/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 277, in launch_agent
+    raise ChildFailedError(
+torch.distributed.elastic.multiprocessing.errors.ChildFailedError: 
+============================================================
+flagscale/train/train_gpt.py FAILED
+------------------------------------------------------------
+Failures:
+  <NO_OTHER_FAILURES>
+------------------------------------------------------------
+Root Cause (first observed failure):
+[0]:
+  time      : 2026-06-06_09:17:42
+  host      : bm-turing-hz1-zone1-MC550-64G-1-14
+  rank      : 0 (local_rank: 0)
+  exitcode  : 1 (pid: 301337)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+============================================================

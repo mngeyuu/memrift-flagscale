@@ -1,0 +1,9 @@
+trial	seq_length	status	exit_code	elapsed_sec	host_log
+1	66560	OOM	0	3151	/home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_66560/logs/host_0_localhost.output
+2	34048	OOM	0	4917	/home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_34048/logs/host_0_localhost.output
+3	17920	OOM	0	5328	/home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_17920/logs/host_0_localhost.output
+4	9728	FAIL	0	2375	/home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_9728/logs/host_0_localhost.output
+5	5632	FAIL	0	1313	/home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_5632/logs/host_0_localhost.output
+6	3584	FAIL	0	929	/home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_3584/logs/host_0_localhost.output
+7	2560	FAIL	0	642	/home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_2560/logs/host_0_localhost.output
+8	2048	FAIL	0	753	/home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/trials/seq_2048/logs/host_0_localhost.output

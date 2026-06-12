@@ -1,0 +1,42 @@
+/opt/conda/lib/python3.10/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+W0606 09:24:17.660000 306705 site-packages/torch/utils/cpp_extension.py:2527] TORCH_CUDA_ARCH_LIST is not set, all archs for visible cards are included for compilation. 
+W0606 09:24:17.660000 306705 site-packages/torch/utils/cpp_extension.py:2527] If this is not desired, please set os.environ['TORCH_CUDA_ARCH_LIST'] to specific architectures.
+Skipping import of cpp extensions due to incompatible torch version 2.8.0+metax3.3.0.2 for torchao version 0.16.0             Please see https://github.com/pytorch/ao/issues/2919 for more info
+/opt/conda/lib/python3.10/site-packages/modelopt/torch/utils/logging.py:115: UserWarning: Failed to import diffusers plugin due to: RuntimeError("Failed to import diffusers.models.modeling_utils because of the following error (look up to see its traceback):\nname 'logger' is not defined"). You may ignore this warning if you do not need this plugin.
+  warnings.warn(message, *args, **kwargs)
+/opt/conda/lib/python3.10/site-packages/xformers/ops/swiglu_op.py:107: FutureWarning: `torch.cuda.amp.custom_fwd(args...)` is deprecated. Please use `torch.amp.custom_fwd(args..., device_type='cuda')` instead.
+  def forward(cls, ctx, x, w1, b1, w2, b2, w3, b3):
+/opt/conda/lib/python3.10/site-packages/xformers/ops/swiglu_op.py:128: FutureWarning: `torch.cuda.amp.custom_bwd(args...)` is deprecated. Please use `torch.amp.custom_bwd(args..., device_type='cuda')` instead.
+  def backward(cls, ctx, dx5):
+/opt/conda/lib/python3.10/site-packages/torchvision/datapoints/__init__.py:12: UserWarning: The torchvision.datapoints and torchvision.transforms.v2 namespaces are still Beta. While we do not expect major breaking changes, some APIs may still change according to user feedback. Please submit any feedback you may have in this issue: https://github.com/pytorch/vision/issues/6753, and you can also check out https://github.com/pytorch/vision/issues/7319 to learn more about the APIs that we suspect might involve future changes. You can silence this warning by calling torchvision.disable_beta_transforms_warning().
+  warnings.warn(_BETA_TRANSFORMS_WARNING)
+/opt/conda/lib/python3.10/site-packages/torchvision/transforms/v2/__init__.py:54: UserWarning: The torchvision.datapoints and torchvision.transforms.v2 namespaces are still Beta. While we do not expect major breaking changes, some APIs may still change according to user feedback. Please submit any feedback you may have in this issue: https://github.com/pytorch/vision/issues/6753, and you can also check out https://github.com/pytorch/vision/issues/7319 to learn more about the APIs that we suspect might involve future changes. You can silence this warning by calling torchvision.disable_beta_transforms_warning().
+  warnings.warn(_BETA_TRANSFORMS_WARNING)
+/opt/conda/lib/python3.10/site-packages/modelopt/torch/utils/logging.py:115: UserWarning: Failed to import diffusers plugin due to: RuntimeError("Failed to import diffusers.loaders.single_file_model because of the following error (look up to see its traceback):\nname 'logger' is not defined"). You may ignore this warning if you do not need this plugin.
+  warnings.warn(message, *args, **kwargs)
+/opt/conda/lib/python3.10/site-packages/modelopt/torch/utils/logging.py:115: UserWarning: Failed to import vllm plugin due to: AttributeError("module 'vllm.attention' has no attribute 'Attention'"). You may ignore this warning if you do not need this plugin.
+  warnings.warn(message, *args, **kwargs)
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "/root/.config/superpowers/worktrees/memrift-flagscale/memrift-split-copy-benchmark/flagscale/train/train_gpt.py", line 262, in <module>
+[rank0]:     pretrain(
+[rank0]:   File "/root/.config/superpowers/worktrees/memrift-flagscale/memrift-split-copy-benchmark/flagscale/train/train.py", line 852, in pretrain
+[rank0]:     initialize_megatron(
+[rank0]:   File "/root/.config/superpowers/worktrees/memrift-flagscale/memrift-split-copy-benchmark/flagscale/train/megatron/training/initialize.py", line 190, in initialize_megatron
+[rank0]:     _compile_dependencies()
+[rank0]:   File "/root/.config/superpowers/worktrees/memrift-flagscale/memrift-split-copy-benchmark/flagscale/train/megatron/training/initialize.py", line 250, in _compile_dependencies
+[rank0]:     fused_kernels.load(args)
+[rank0]:   File "/root/.config/superpowers/worktrees/memrift-flagscale/memrift-split-copy-benchmark/flagscale/train/megatron/legacy/fused_kernels/__init__.py", line 21, in load
+[rank0]:     _, bare_metal_major, bare_metal_minor = _get_cuda_bare_metal_version(cpp_extension.CUDA_HOME)
+[rank0]:   File "/root/.config/superpowers/worktrees/memrift-flagscale/memrift-split-copy-benchmark/flagscale/train/megatron/legacy/fused_kernels/__init__.py", line 49, in _get_cuda_bare_metal_version
+[rank0]:     raw_output = subprocess.check_output([cuda_dir + "/bin/nvcc", "-V"], universal_newlines=True)
+[rank0]:   File "/opt/conda/lib/python3.10/subprocess.py", line 421, in check_output
+[rank0]:     return run(*popenargs, stdout=PIPE, timeout=timeout, check=True,
+[rank0]:   File "/opt/conda/lib/python3.10/subprocess.py", line 503, in run
+[rank0]:     with Popen(*popenargs, **kwargs) as process:
+[rank0]:   File "/opt/conda/lib/python3.10/subprocess.py", line 971, in __init__
+[rank0]:     self._execute_child(args, executable, preexec_fn, close_fds,
+[rank0]:   File "/opt/conda/lib/python3.10/subprocess.py", line 1847, in _execute_child
+[rank0]:     raise child_exception_type(errno_num, err_msg, err_filename)
+[rank0]: FileNotFoundError: [Errno 2] No such file or directory: '/opt/maca/tools/cu-bridge/bin/nvcc'
+[rank0]:[W606 09:24:27.133073294 ProcessGroupNCCL.cpp:1544] Warning: WARNING: destroy_process_group() was not called before program exit, which can leak resources. For more info, please see https://pytorch.org/docs/stable/distributed.html#shutdown (function operator())

@@ -1,0 +1,35 @@
+{
+  "train_iters": 5,
+  "model": "/home/secure/myc/model/llama-3.1-8b",
+  "memrift_weight_dir": "/home/secure/myc/memrift-flagscale/memrift_weights/llama31_8b_zstd_level18",
+  "memrift_plus_lora": {
+    "max_allocated_mb": 25030.6962890625,
+    "elapsed_ms_per_iter_all": [
+      78717.7,
+      61513.0,
+      62194.0,
+      61249.3,
+      61920.2
+    ],
+    "elapsed_ms_per_iter_mean": 65118.840000000004,
+    "elapsed_ms_per_iter_last": 61920.2,
+    "num_time_samples": 5,
+    "source_log": "/home/secure/myc/memrift-flagscale/output/llama31_8b_compare/logs/memrift_host_0_localhost.output"
+  },
+  "pure_lora": {
+    "max_allocated_mb": 28387.564453125,
+    "elapsed_ms_per_iter_all": [
+      17362.1,
+      3941.9,
+      3913.6,
+      3944.7,
+      3949.7
+    ],
+    "elapsed_ms_per_iter_mean": 6622.4,
+    "elapsed_ms_per_iter_last": 3949.7,
+    "num_time_samples": 5,
+    "source_log": "/home/secure/myc/memrift-flagscale/output/llama31_8b_compare/logs/pure_lora_host_0_localhost.output"
+  },
+  "peak_delta_mb_pure_minus_memrift": 3356.8682,
+  "iter_time_ratio_memrift_over_pure": 9.833118
+}

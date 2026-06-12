@@ -1,0 +1,84 @@
+/opt/conda/lib/python3.10/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+W0606 09:29:38.269000 312519 site-packages/torch/utils/cpp_extension.py:2527] TORCH_CUDA_ARCH_LIST is not set, all archs for visible cards are included for compilation. 
+W0606 09:29:38.269000 312519 site-packages/torch/utils/cpp_extension.py:2527] If this is not desired, please set os.environ['TORCH_CUDA_ARCH_LIST'] to specific architectures.
+Skipping import of cpp extensions due to incompatible torch version 2.8.0+metax3.3.0.2 for torchao version 0.16.0             Please see https://github.com/pytorch/ao/issues/2919 for more info
+/opt/conda/lib/python3.10/site-packages/modelopt/torch/utils/logging.py:115: UserWarning: Failed to import diffusers plugin due to: RuntimeError("Failed to import diffusers.models.modeling_utils because of the following error (look up to see its traceback):\nname 'logger' is not defined"). You may ignore this warning if you do not need this plugin.
+  warnings.warn(message, *args, **kwargs)
+/opt/conda/lib/python3.10/site-packages/xformers/ops/swiglu_op.py:107: FutureWarning: `torch.cuda.amp.custom_fwd(args...)` is deprecated. Please use `torch.amp.custom_fwd(args..., device_type='cuda')` instead.
+  def forward(cls, ctx, x, w1, b1, w2, b2, w3, b3):
+/opt/conda/lib/python3.10/site-packages/xformers/ops/swiglu_op.py:128: FutureWarning: `torch.cuda.amp.custom_bwd(args...)` is deprecated. Please use `torch.amp.custom_bwd(args..., device_type='cuda')` instead.
+  def backward(cls, ctx, dx5):
+/opt/conda/lib/python3.10/site-packages/torchvision/datapoints/__init__.py:12: UserWarning: The torchvision.datapoints and torchvision.transforms.v2 namespaces are still Beta. While we do not expect major breaking changes, some APIs may still change according to user feedback. Please submit any feedback you may have in this issue: https://github.com/pytorch/vision/issues/6753, and you can also check out https://github.com/pytorch/vision/issues/7319 to learn more about the APIs that we suspect might involve future changes. You can silence this warning by calling torchvision.disable_beta_transforms_warning().
+  warnings.warn(_BETA_TRANSFORMS_WARNING)
+/opt/conda/lib/python3.10/site-packages/torchvision/transforms/v2/__init__.py:54: UserWarning: The torchvision.datapoints and torchvision.transforms.v2 namespaces are still Beta. While we do not expect major breaking changes, some APIs may still change according to user feedback. Please submit any feedback you may have in this issue: https://github.com/pytorch/vision/issues/6753, and you can also check out https://github.com/pytorch/vision/issues/7319 to learn more about the APIs that we suspect might involve future changes. You can silence this warning by calling torchvision.disable_beta_transforms_warning().
+  warnings.warn(_BETA_TRANSFORMS_WARNING)
+/opt/conda/lib/python3.10/site-packages/modelopt/torch/utils/logging.py:115: UserWarning: Failed to import diffusers plugin due to: RuntimeError("Failed to import diffusers.loaders.single_file_model because of the following error (look up to see its traceback):\nname 'logger' is not defined"). You may ignore this warning if you do not need this plugin.
+  warnings.warn(message, *args, **kwargs)
+/opt/conda/lib/python3.10/site-packages/modelopt/torch/utils/logging.py:115: UserWarning: Failed to import vllm plugin due to: AttributeError("module 'vllm.attention' has no attribute 'Attention'"). You may ignore this warning if you do not need this plugin.
+  warnings.warn(message, *args, **kwargs)
+/opt/conda/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:5383: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/transformer/spec_utils.py", line 97, in build_module
+[rank0]:     return module(
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/transformer/torch_norm.py", line 30, in __new__
+[rank0]:     assert not config.persist_layer_norm, f"persist_layer_norm not supported by torch LayerNorm"
+[rank0]: AssertionError: persist_layer_norm not supported by torch LayerNorm
+
+[rank0]: During handling of the above exception, another exception occurred:
+
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/transformer/spec_utils.py", line 97, in build_module
+[rank0]:     return module(
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/transformer/transformer_layer.py", line 357, in __init__
+[rank0]:     self.input_layernorm = build_module(
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/transformer/spec_utils.py", line 104, in build_module
+[rank0]:     raise type(e)(f"{str(e)} when instantiating {module.__name__}").with_traceback(
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/transformer/spec_utils.py", line 97, in build_module
+[rank0]:     return module(
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/transformer/torch_norm.py", line 30, in __new__
+[rank0]:     assert not config.persist_layer_norm, f"persist_layer_norm not supported by torch LayerNorm"
+[rank0]: AssertionError: persist_layer_norm not supported by torch LayerNorm when instantiating WrappedTorchNorm
+
+[rank0]: During handling of the above exception, another exception occurred:
+
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "/root/.config/superpowers/worktrees/memrift-flagscale/memrift-split-copy-benchmark/flagscale/train/train_gpt.py", line 262, in <module>
+[rank0]:     pretrain(
+[rank0]:   File "/root/.config/superpowers/worktrees/memrift-flagscale/memrift-split-copy-benchmark/flagscale/train/train.py", line 968, in pretrain
+[rank0]:     model, optimizer, opt_param_scheduler = setup_model_and_optimizer(
+[rank0]:   File "/root/.config/superpowers/worktrees/memrift-flagscale/memrift-split-copy-benchmark/flagscale/train/train.py", line 1493, in setup_model_and_optimizer
+[rank0]:     model = get_model(model_provider_func, model_type)
+[rank0]:   File "/root/.config/superpowers/worktrees/memrift-flagscale/memrift-split-copy-benchmark/flagscale/train/train.py", line 1250, in get_model
+[rank0]:     model = build_model()
+[rank0]:   File "/root/.config/superpowers/worktrees/memrift-flagscale/memrift-split-copy-benchmark/flagscale/train/train.py", line 1242, in build_model
+[rank0]:     model = model_provider_func(pre_process=pre_process, post_process=post_process)
+[rank0]:   File "/root/.config/superpowers/worktrees/memrift-flagscale/memrift-split-copy-benchmark/flagscale/train/model_provider.py", line 73, in model_provider
+[rank0]:     return model_builder(
+[rank0]:   File "/root/.config/superpowers/worktrees/memrift-flagscale/memrift-split-copy-benchmark/flagscale/train/gpt_builders.py", line 88, in gpt_builder
+[rank0]:     model = GPTModel(
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/models/gpt/gpt_model.py", line 204, in __init__
+[rank0]:     self.decoder = TransformerBlock(
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/transformer/transformer_block.py", line 341, in __init__
+[rank0]:     self._build_layers()
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/transformer/transformer_block.py", line 384, in _build_layers
+[rank0]:     [
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/transformer/transformer_block.py", line 385, in <listcomp>
+[rank0]:     build_layer(layer_spec, i + 1)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/transformer/transformer_block.py", line 373, in build_layer
+[rank0]:     module = build_module(
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/transformer/spec_utils.py", line 104, in build_module
+[rank0]:     raise type(e)(f"{str(e)} when instantiating {module.__name__}").with_traceback(
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/transformer/spec_utils.py", line 97, in build_module
+[rank0]:     return module(
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/transformer/transformer_layer.py", line 357, in __init__
+[rank0]:     self.input_layernorm = build_module(
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/transformer/spec_utils.py", line 104, in build_module
+[rank0]:     raise type(e)(f"{str(e)} when instantiating {module.__name__}").with_traceback(
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/transformer/spec_utils.py", line 97, in build_module
+[rank0]:     return module(
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/transformer/torch_norm.py", line 30, in __new__
+[rank0]:     assert not config.persist_layer_norm, f"persist_layer_norm not supported by torch LayerNorm"
+[rank0]: AssertionError: persist_layer_norm not supported by torch LayerNorm when instantiating WrappedTorchNorm when instantiating TransformerLayer
+[rank0]:[W606 09:29:48.421229188 ProcessGroupNCCL.cpp:1544] Warning: WARNING: destroy_process_group() was not called before program exit, which can leak resources. For more info, please see https://pytorch.org/docs/stable/distributed.html#shutdown (function operator())

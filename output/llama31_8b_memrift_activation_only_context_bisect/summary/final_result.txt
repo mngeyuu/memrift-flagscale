@@ -1,0 +1,6 @@
+Llama-3.1-8B MemRift activation-only context bisect summary
+out_root=/home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect
+results_tsv=/home/secure/myc/memrift-flagscale/output/llama31_8b_memrift_activation_only_context_bisect/summary/results.tsv
+max_runnable_seq_length=<none>
+first_failed_seq_length_near_boundary=2048
+first_failed_status_near_boundary=FAIL

@@ -1,0 +1,17 @@
+- action=run
+- experiment.exp_dir=/home/secure/myc/memrift-flagscale/output/llama31_8b_compare/memrift_run
+- experiment.exp_name=llama31_8b_memrift
+- train.system.memrift_enable=true
+- train.system.memrift_weight_enable=true
+- train.system.memrift_activation_enable=false
+- train.system.memrift_weight_async=true
+- train.system.memrift_act_async=false
+- train.system.memrift_prefetch_layers=12
+- train.system.memrift_compressed_weight_dir=/home/secure/myc/memrift-flagscale/memrift_weights/llama31_8b_zstd_level18
+- train.model.transformer_impl=transformer_engine
+- train.model.tokenizer_path=/home/secure/myc/model/llama-3.1-8b
+- train.model.tokenizer_model=/home/secure/myc/model/llama-3.1-8b
+- train.trainer.train_iters=5
+- train.trainer.lr_warmup_iters=2
+- +train.system.num_workers=0
+- train.system.logging.log_interval=1

@@ -1,0 +1,172 @@
+{
+  "config": {
+    "mode": "both",
+    "dtype": "bf16",
+    "shapes": [
+      [
+        1024,
+        1024
+      ]
+    ],
+    "warmup": 1,
+    "iters": 2,
+    "zstd_level": 18,
+    "stream": "current"
+  },
+  "environment": {
+    "torch_version": "2.8.0+metax3.3.0.2",
+    "stream": "current",
+    "argv": [
+      "scripts/benchmark_memrift_split_paths.py",
+      "--shape",
+      "1024,1024",
+      "--warmup",
+      "1",
+      "--iters",
+      "2",
+      "--out",
+      "outputs/memrift_split_path_smoke.json"
+    ],
+    "device_name": "MetaX C550"
+  },
+  "results": [
+    {
+      "mode": "mapped",
+      "shape": [
+        1024,
+        1024
+      ],
+      "dtype": "bf16",
+      "numel": 1048576,
+      "warmup": 1,
+      "iters": 2,
+      "zstd_level": 18,
+      "stream": "current",
+      "iterations": [
+        {
+          "submit_ms": 0.030798022635281086,
+          "cuda_event_ms": 108.49894714355469,
+          "event_wait_ms": 108.65326298517175,
+          "numpy_ms": 0.2471559855621308,
+          "zstd_ms": 350.4673429997638,
+          "compressed_bytes": 340856
+        },
+        {
+          "submit_ms": 0.15858898404985666,
+          "cuda_event_ms": 108.59366607666016,
+          "event_wait_ms": 108.61408899654634,
+          "numpy_ms": 0.05960199632681906,
+          "zstd_ms": 346.7475090001244,
+          "compressed_bytes": 340856
+        }
+      ],
+      "summaries": {
+        "submit": {
+          "min_ms": 0.030798022635281086,
+          "max_ms": 0.15858898404985666,
+          "mean_ms": 0.09469350334256887,
+          "median_ms": 0.09469350334256887
+        },
+        "cuda_event": {
+          "min_ms": 108.49894714355469,
+          "max_ms": 108.59366607666016,
+          "mean_ms": 108.54630661010742,
+          "median_ms": 108.54630661010742
+        },
+        "event_wait": {
+          "min_ms": 108.61408899654634,
+          "max_ms": 108.65326298517175,
+          "mean_ms": 108.63367599085905,
+          "median_ms": 108.63367599085905
+        },
+        "numpy": {
+          "min_ms": 0.05960199632681906,
+          "max_ms": 0.2471559855621308,
+          "mean_ms": 0.15337899094447494,
+          "median_ms": 0.15337899094447494
+        },
+        "zstd": {
+          "min_ms": 346.7475090001244,
+          "max_ms": 350.4673429997638,
+          "mean_ms": 348.6074259999441,
+          "median_ms": 348.6074259999441
+        },
+        "compressed_bytes": {
+          "min_bytes": 340856,
+          "max_bytes": 340856,
+          "mean_bytes": 340856.0,
+          "median_bytes": 340856.0
+        }
+      }
+    },
+    {
+      "mode": "copy",
+      "shape": [
+        1024,
+        1024
+      ],
+      "dtype": "bf16",
+      "numel": 1048576,
+      "warmup": 1,
+      "iters": 2,
+      "zstd_level": 18,
+      "stream": "current",
+      "iterations": [
+        {
+          "submit_ms": 0.036729994462803006,
+          "cuda_event_ms": 0.08627200126647949,
+          "event_wait_ms": 0.05263902130536735,
+          "numpy_ms": 0.048932008212432265,
+          "zstd_ms": 345.31671498552896,
+          "compressed_bytes": 340856
+        },
+        {
+          "submit_ms": 0.16320700524374843,
+          "cuda_event_ms": 0.20377600193023682,
+          "event_wait_ms": 0.05229900125414133,
+          "numpy_ms": 0.04930299473926425,
+          "zstd_ms": 345.78913397854194,
+          "compressed_bytes": 340856
+        }
+      ],
+      "summaries": {
+        "submit": {
+          "min_ms": 0.036729994462803006,
+          "max_ms": 0.16320700524374843,
+          "mean_ms": 0.09996849985327572,
+          "median_ms": 0.09996849985327572
+        },
+        "cuda_event": {
+          "min_ms": 0.08627200126647949,
+          "max_ms": 0.20377600193023682,
+          "mean_ms": 0.14502400159835815,
+          "median_ms": 0.14502400159835815
+        },
+        "event_wait": {
+          "min_ms": 0.05229900125414133,
+          "max_ms": 0.05263902130536735,
+          "mean_ms": 0.05246901127975434,
+          "median_ms": 0.05246901127975434
+        },
+        "numpy": {
+          "min_ms": 0.048932008212432265,
+          "max_ms": 0.04930299473926425,
+          "mean_ms": 0.04911750147584826,
+          "median_ms": 0.04911750147584826
+        },
+        "zstd": {
+          "min_ms": 345.31671498552896,
+          "max_ms": 345.78913397854194,
+          "mean_ms": 345.55292448203545,
+          "median_ms": 345.55292448203545
+        },
+        "compressed_bytes": {
+          "min_bytes": 340856,
+          "max_bytes": 340856,
+          "mean_bytes": 340856.0,
+          "median_bytes": 340856.0
+        }
+      }
+    }
+  ]
+}

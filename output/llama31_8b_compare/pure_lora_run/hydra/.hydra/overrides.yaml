@@ -1,0 +1,13 @@
+- action=run
+- experiment.exp_dir=/home/secure/myc/memrift-flagscale/output/llama31_8b_compare/pure_lora_run
+- experiment.exp_name=llama31_8b_pure_lora
+- train.system.memrift_enable=false
+- train.system.memrift_weight_enable=false
+- +train.system.init_model_with_meta_device=false
+- train.model.transformer_impl=transformer_engine
+- train.model.tokenizer_path=/home/secure/myc/model/llama-3.1-8b
+- train.model.tokenizer_model=/home/secure/myc/model/llama-3.1-8b
+- train.trainer.train_iters=5
+- train.trainer.lr_warmup_iters=2
+- +train.system.num_workers=0
+- train.system.logging.log_interval=1

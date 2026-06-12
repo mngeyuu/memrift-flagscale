@@ -1,0 +1,14 @@
+{
+  "max_allocated_mb": 25030.6962890625,
+  "elapsed_ms_per_iter_all": [
+    78717.7,
+    61513.0,
+    62194.0,
+    61249.3,
+    61920.2
+  ],
+  "elapsed_ms_per_iter_mean": 65118.840000000004,
+  "elapsed_ms_per_iter_last": 61920.2,
+  "num_time_samples": 5,
+  "source_log": "/home/secure/myc/memrift-flagscale/output/llama31_8b_compare/logs/memrift_host_0_localhost.output"
+}

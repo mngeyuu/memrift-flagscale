@@ -1,0 +1,584 @@
+==============================================
+ Llama-3.1-8B context binary search (background)
+==============================================
+ REPO_ROOT:  /home/secure/myc/memrift-flagscale
+ OUT_ROOT:   /home/secure/myc/memrift-flagscale/outputs/llama31_8b_context_limit_binary_bg
+ VARIANT:    compare_act_weight
+ SEARCH_MODE:binary
+==============================================
+
+>> 2026-05-30 10:23:06 elapsed=0s
+# Llama-3.1-8B Single-GPU Context Sweep
+
+- Selected physical GPU: `2`
+- GPU selection mode: `auto`
+- Timeout per run: `1800` seconds
+
+| Variant | Last Success Seq | First Failure Seq | Failure Type | Last Success Max Allocated (MB) | Last Success Elapsed (ms) |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Pure LoRA | 3424 | 3432 | oom | 62923.61 | 24058.5 |
+
+
+>> 2026-05-30 10:28:06 elapsed=300s
+# Llama-3.1-8B Single-GPU Context Sweep
+
+- Selected physical GPU: `2`
+- GPU selection mode: `auto`
+- Timeout per run: `1800` seconds
+
+| Variant | Last Success Seq | First Failure Seq | Failure Type | Last Success Max Allocated (MB) | Last Success Elapsed (ms) |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Pure LoRA | 3425 | 3426 | oom | 62929.34 | 32222.9 |
+
+
+>> 2026-05-30 10:33:06 elapsed=600s
+# Llama-3.1-8B Single-GPU Context Sweep
+
+- Selected physical GPU: `2`
+- GPU selection mode: `auto`
+- Timeout per run: `1800` seconds
+
+| Variant | Last Success Seq | First Failure Seq | Failure Type | Last Success Max Allocated (MB) | Last Success Elapsed (ms) |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Pure LoRA | 3425 | 3426 | oom | 62929.34 | 32222.9 |
+| Act+Weight MemRift | 2048 | 4096 | oom | 36325.26 | 127724.7 |
+
+- Act+Weight MemRift extends the last-success context by `-1377` tokens versus pure LoRA.
+
+>> 2026-05-30 10:38:06 elapsed=900s
+# Llama-3.1-8B Single-GPU Context Sweep
+
+- Selected physical GPU: `2`
+- GPU selection mode: `auto`
+- Timeout per run: `1800` seconds
+
+| Variant | Last Success Seq | First Failure Seq | Failure Type | Last Success Max Allocated (MB) | Last Success Elapsed (ms) |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Pure LoRA | 3425 | 3426 | oom | 62929.34 | 32222.9 |
+| Act+Weight MemRift | 3072 | 3584 | oom | 52725.96 | 129829.0 |
+
+- Act+Weight MemRift extends the last-success context by `-353` tokens versus pure LoRA.
+
+>> 2026-05-30 10:43:06 elapsed=1200s
+# Llama-3.1-8B Single-GPU Context Sweep
+
+- Selected physical GPU: `2`
+- GPU selection mode: `auto`
+- Timeout per run: `1800` seconds
+
+| Variant | Last Success Seq | First Failure Seq | Failure Type | Last Success Max Allocated (MB) | Last Success Elapsed (ms) |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Pure LoRA | 3425 | 3426 | oom | 62929.34 | 32222.9 |
+| Act+Weight MemRift | 3328 | 3584 | oom | 57563.87 | 127856.9 |
+
+- Act+Weight MemRift extends the last-success context by `-97` tokens versus pure LoRA.
+
+>> 2026-05-30 10:48:06 elapsed=1500s
+# Llama-3.1-8B Single-GPU Context Sweep
+
+- Selected physical GPU: `2`
+- GPU selection mode: `auto`
+- Timeout per run: `1800` seconds
+
+| Variant | Last Success Seq | First Failure Seq | Failure Type | Last Success Max Allocated (MB) | Last Success Elapsed (ms) |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Pure LoRA | 3425 | 3426 | oom | 62929.34 | 32222.9 |
+| Act+Weight MemRift | 3456 | 3584 | oom | 60121.95 | 130701.9 |
+
+- Act+Weight MemRift extends the last-success context by `31` tokens versus pure LoRA.
+
+>> 2026-05-30 10:53:06 elapsed=1800s
+# Llama-3.1-8B Single-GPU Context Sweep
+
+- Selected physical GPU: `2`
+- GPU selection mode: `auto`
+- Timeout per run: `1800` seconds
+
+| Variant | Last Success Seq | First Failure Seq | Failure Type | Last Success Max Allocated (MB) | Last Success Elapsed (ms) |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Pure LoRA | 3425 | 3426 | oom | 62929.34 | 32222.9 |
+| Act+Weight MemRift | 3520 | 3552 | oom | 61378.26 | 132471.5 |
+
+- Act+Weight MemRift extends the last-success context by `95` tokens versus pure LoRA.
+
+>> 2026-05-30 10:58:06 elapsed=2100s
+# Llama-3.1-8B Single-GPU Context Sweep
+
+- Selected physical GPU: `2`
+- GPU selection mode: `auto`
+- Timeout per run: `1800` seconds
+
+| Variant | Last Success Seq | First Failure Seq | Failure Type | Last Success Max Allocated (MB) | Last Success Elapsed (ms) |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Pure LoRA | 3425 | 3426 | oom | 62929.34 | 32222.9 |
+| Act+Weight MemRift | 3520 | 3552 | oom | 61378.26 | 132471.5 |
+
+- Act+Weight MemRift extends the last-success context by `95` tokens versus pure LoRA.
+
+>> 2026-05-30 11:03:06 elapsed=2400s
+# Llama-3.1-8B Single-GPU Context Sweep
+
+- Selected physical GPU: `2`
+- GPU selection mode: `auto`
+- Timeout per run: `1800` seconds
+
+| Variant | Last Success Seq | First Failure Seq | Failure Type | Last Success Max Allocated (MB) | Last Success Elapsed (ms) |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Pure LoRA | 3425 | 3426 | oom | 62929.34 | 32222.9 |
+| Act+Weight MemRift | 3520 | 3552 | oom | 61378.26 | 132471.5 |
+
+- Act+Weight MemRift extends the last-success context by `95` tokens versus pure LoRA.
+
+>> 2026-05-30 11:08:06 elapsed=2700s
+# Llama-3.1-8B Single-GPU Context Sweep
+
+- Selected physical GPU: `2`
+- GPU selection mode: `auto`
+- Timeout per run: `1800` seconds
+
+| Variant | Last Success Seq | First Failure Seq | Failure Type | Last Success Max Allocated (MB) | Last Success Elapsed (ms) |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Pure LoRA | 3425 | 3426 | oom | 62929.34 | 32222.9 |
+| Act+Weight MemRift | 3520 | 3552 | oom | 61378.26 | 132471.5 |
+
+- Act+Weight MemRift extends the last-success context by `95` tokens versus pure LoRA.
+
+>> 2026-05-30 11:13:06 elapsed=3000s
+# Llama-3.1-8B Single-GPU Context Sweep
+
+- Selected physical GPU: `2`
+- GPU selection mode: `auto`
+- Timeout per run: `1800` seconds
+
+| Variant | Last Success Seq | First Failure Seq | Failure Type | Last Success Max Allocated (MB) | Last Success Elapsed (ms) |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Pure LoRA | 3425 | 3426 | oom | 62929.34 | 32222.9 |
+| Act+Weight MemRift | 3520 | 3552 | oom | 61378.26 | 132471.5 |
+
+- Act+Weight MemRift extends the last-success context by `95` tokens versus pure LoRA.
+
+>> 2026-05-30 11:18:06 elapsed=3300s
+# Llama-3.1-8B Single-GPU Context Sweep
+
+- Selected physical GPU: `2`
+- GPU selection mode: `auto`
+- Timeout per run: `1800` seconds
+
+| Variant | Last Success Seq | First Failure Seq | Failure Type | Last Success Max Allocated (MB) | Last Success Elapsed (ms) |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Pure LoRA | 3425 | 3426 | oom | 62929.34 | 32222.9 |
+| Act+Weight MemRift | 3520 | 3552 | oom | 61378.26 | 132471.5 |
+
+- Act+Weight MemRift extends the last-success context by `95` tokens versus pure LoRA.
+==============================================
+ Llama-3.1-8B context binary search (background)
+==============================================
+ REPO_ROOT:  /home/secure/myc/memrift-flagscale
+ OUT_ROOT:   /home/secure/myc/memrift-flagscale/outputs/llama31_8b_context_limit_binary_bg
+ VARIANT:    act_weight
+ SEARCH_MODE:binary
+==============================================
+
+>> 2026-05-30 11:28:44 elapsed=0s
+# Llama-3.1-8B Single-GPU Context Sweep
+
+- Selected physical GPU: `3`
+- GPU selection mode: `auto`
+- Timeout per run: `1800` seconds
+
+| Variant | Last Success Seq | First Failure Seq | Failure Type | Last Success Max Allocated (MB) | Last Success Elapsed (ms) |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Pure LoRA | 3425 | 3426 | oom | 62929.34 | 32222.9 |
+
+
+>> 2026-05-30 11:33:44 elapsed=300s
+# Llama-3.1-8B Single-GPU Context Sweep
+
+- Selected physical GPU: `3`
+- GPU selection mode: `auto`
+- Timeout per run: `1800` seconds
+
+| Variant | Last Success Seq | First Failure Seq | Failure Type | Last Success Max Allocated (MB) | Last Success Elapsed (ms) |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Pure LoRA | 3425 | 3426 | oom | 62929.34 | 32222.9 |
+
+
+>> 2026-05-30 11:38:44 elapsed=600s
+# Llama-3.1-8B Single-GPU Context Sweep
+
+- Selected physical GPU: `3`
+- GPU selection mode: `auto`
+- Timeout per run: `1800` seconds
+
+| Variant | Last Success Seq | First Failure Seq | Failure Type | Last Success Max Allocated (MB) | Last Success Elapsed (ms) |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Pure LoRA | 3425 | 3426 | oom | 62929.34 | 32222.9 |
+
+
+>> 2026-05-30 11:43:44 elapsed=900s
+# Llama-3.1-8B Single-GPU Context Sweep
+
+- Selected physical GPU: `3`
+- GPU selection mode: `auto`
+- Timeout per run: `1800` seconds
+
+| Variant | Last Success Seq | First Failure Seq | Failure Type | Last Success Max Allocated (MB) | Last Success Elapsed (ms) |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Pure LoRA | 3425 | 3426 | oom | 62929.34 | 32222.9 |
+
+
+>> 2026-05-30 11:48:44 elapsed=1200s
+# Llama-3.1-8B Single-GPU Context Sweep
+
+- Selected physical GPU: `3`
+- GPU selection mode: `auto`
+- Timeout per run: `1800` seconds
+
+| Variant | Last Success Seq | First Failure Seq | Failure Type | Last Success Max Allocated (MB) | Last Success Elapsed (ms) |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Pure LoRA | 3425 | 3426 | oom | 62929.34 | 32222.9 |
+
+
+>> 2026-05-30 11:53:44 elapsed=1500s
+# Llama-3.1-8B Single-GPU Context Sweep
+
+- Selected physical GPU: `3`
+- GPU selection mode: `auto`
+- Timeout per run: `1800` seconds
+
+| Variant | Last Success Seq | First Failure Seq | Failure Type | Last Success Max Allocated (MB) | Last Success Elapsed (ms) |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Pure LoRA | 3425 | 3426 | oom | 62929.34 | 32222.9 |
+
+==============================================
+ Llama-3.1-8B context binary search (background)
+==============================================
+ REPO_ROOT:  /home/secure/myc/memrift-flagscale
+ OUT_ROOT:   /home/secure/myc/memrift-flagscale/outputs/llama31_8b_context_limit_binary_bg
+ VARIANT:    act_weight
+ SEARCH_MODE:binary
+==============================================
+
+>> 2026-05-30 13:07:49 elapsed=0s
+# Llama-3.1-8B Single-GPU Context Sweep
+
+- Selected physical GPU: `2`
+- GPU selection mode: `auto`
+- Timeout per run: `disabled`
+
+| Variant | Last Success Seq | First Failure Seq | Failure Type | Last Success Max Allocated (MB) | Last Success Elapsed (ms) |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Pure LoRA | 3425 | 3426 | oom | 62929.34 | 32222.9 |
+
+
+>> 2026-05-30 13:12:49 elapsed=300s
+# Llama-3.1-8B Single-GPU Context Sweep
+
+- Selected physical GPU: `2`
+- GPU selection mode: `auto`
+- Timeout per run: `disabled`
+
+| Variant | Last Success Seq | First Failure Seq | Failure Type | Last Success Max Allocated (MB) | Last Success Elapsed (ms) |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Pure LoRA | 3425 | 3426 | oom | 62929.34 | 32222.9 |
+
+
+>> 2026-05-30 13:17:49 elapsed=600s
+# Llama-3.1-8B Single-GPU Context Sweep
+
+- Selected physical GPU: `2`
+- GPU selection mode: `auto`
+- Timeout per run: `disabled`
+
+| Variant | Last Success Seq | First Failure Seq | Failure Type | Last Success Max Allocated (MB) | Last Success Elapsed (ms) |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Pure LoRA | 3425 | 3426 | oom | 62929.34 | 32222.9 |
+
+
+>> 2026-05-30 13:22:49 elapsed=900s
+# Llama-3.1-8B Single-GPU Context Sweep
+
+- Selected physical GPU: `2`
+- GPU selection mode: `auto`
+- Timeout per run: `disabled`
+
+| Variant | Last Success Seq | First Failure Seq | Failure Type | Last Success Max Allocated (MB) | Last Success Elapsed (ms) |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Pure LoRA | 3425 | 3426 | oom | 62929.34 | 32222.9 |
+
+
+>> 2026-05-30 13:27:49 elapsed=1200s
+# Llama-3.1-8B Single-GPU Context Sweep
+
+- Selected physical GPU: `2`
+- GPU selection mode: `auto`
+- Timeout per run: `disabled`
+
+| Variant | Last Success Seq | First Failure Seq | Failure Type | Last Success Max Allocated (MB) | Last Success Elapsed (ms) |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Pure LoRA | 3425 | 3426 | oom | 62929.34 | 32222.9 |
+
+
+>> 2026-05-30 13:32:49 elapsed=1500s
+# Llama-3.1-8B Single-GPU Context Sweep
+
+- Selected physical GPU: `2`
+- GPU selection mode: `auto`
+- Timeout per run: `disabled`
+
+| Variant | Last Success Seq | First Failure Seq | Failure Type | Last Success Max Allocated (MB) | Last Success Elapsed (ms) |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Pure LoRA | 3425 | 3426 | oom | 62929.34 | 32222.9 |
+
+
+>> 2026-05-30 13:37:49 elapsed=1800s
+# Llama-3.1-8B Single-GPU Context Sweep
+
+- Selected physical GPU: `2`
+- GPU selection mode: `auto`
+- Timeout per run: `disabled`
+
+| Variant | Last Success Seq | First Failure Seq | Failure Type | Last Success Max Allocated (MB) | Last Success Elapsed (ms) |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Pure LoRA | 3425 | 3426 | oom | 62929.34 | 32222.9 |
+
+
+>> 2026-05-30 13:42:49 elapsed=2100s
+# Llama-3.1-8B Single-GPU Context Sweep
+
+- Selected physical GPU: `2`
+- GPU selection mode: `auto`
+- Timeout per run: `disabled`
+
+| Variant | Last Success Seq | First Failure Seq | Failure Type | Last Success Max Allocated (MB) | Last Success Elapsed (ms) |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Pure LoRA | 3425 | 3426 | oom | 62929.34 | 32222.9 |
+
+
+>> 2026-05-30 13:47:49 elapsed=2400s
+# Llama-3.1-8B Single-GPU Context Sweep
+
+- Selected physical GPU: `2`
+- GPU selection mode: `auto`
+- Timeout per run: `disabled`
+
+| Variant | Last Success Seq | First Failure Seq | Failure Type | Last Success Max Allocated (MB) | Last Success Elapsed (ms) |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Pure LoRA | 3425 | 3426 | oom | 62929.34 | 32222.9 |
+
+
+>> 2026-05-30 13:52:49 elapsed=2700s
+# Llama-3.1-8B Single-GPU Context Sweep
+
+- Selected physical GPU: `2`
+- GPU selection mode: `auto`
+- Timeout per run: `disabled`
+
+| Variant | Last Success Seq | First Failure Seq | Failure Type | Last Success Max Allocated (MB) | Last Success Elapsed (ms) |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Pure LoRA | 3425 | 3426 | oom | 62929.34 | 32222.9 |
+
+
+>> 2026-05-30 13:57:49 elapsed=3000s
+# Llama-3.1-8B Single-GPU Context Sweep
+
+- Selected physical GPU: `2`
+- GPU selection mode: `auto`
+- Timeout per run: `disabled`
+
+| Variant | Last Success Seq | First Failure Seq | Failure Type | Last Success Max Allocated (MB) | Last Success Elapsed (ms) |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Pure LoRA | 3425 | 3426 | oom | 62929.34 | 32222.9 |
+
+
+>> 2026-05-30 14:02:49 elapsed=3300s
+# Llama-3.1-8B Single-GPU Context Sweep
+
+- Selected physical GPU: `2`
+- GPU selection mode: `auto`
+- Timeout per run: `disabled`
+
+| Variant | Last Success Seq | First Failure Seq | Failure Type | Last Success Max Allocated (MB) | Last Success Elapsed (ms) |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Pure LoRA | 3425 | 3426 | oom | 62929.34 | 32222.9 |
+
+
+>> 2026-05-30 14:07:49 elapsed=3600s
+# Llama-3.1-8B Single-GPU Context Sweep
+
+- Selected physical GPU: `2`
+- GPU selection mode: `auto`
+- Timeout per run: `disabled`
+
+| Variant | Last Success Seq | First Failure Seq | Failure Type | Last Success Max Allocated (MB) | Last Success Elapsed (ms) |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Pure LoRA | 3425 | 3426 | oom | 62929.34 | 32222.9 |
+
+
+>> 2026-05-30 14:12:49 elapsed=3900s
+# Llama-3.1-8B Single-GPU Context Sweep
+
+- Selected physical GPU: `2`
+- GPU selection mode: `auto`
+- Timeout per run: `disabled`
+
+| Variant | Last Success Seq | First Failure Seq | Failure Type | Last Success Max Allocated (MB) | Last Success Elapsed (ms) |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Pure LoRA | 3425 | 3426 | oom | 62929.34 | 32222.9 |
+
+
+>> 2026-05-30 14:17:49 elapsed=4200s
+# Llama-3.1-8B Single-GPU Context Sweep
+
+- Selected physical GPU: `2`
+- GPU selection mode: `auto`
+- Timeout per run: `disabled`
+
+| Variant | Last Success Seq | First Failure Seq | Failure Type | Last Success Max Allocated (MB) | Last Success Elapsed (ms) |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Pure LoRA | 3425 | 3426 | oom | 62929.34 | 32222.9 |
+
+
+>> 2026-05-30 14:22:49 elapsed=4500s
+# Llama-3.1-8B Single-GPU Context Sweep
+
+- Selected physical GPU: `2`
+- GPU selection mode: `auto`
+- Timeout per run: `disabled`
+
+| Variant | Last Success Seq | First Failure Seq | Failure Type | Last Success Max Allocated (MB) | Last Success Elapsed (ms) |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Pure LoRA | 3425 | 3426 | oom | 62929.34 | 32222.9 |
+
+
+>> 2026-05-30 14:27:49 elapsed=4800s
+# Llama-3.1-8B Single-GPU Context Sweep
+
+- Selected physical GPU: `2`
+- GPU selection mode: `auto`
+- Timeout per run: `disabled`
+
+| Variant | Last Success Seq | First Failure Seq | Failure Type | Last Success Max Allocated (MB) | Last Success Elapsed (ms) |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Pure LoRA | 3425 | 3426 | oom | 62929.34 | 32222.9 |
+
+
+>> 2026-05-30 14:32:49 elapsed=5100s
+# Llama-3.1-8B Single-GPU Context Sweep
+
+- Selected physical GPU: `2`
+- GPU selection mode: `auto`
+- Timeout per run: `disabled`
+
+| Variant | Last Success Seq | First Failure Seq | Failure Type | Last Success Max Allocated (MB) | Last Success Elapsed (ms) |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Pure LoRA | 3425 | 3426 | oom | 62929.34 | 32222.9 |
+
+
+>> 2026-05-30 14:37:49 elapsed=5400s
+# Llama-3.1-8B Single-GPU Context Sweep
+
+- Selected physical GPU: `2`
+- GPU selection mode: `auto`
+- Timeout per run: `disabled`
+
+| Variant | Last Success Seq | First Failure Seq | Failure Type | Last Success Max Allocated (MB) | Last Success Elapsed (ms) |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Pure LoRA | 3425 | 3426 | oom | 62929.34 | 32222.9 |
+
+
+>> 2026-05-30 14:42:49 elapsed=5700s
+# Llama-3.1-8B Single-GPU Context Sweep
+
+- Selected physical GPU: `2`
+- GPU selection mode: `auto`
+- Timeout per run: `disabled`
+
+| Variant | Last Success Seq | First Failure Seq | Failure Type | Last Success Max Allocated (MB) | Last Success Elapsed (ms) |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Pure LoRA | 3425 | 3426 | oom | 62929.34 | 32222.9 |
+
+
+>> 2026-05-30 14:47:49 elapsed=6000s
+# Llama-3.1-8B Single-GPU Context Sweep
+
+- Selected physical GPU: `2`
+- GPU selection mode: `auto`
+- Timeout per run: `disabled`
+
+| Variant | Last Success Seq | First Failure Seq | Failure Type | Last Success Max Allocated (MB) | Last Success Elapsed (ms) |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Pure LoRA | 3425 | 3426 | oom | 62929.34 | 32222.9 |
+
+
+>> 2026-05-30 14:52:49 elapsed=6300s
+# Llama-3.1-8B Single-GPU Context Sweep
+
+- Selected physical GPU: `2`
+- GPU selection mode: `auto`
+- Timeout per run: `disabled`
+
+| Variant | Last Success Seq | First Failure Seq | Failure Type | Last Success Max Allocated (MB) | Last Success Elapsed (ms) |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Pure LoRA | 3425 | 3426 | oom | 62929.34 | 32222.9 |
+
+
+>> 2026-05-30 14:57:49 elapsed=6600s
+# Llama-3.1-8B Single-GPU Context Sweep
+
+- Selected physical GPU: `2`
+- GPU selection mode: `auto`
+- Timeout per run: `disabled`
+
+| Variant | Last Success Seq | First Failure Seq | Failure Type | Last Success Max Allocated (MB) | Last Success Elapsed (ms) |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Pure LoRA | 3425 | 3426 | oom | 62929.34 | 32222.9 |
+
+
+>> 2026-05-30 15:02:49 elapsed=6900s
+# Llama-3.1-8B Single-GPU Context Sweep
+
+- Selected physical GPU: `2`
+- GPU selection mode: `auto`
+- Timeout per run: `disabled`
+
+| Variant | Last Success Seq | First Failure Seq | Failure Type | Last Success Max Allocated (MB) | Last Success Elapsed (ms) |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Pure LoRA | 3425 | 3426 | oom | 62929.34 | 32222.9 |
+
+
+>> 2026-05-30 15:07:49 elapsed=7200s
+# Llama-3.1-8B Single-GPU Context Sweep
+
+- Selected physical GPU: `2`
+- GPU selection mode: `auto`
+- Timeout per run: `disabled`
+
+| Variant | Last Success Seq | First Failure Seq | Failure Type | Last Success Max Allocated (MB) | Last Success Elapsed (ms) |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Pure LoRA | 3425 | 3426 | oom | 62929.34 | 32222.9 |
+
+
+>> 2026-05-30 15:12:49 elapsed=7500s
+# Llama-3.1-8B Single-GPU Context Sweep
+
+- Selected physical GPU: `2`
+- GPU selection mode: `auto`
+- Timeout per run: `disabled`
+
+| Variant | Last Success Seq | First Failure Seq | Failure Type | Last Success Max Allocated (MB) | Last Success Elapsed (ms) |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Pure LoRA | 3425 | 3426 | oom | 62929.34 | 32222.9 |
+
+
+>> 2026-05-30 15:19:31 elapsed=7800s
+# Llama-3.1-8B Single-GPU Context Sweep
+
+- Selected physical GPU: `2`
+- GPU selection mode: `auto`
+- Timeout per run: `disabled`
+
+| Variant | Last Success Seq | First Failure Seq | Failure Type | Last Success Max Allocated (MB) | Last Success Elapsed (ms) |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Pure LoRA | 3425 | 3426 | oom | 62929.34 | 32222.9 |
+

@@ -1,0 +1,121 @@
+/opt/conda/lib/python3.10/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+W0530 15:41:04.882000 4322 site-packages/torch/utils/cpp_extension.py:2527] TORCH_CUDA_ARCH_LIST is not set, all archs for visible cards are included for compilation. 
+W0530 15:41:04.882000 4322 site-packages/torch/utils/cpp_extension.py:2527] If this is not desired, please set os.environ['TORCH_CUDA_ARCH_LIST'] to specific architectures.
+Skipping import of cpp extensions due to incompatible torch version 2.8.0+metax3.3.0.2 for torchao version 0.16.0             Please see https://github.com/pytorch/ao/issues/2919 for more info
+/opt/conda/lib/python3.10/site-packages/modelopt/torch/utils/logging.py:115: UserWarning: Failed to import diffusers plugin due to: RuntimeError("Failed to import diffusers.models.modeling_utils because of the following error (look up to see its traceback):\nname 'logger' is not defined"). You may ignore this warning if you do not need this plugin.
+  warnings.warn(message, *args, **kwargs)
+/opt/conda/lib/python3.10/site-packages/xformers/ops/swiglu_op.py:107: FutureWarning: `torch.cuda.amp.custom_fwd(args...)` is deprecated. Please use `torch.amp.custom_fwd(args..., device_type='cuda')` instead.
+  def forward(cls, ctx, x, w1, b1, w2, b2, w3, b3):
+/opt/conda/lib/python3.10/site-packages/xformers/ops/swiglu_op.py:128: FutureWarning: `torch.cuda.amp.custom_bwd(args...)` is deprecated. Please use `torch.amp.custom_bwd(args..., device_type='cuda')` instead.
+  def backward(cls, ctx, dx5):
+/opt/conda/lib/python3.10/site-packages/torchvision/datapoints/__init__.py:12: UserWarning: The torchvision.datapoints and torchvision.transforms.v2 namespaces are still Beta. While we do not expect major breaking changes, some APIs may still change according to user feedback. Please submit any feedback you may have in this issue: https://github.com/pytorch/vision/issues/6753, and you can also check out https://github.com/pytorch/vision/issues/7319 to learn more about the APIs that we suspect might involve future changes. You can silence this warning by calling torchvision.disable_beta_transforms_warning().
+  warnings.warn(_BETA_TRANSFORMS_WARNING)
+/opt/conda/lib/python3.10/site-packages/torchvision/transforms/v2/__init__.py:54: UserWarning: The torchvision.datapoints and torchvision.transforms.v2 namespaces are still Beta. While we do not expect major breaking changes, some APIs may still change according to user feedback. Please submit any feedback you may have in this issue: https://github.com/pytorch/vision/issues/6753, and you can also check out https://github.com/pytorch/vision/issues/7319 to learn more about the APIs that we suspect might involve future changes. You can silence this warning by calling torchvision.disable_beta_transforms_warning().
+  warnings.warn(_BETA_TRANSFORMS_WARNING)
+/opt/conda/lib/python3.10/site-packages/modelopt/torch/utils/logging.py:115: UserWarning: Failed to import diffusers plugin due to: RuntimeError("Failed to import diffusers.loaders.single_file_model because of the following error (look up to see its traceback):\nname 'logger' is not defined"). You may ignore this warning if you do not need this plugin.
+  warnings.warn(message, *args, **kwargs)
+/opt/conda/lib/python3.10/site-packages/modelopt/torch/utils/logging.py:115: UserWarning: Failed to import vllm plugin due to: AttributeError("module 'vllm.attention' has no attribute 'Attention'"). You may ignore this warning if you do not need this plugin.
+  warnings.warn(message, *args, **kwargs)
+/opt/conda/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:5383: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+/opt/conda/lib/python3.10/site-packages/torch/nn/functional.py:1422: UserWarning: Unsupported unwinding pattern: Address not in range (Triggered internally at /workspace/framework/mcPytorch/torch/csrc/profiler/unwind/unwind.cpp:219.)
+  _VF.dropout_(input, p, training) if inplace else _VF.dropout(input, p, training)
+/opt/conda/lib/python3.10/site-packages/megatron/core/tensor_parallel/layers.py:346: UserWarning: Attempting to run cuBLAS, but there was no current CUDA context! Attempting to set the primary context... (Triggered internally at /workspace/framework/mcPytorch/aten/src/ATen/cuda/CublasHandlePool.cpp:183.)
+  grad_input = grad_output.matmul(weight)
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "/home/secure/myc/memrift-flagscale/flagscale/train/train_gpt.py", line 262, in <module>
+[rank0]:     pretrain(
+[rank0]:   File "/home/secure/myc/memrift-flagscale/flagscale/train/train.py", line 1085, in pretrain
+[rank0]:     evaluate_and_print_results(
+[rank0]:   File "/home/secure/myc/memrift-flagscale/flagscale/train/train.py", line 3224, in evaluate_and_print_results
+[rank0]:     total_loss_dict, collected_non_loss_data, timelimit = evaluate(
+[rank0]:   File "/home/secure/myc/memrift-flagscale/flagscale/train/train.py", line 3073, in evaluate
+[rank0]:     loss_dicts = forward_backward_func(
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/pipeline_parallel/schedules.py", line 602, in forward_backward_no_pipelining
+[rank0]:     output_tensor, num_tokens = forward_step(
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/pipeline_parallel/schedules.py", line 409, in forward_step
+[rank0]:     output_tensor, loss_func = forward_step_func(data_iterator, model)
+[rank0]:   File "/home/secure/myc/memrift-flagscale/flagscale/train/train_gpt.py", line 157, in forward_step
+[rank0]:     output_tensor = model(
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1773, in _wrapped_call_impl
+[rank0]:     return self._call_impl(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1784, in _call_impl
+[rank0]:     return forward_call(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/distributed/data_parallel_base.py", line 22, in forward
+[rank0]:     return self.module(*inputs, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1773, in _wrapped_call_impl
+[rank0]:     return self._call_impl(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1784, in _call_impl
+[rank0]:     return forward_call(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/transformer/module.py", line 446, in forward
+[rank0]:     outputs = self.module(*inputs, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1773, in _wrapped_call_impl
+[rank0]:     return self._call_impl(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1784, in _call_impl
+[rank0]:     return forward_call(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/models/gpt/gpt_model.py", line 457, in forward
+[rank0]:     hidden_states = self.decoder(
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/transformer/transformer_block.py", line 570, in __call__
+[rank0]:     return super().__call__(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/transformer/module.py", line 308, in __call__
+[rank0]:     return super().__call__(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1773, in _wrapped_call_impl
+[rank0]:     return self._call_impl(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1784, in _call_impl
+[rank0]:     return forward_call(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/transformer/transformer_block.py", line 787, in forward
+[rank0]:     hidden_states, context = layer(
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/transformer/transformer_layer.py", line 925, in __call__
+[rank0]:     return super().__call__(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/transformer/module.py", line 308, in __call__
+[rank0]:     return super().__call__(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1773, in _wrapped_call_impl
+[rank0]:     return self._call_impl(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1784, in _call_impl
+[rank0]:     return forward_call(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/transformer/transformer_layer.py", line 507, in forward
+[rank0]:     hidden_states, context = self._forward_attention(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/transformer/transformer_layer.py", line 572, in _forward_attention
+[rank0]:     attention_output_with_bias = self.self_attention(
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1773, in _wrapped_call_impl
+[rank0]:     return self._call_impl(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1784, in _call_impl
+[rank0]:     return forward_call(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/transformer/attention.py", line 775, in forward
+[rank0]:     qkv_output = self.get_query_key_value_tensors(
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/transformer/attention.py", line 1136, in get_query_key_value_tensors
+[rank0]:     mixed_qkv, _ = self.linear_qkv(hidden_states)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1773, in _wrapped_call_impl
+[rank0]:     return self._call_impl(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1784, in _call_impl
+[rank0]:     return forward_call(*args, **kwargs)
+[rank0]:   File "/home/secure/myc/memrift-flagscale/flagscale/train/peft/lora.py", line 46, in forward
+[rank0]:     adapter_output = self.adapter(layernorm_output.contiguous())
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1773, in _wrapped_call_impl
+[rank0]:     return self._call_impl(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1784, in _call_impl
+[rank0]:     return forward_call(*args, **kwargs)
+[rank0]:   File "/home/secure/myc/memrift-flagscale/flagscale/train/peft/utils.py", line 240, in forward
+[rank0]:     x, _ = self.linear_in(x)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1773, in _wrapped_call_impl
+[rank0]:     return self._call_impl(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1784, in _call_impl
+[rank0]:     return forward_call(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/megatron/core/extensions/transformer_engine.py", line 429, in forward
+[rank0]:     out = super().forward(x, is_first_microbatch=_is_first_microbatch)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/torch/_dynamo/eval_frame.py", line 929, in _fn
+[rank0]:     return fn(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/transformer_engine/pytorch/module/linear.py", line 1495, in forward
+[rank0]:     out = linear_fn(*args)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/transformer_engine/pytorch/module/linear.py", line 310, in forward
+[rank0]:     gemm_out, *_, reduce_scatter_out = general_gemm(
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/transformer_engine/pytorch/cpp_extensions/gemm.py", line 152, in general_gemm
+[rank0]:     out, bias_grad, gelu_input, extra_output = tex.generic_gemm(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/transformer_engine/plugin/core/manager.py", line 393, in call
+[rank0]:     return cached_impl.fn(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/transformer_engine/plugin/core/backends/vendor/metax/register_ops.py", line 23, in wrapper
+[rank0]:     return fn(*args, **kwargs)
+[rank0]:   File "/opt/conda/lib/python3.10/site-packages/transformer_engine/plugin/core/backends/vendor/metax/metax.py", line 196, in generic_gemm
+[rank0]:     return tex.generic_gemm(
+[rank0]: KeyboardInterrupt

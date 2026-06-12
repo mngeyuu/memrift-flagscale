@@ -1,0 +1,10 @@
+trial	seq_length	status	exit_code	elapsed_sec	host_log
+1	66560	OOM	0	71	/home/secure/myc/memrift-flagscale/output/llama31_8b_pure_lora_context_bisect/trials/seq_66560/logs/host_0_localhost.output
+2	34048	OOM	0	61	/home/secure/myc/memrift-flagscale/output/llama31_8b_pure_lora_context_bisect/trials/seq_34048/logs/host_0_localhost.output
+3	17920	OOM	0	62	/home/secure/myc/memrift-flagscale/output/llama31_8b_pure_lora_context_bisect/trials/seq_17920/logs/host_0_localhost.output
+4	9728	OOM	0	60	/home/secure/myc/memrift-flagscale/output/llama31_8b_pure_lora_context_bisect/trials/seq_9728/logs/host_0_localhost.output
+5	5632	PASS	0	96	/home/secure/myc/memrift-flagscale/output/llama31_8b_pure_lora_context_bisect/trials/seq_5632/logs/host_0_localhost.output
+6	7680	PASS	0	98	/home/secure/myc/memrift-flagscale/output/llama31_8b_pure_lora_context_bisect/trials/seq_7680/logs/host_0_localhost.output
+7	8704	OOM	0	64	/home/secure/myc/memrift-flagscale/output/llama31_8b_pure_lora_context_bisect/trials/seq_8704/logs/host_0_localhost.output
+8	8192	PASS	0	96	/home/secure/myc/memrift-flagscale/output/llama31_8b_pure_lora_context_bisect/trials/seq_8192/logs/host_0_localhost.output
+9	8448	PASS	0	95	/home/secure/myc/memrift-flagscale/output/llama31_8b_pure_lora_context_bisect/trials/seq_8448/logs/host_0_localhost.output

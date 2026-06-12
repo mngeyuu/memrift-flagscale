@@ -1,0 +1,7 @@
+Llama-3.1-8B MemRift context bisect summary
+out_root=/home/secure/myc/memrift-flagscale/output/llama31_8b_context_bisect
+results_tsv=/home/secure/myc/memrift-flagscale/output/llama31_8b_context_bisect/summary/results.tsv
+max_runnable_seq_length=10240
+best_pass_host_log=/home/secure/myc/memrift-flagscale/output/llama31_8b_context_bisect/trials/seq_10240/logs/host_0_localhost.output
+first_failed_seq_length_near_boundary=10496
+first_failed_status_near_boundary=OOM

@@ -1,0 +1,9 @@
+- action=run
+- experiment.exp_name=lora_llama31_8b_1step_metax
+- experiment.exp_dir=./outputs/lora_llama31_8b_1step_metax
+- train.trainer.train_iters=1
+- train.trainer.lr_warmup_iters=0
+- train.system.logging.log_interval=1
+- train.system.memrift_enable=false
+- train.system.memrift_weight_enable=false
+- train.system.memrift_activation_enable=false
