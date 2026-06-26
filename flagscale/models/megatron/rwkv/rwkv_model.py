@@ -1,42 +1,33 @@
 # This code is modified based on the RWKV GitHub repository:
 # https://github.com/BlinkDL/RWKV-LM
 
-import math
-import os
-
 from typing import Dict, Literal, Optional
+from torch.utils.cpp_extension import load
+from megatron.core.transformer import TransformerConfig
 
-import pytorch_lightning as pl
+import os
+import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+import pytorch_lightning as pl
+from torch import Tensor
+from megatron.core.inference.contexts import BaseInferenceContext
+from megatron.core.packed_seq_params import PackedSeqParams
 from rwkvfla.modules.token_shift import token_shift
 from rwkvfla.ops.rwkv7.fused_addcmul import fused_addcmul_rwkv7
 from rwkvfla.ops.rwkv7.fused_k_update import fused_k_rwkv7
-from torch import Tensor
-from torch.utils.cpp_extension import load
-
-from megatron.core.inference.contexts import BaseInferenceContext
-from megatron.core.packed_seq_params import PackedSeqParams
-from megatron.core.transformer import TransformerConfig
 
 # Safe imports / fallbacks for torch._dynamo and torch.compile
 try:
     import torch._dynamo as _dynamo
 except Exception:
-
     class _Dummy:
-        def disable(self, f):
-            return f
-
-        def is_compiling(self):
-            return False
-
+        def disable(self, f): return f
+        def is_compiling(self): return False
     _dynamo = _Dummy()
 
 _raw_token_shift = token_shift
-
 
 @_dynamo.disable
 def _safe_token_shift(*args, **kwargs):
@@ -46,13 +37,10 @@ def _safe_token_shift(*args, **kwargs):
         return main
     return out
 
-
 token_shift = _safe_token_shift
-
 
 def __nop(ob):
     return ob
-
 
 # ROCm detection (robust)
 ROCm_flag = hasattr(torch.version, "hip") and (torch.version.hip is not None)
@@ -88,10 +76,7 @@ if "x070" in _RWKV_MY_TESTING:
         ]
         load(
             name="wind_backstepping_hip",
-            sources=[
-                "megatron/core/models/rwkv/cuda/wkv7_hip.hip",
-                "megatron/core/models/rwkv/cuda/wkv7_op.hip",
-            ],
+            sources=["megatron/core/models/rwkv/cuda/wkv7_hip.hip", "megatron/core/models/rwkv/cuda/wkv7_op.hip"],
             is_python_module=False,
             verbose=True,
             extra_cuda_cflags=flags,
@@ -108,10 +93,7 @@ if "x070" in _RWKV_MY_TESTING:
         ]
         load(
             name="wind_backstepping",
-            sources=[
-                "megatron/core/models/rwkv/cuda/wkv7_cuda.cu",
-                "megatron/core/models/rwkv/cuda/wkv7_op.cpp",
-            ],
+            sources=["megatron/core/models/rwkv/cuda/wkv7_cuda.cu", "megatron/core/models/rwkv/cuda/wkv7_op.cpp"],
             is_python_module=False,
             verbose=True,
             extra_cuda_cflags=flags,
@@ -124,7 +106,8 @@ if "x070" in _RWKV_MY_TESTING:
             assert T % CHUNK_LEN == 0
             assert all(i.dtype in [torch.bfloat16, torch.float16] for i in [w, q, k, v, z, b])
             w, q, k, v, z, b, s, sa = ctx.saved_tensors
-            dw, dq, dk, dv, dz, db = [torch.empty_like(x) for x in [w, q, k, v, z, b]]
+            dw, dq, dk, dv, dz, db = [torch.empty_like(x) for x in [
+                w, q, k, v, z, b]]
             torch.ops.wind_backstepping.backward(
                 w, q, k, v, z, b, dy, s, sa, dw, dq, dk, dv, dz, db
             )
@@ -188,10 +171,10 @@ class RWKV_Tmix_x070(nn.Module):
         def ortho_init(x, scale):
             shape = x.shape
             if len(shape) == 2:
-                gain = math.sqrt(shape[0] / shape[1]) if shape[0] > shape[1] else 1
+                gain = (math.sqrt(shape[0] / shape[1]) if shape[0] > shape[1] else 1)
                 nn.init.orthogonal_(x, gain=gain * scale)
             elif len(shape) == 3:
-                gain = math.sqrt(shape[1] / shape[2]) if shape[1] > shape[2] else 1
+                gain = (math.sqrt(shape[1] / shape[2]) if shape[1] > shape[2] else 1)
                 for i in range(shape[0]):
                     nn.init.orthogonal_(x[i], gain=gain * scale)
             else:
@@ -253,9 +236,9 @@ class RWKV_Tmix_x070(nn.Module):
     def forward(self, x, v_first):
         B, T, C = x.size()
         xx = token_shift(x)
-        xr, xw, xk, xv, xa, xg = fused_addcmul_rwkv7(
-            x, xx, self.x_r, self.x_w, self.x_k, self.x_v, self.x_a, self.x_g
-        )
+        xr, xw, xk, xv, xa, xg = fused_addcmul_rwkv7(x, xx, self.x_r,
+                                                     self.x_w, self.x_k, self.x_v,
+                                                     self.x_a, self.x_g)
 
         r = self.receptance(xr)
         # soft-clamp to (-inf, -0.5)
@@ -274,7 +257,8 @@ class RWKV_Tmix_x070(nn.Module):
         a = torch.sigmoid(self.a0 + (xa @ self.a1) @ self.a2)
         g = torch.sigmoid(xg @ self.g1) @ self.g2
 
-        kk = F.normalize((k * self.k_k).view(B, T, self.n_head, -1), dim=-1, p=2.0).view(B, T, C)
+        kk = F.normalize((k * self.k_k).view(B, T, self.n_head, -1),
+                         dim=-1, p=2.0).view(B, T, C)
         k = fused_k_rwkv7(k, a, self.k_a)
 
         x = RUN_CUDA_RWKV7g(r, w, k, v, -kk, kk * a)
@@ -306,7 +290,9 @@ class RWKV_CMix_x070(nn.Module):
         self.key = nn.Linear(args.n_embd, args.n_embd * 4, bias=False)
         self.value = nn.Linear(args.n_embd * 4, args.n_embd, bias=False)
 
-        self.key.weight.data.uniform_(-0.5 / (args.n_embd**0.5), 0.5 / (args.n_embd**0.5))
+        self.key.weight.data.uniform_(
+            -0.5 / (args.n_embd**0.5), 0.5 / (args.n_embd**0.5)
+        )
         self.value.weight.data.zero_()
 
     @CompileFunction
@@ -365,9 +351,9 @@ class RWKVModel(nn.Module):
         *,
         pre_process: bool = True,
         post_process: bool = True,
-        parallel_output: bool = True,  # keep for future TP; no effect with TP=1
+        parallel_output: bool = True,   # keep for future TP; no effect with TP=1
         use_grad_checkpoint: bool = False,  # PyTorch checkpoint at block granularity
-        dtype: torch.dtype | None = None,  # e.g., torch.bfloat16 to match --bf16
+        dtype: torch.dtype | None = None,   # e.g., torch.bfloat16 to match --bf16
     ):
         super().__init__()
         self.vocab_size = vocab_size
@@ -385,15 +371,14 @@ class RWKVModel(nn.Module):
             num_attention_heads=1,
             use_cpu_initialization=True,
             bf16=True,
-            fp16=False,
+            fp16=False
         )
 
         # Embedding / Blocks / Head - align with your original RWKV stack
         self.emb = nn.Embedding(vocab_size, hidden_size)
         # Use _ArgsShim to adapt expected args for Block
-        self.blocks = nn.ModuleList(
-            [Block(_ArgsShim(hidden_size, n_layer), i) for i in range(n_layer)]
-        )
+        self.blocks = nn.ModuleList([Block(_ArgsShim(hidden_size, n_layer), i)
+                                     for i in range(n_layer)])
         self.ln_out = nn.LayerNorm(hidden_size)
         self.head = nn.Linear(hidden_size, vocab_size, bias=False)
 
@@ -401,7 +386,12 @@ class RWKVModel(nn.Module):
             # Optional: move module parameters to a specific dtype (e.g., bf16)
             self.to(dtype=dtype)
 
-    def forward(self, input_ids: Tensor, labels: Tensor = None, loss_mask: Optional[Tensor] = None):
+    def forward(
+        self,
+        input_ids: Tensor,
+        labels: Tensor = None,
+        loss_mask: Optional[Tensor] = None,
+    ):
         """
         Returns:
           - If labels is None: logits [B, T, V]
@@ -430,7 +420,10 @@ class RWKVModel(nn.Module):
         # 4) Training branch: return per-token cross entropy for Megatron to aggregate
         if labels is not None:
             # Use transpose for CE: [B, V, T] vs labels [B, T]
-            per_tok = F.cross_entropy(logits.transpose(1, 2), labels, reduction="none")  # [B, T]
+            per_tok = F.cross_entropy(
+                logits.transpose(1, 2), labels,
+                reduction="none"
+            )  # [B, T]
 
             # Do NOT reduce here. Optionally pre-mask per-token loss for clarity.
             if loss_mask is not None:
@@ -458,7 +451,9 @@ class RWKVModel(nn.Module):
         state_dict_ = {}
 
         # Save embeddings
-        state_dict_[self._word_embeddings_for_head_key] = self.emb.state_dict(keep_vars=keep_vars)
+        state_dict_[self._word_embeddings_for_head_key] = self.emb.state_dict(
+            keep_vars=keep_vars
+        )
 
         # Save each block
         blocks_state = {}
@@ -497,7 +492,6 @@ class _ArgsShim:
     Minimal adapter to provide attributes that Block(...) expects from `args`.
     Extend this class if Block accesses additional fields in your repo.
     """
-
     def __init__(self, n_embd: int, n_layer: int):
         self.n_embd = n_embd
         self.n_layer = n_layer

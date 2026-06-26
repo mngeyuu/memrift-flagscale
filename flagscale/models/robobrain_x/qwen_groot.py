@@ -11,14 +11,12 @@ Qwen-GR00T Framework
 A lightweight implementation that Qwen-VL + Flow-matching head to directly predict continuous actions
 Flow-matching header is copyright from GR00T N1.5,
 """
-import os
 
-from typing import List, Optional, Tuple
+import os
 
 import numpy as np
 import omegaconf
 import torch
-
 from omegaconf import OmegaConf
 from PIL import Image
 from transformers import PretrainedConfig, PreTrainedModel
@@ -45,7 +43,7 @@ class Qwen_GR00T(PreTrainedModel):
     Focus: Predict future continuous actions conditioned on images + instruction.
     """
 
-    def __init__(self, config: Optional[dict] = None, **kwargs) -> None:
+    def __init__(self, config: dict | None = None, **kwargs) -> None:
         """
         Construct all submodules and cache key configuration values.
 
@@ -67,19 +65,7 @@ class Qwen_GR00T(PreTrainedModel):
         self.past_action_window_size = config.framework.action_model.past_action_window_size
         self.chunk_len = self.past_action_window_size + 1 + self.future_action_window_size
 
-    def forward(self, examples: List[dict] = None, **kwargs) -> Tuple:
-        batch_images = [example["image"] for example in examples]  #  [B，[PLT]]
-        instructions = [example["lang"] for example in examples]  # [B, str]
-        actions = [example["action"] for example in examples]  # label [B， len, 7]
-
-        state = (
-            [example["state"] for example in examples] if "state" in examples[0] else None
-        )  # [B, 1, state_dim]
-
-        # Step 1: QWenVL input format
-        qwen_inputs = self.qwen_vl_interface.build_qwenvl_inputs(
-            images=batch_images, instructions=instructions
-        )
+    def forward(self, qwen_inputs, state, actions, **kwargs) -> tuple:
         with torch.autocast("cuda", dtype=torch.bfloat16):
             qwenvl_outputs = self.qwen_vl_interface(
                 **qwen_inputs, output_attentions=False, output_hidden_states=True, return_dict=True
@@ -90,14 +76,7 @@ class Qwen_GR00T(PreTrainedModel):
         # Step 4: Action Expert Forward and Loss
         with torch.autocast("cuda", dtype=torch.float32):
             # [B, T_full, action_dim]
-            if isinstance(actions[0], torch.Tensor):
-                actions = torch.stack(actions, dim=0).to(
-                    device=last_hidden.device, dtype=last_hidden.dtype
-                )
-            else:
-                actions = torch.tensor(
-                    np.array(actions), device=last_hidden.device, dtype=last_hidden.dtype
-                )
+            actions = actions.to(device=last_hidden.device, dtype=last_hidden.dtype)
             actions_target = actions[
                 :, -(self.future_action_window_size + 1) :, :
             ]  # (B, chunk_len, action_dim)
@@ -111,17 +90,8 @@ class Qwen_GR00T(PreTrainedModel):
             last_hidden_repeated = last_hidden.repeat(repeated_diffusion_steps, 1, 1)
 
             state_repeated = None
-            if state is not None:
-
-                if isinstance(state[0], torch.Tensor):
-                    state = torch.stack(state, dim=0).to(
-                        device=last_hidden.device, dtype=last_hidden.dtype
-                    )
-                else:
-                    state = torch.tensor(
-                        np.array(state), device=last_hidden.device, dtype=last_hidden.dtype
-                    )
-                state_repeated = state.repeat(repeated_diffusion_steps, 1, 1)
+            state = state.to(device=last_hidden.device, dtype=last_hidden.dtype)
+            state_repeated = state.repeat(repeated_diffusion_steps, 1, 1)
 
             action_loss = self.action_model(
                 last_hidden_repeated, actions_target_repeated, state_repeated
@@ -132,9 +102,9 @@ class Qwen_GR00T(PreTrainedModel):
     @torch.inference_mode()
     def predict_action(
         self,
-        batch_images: List[List[Image.Image]],  # Batch of PIL Image list as [view1, view2]
-        instructions: List[str],
-        state: Optional[np.ndarray] = None,
+        batch_images: list[list[Image.Image]],  # Batch of PIL Image list as [view1, view2]
+        instructions: list[str],
+        state: np.ndarray | None = None,
         **kwargs: str,
     ) -> np.ndarray:
         """
@@ -235,10 +205,10 @@ def get_batch(batch):
     rsp_batch = []
     for i_batch in batch:
         ab = {
-            "action": i_batch['action'][:16, :7],
-            "image": [i_batch['observation.images.camera0'], i_batch['observation.images.camera1']],
-            "lang": i_batch['task'],
-            "state": i_batch['observation.state'][:7][None,],
+            "action": i_batch["action"][:16, :7],
+            "image": [i_batch["observation.images.camera0"], i_batch["observation.images.camera1"]],
+            "lang": i_batch["task"],
+            "state": i_batch["observation.state"][:7][None,],
         }
         rsp_batch.append(ab)
     return rsp_batch
@@ -289,47 +259,15 @@ def dryrun_with_random_sample(cfg):
             instructions=[batch[0]["lang"]],
             state=[batch[0]["state"]],
         )
-        normalized_actions = predict_output['normalized_actions']
+        normalized_actions = predict_output["normalized_actions"]
         print(f"Unnormalized Action: {normalized_actions.shape}")
         print(f"{normalized_actions[0,0,:]=}")
 
     forward_output = model(batch)
-    action_loss = forward_output['action_loss']
+    action_loss = forward_output["action_loss"]
     print(f"Action Loss: {action_loss.item()}")
 
     model.save_pretrained()
-
-
-def dryrun_with_dataloader(cfg):
-    model: Qwen_GR00T = Qwen_GR00T(cfg)
-
-    from megatron.energon import WorkerConfig, get_loader, get_train_dataset
-    from tools.datasets.vla.data.dataset_helpers_np_pil import TaskEncoder
-
-    ds = get_train_dataset(
-        cfg.datasets.data_path,
-        batch_size=1,
-        shuffle_buffer_size=100,
-        max_samples_per_sequence=100,
-        worker_config=WorkerConfig.default_worker_config(num_workers=1, data_parallel_group=None),
-        task_encoder=TaskEncoder(cfg.datasets.task_encoder),
-        repeat=True,
-    )
-    vla_train_dataloader = get_loader(ds)
-    data_iter = iter(vla_train_dataloader)
-    batch = next(data_iter)
-    batch = get_batch(batch)
-
-    # try get model
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = model.to(device)
-    model(batch)
-    forward_output = model(batch)
-    action_loss = forward_output['action_loss']
-    print(f"Action Loss: {action_loss.item()}")
-
-    action = model.predict_action(batch_images=[batch[0]["image"]], instructions=[batch[0]["lang"]])
-    print(f"Action inference: {action['normalized_actions'].shape}")
 
 
 if __name__ == "__main__":
@@ -342,13 +280,7 @@ if __name__ == "__main__":
         default="./examples/robobrain_x0_5/conf/train/libero_qwengroot.yaml",
         help="Path to YAML config",
     )
-    parser.add_argument("--dryrun-dataloader", action="store_true")
-    parser.add_argument("--dryrun-random", action="store_true")
 
     args, clipargs = parser.parse_known_args()
     cfg = OmegaConf.load(args.config_yaml)
-
-    if args.dryrun_dataloader:
-        dryrun_with_dataloader(cfg)
-    if args.dryrun_random:
-        dryrun_with_random_sample(cfg)
+    dryrun_with_random_sample(cfg)

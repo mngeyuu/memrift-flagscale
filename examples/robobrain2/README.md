@@ -1,0 +1,142 @@
+
+# Quick Start
+
+## Installation
+
+### Clone Repository
+
+```sh
+git clone https://github.com/FlagOpen/FlagScale.git
+cd FlagScale/
+```
+
+### Setup Conda Environment
+
+Create a new conda environment:
+
+```sh
+conda create -n flagscale-inference python=3.12
+conda activate flagscale-inference
+```
+
+Install FlagScale:
+
+```sh
+cd FlagScale/
+pip install . --verbose
+```
+
+### Install vLLM and Transformers
+
+```sh
+git clone https://github.com/flagos-ai/vllm-FL.git
+cd vllm-FL
+pip install packaging==24.2
+pip install --no-build-isolation .
+```
+
+## Download Model
+
+```sh
+git lfs install
+
+mkdir -p /tmp/models/BAAI/
+cd /tmp/models/BAAI/
+git clone https://huggingface.co/BAAI/RoboBrain2.0-3B
+```
+
+If you don't have access to the international internet, download from modelscope.
+
+```sh
+mkdir -p /tmp/models/
+cd /tmp/models/
+modelscope download --model BAAI/RoboBrain2.0-3B --local_dir BAAI/RoboBrain2.0-3B
+```
+
+## Inference
+
+### Edit Inference Config
+
+```sh
+cd FlagScale/
+vim examples/robobrain2/conf/inference/3b.yaml
+```
+
+Change 2 fields:
+
+- llm.model: change to "/tmp/models/BAAI/RoboBrain2.0-3B".
+- generate.prompts: change to your customized input text.
+
+### Run Inference
+
+```sh
+flagscale inference robobrain2 --config ./examples/robobrain2/conf/inference.yaml
+# or
+flagscale inference robobrain2 -c ./examples/robobrain2/conf/inference.yaml
+```
+
+### Check Logs
+
+```sh
+cd FlagScale/
+tail -f  outputs/robobrain2.0_3b/inference_logs/host_0_localhost.output
+```
+
+## Serving
+
+### Edit Serving Config
+
+```sh
+cd FlagScale/
+vim examples/robobrain2/conf/serve/3b.yaml
+```
+
+Change 1 fields:
+
+- engine_args.model: change to "/tmp/models/BAAI/RoboBrain2.0-3B"
+
+## Run Serving
+
+```sh
+cd FlagScale/
+flagscale serve robobrain2 --config ./examples/robobrain2/conf/serve.yaml
+# or
+flagscale serve robobrain2 -c ./examples/robobrain2/conf/serve.yaml
+```
+
+## Test Server with CURL
+
+```sh
+curl http://localhost:9010/v1/chat/completions \
+-H "Content-Type: application/json" \
+-H "Authorization: Bearer no-key" \
+-d '{
+"model": "",
+"messages": [
+{
+    "role": "system",
+    "content":
+    [{
+        "type": "text",
+        "text": "123"
+    }]
+},
+{
+    "role": "user",
+    "content":
+    [{
+        "type": "text",
+        "text": "123"
+    }]
+}
+],
+"temperature": 0.0,
+"max_completion_tokens": 200,
+"stream": true,
+"stream_options": {"include_usage": true}, "max_tokens": 4, "n_predict": 200
+}'
+```
+
+## Training
+
+Refer to [Qwen2.5-VL](../qwen2_5_vl/README.md)

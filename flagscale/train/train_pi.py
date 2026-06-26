@@ -1,28 +1,32 @@
+# Mainly adopted from
+# https://github.com/huggingface/lerobot/blob/2b304eeb841ae6c371e3dd341bbbb9dd254b07cb/src/lerobot/scripts/lerobot_train.py
+
 import argparse
 import json
 from pathlib import Path
 from typing import Any, Iterator, TypedDict
-import wandb
 import os
 import pathlib
 import random
-from dataclasses import dataclass
 from typing_extensions import Unpack
-import math
 import time
 from contextlib import nullcontext
 
-# import etils.epath as epath
+from omegaconf import OmegaConf
 import numpy as np
 import torch
 import torch.distributed as dist
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
-from torch.nn.parallel import DistributedDataParallel as DDP
-from accelerate import Accelerator
-from accelerate.utils import DistributedDataParallelKwargs
+from torch.distributed.fsdp import (
+    FullyShardedDataParallel as FSDP,
+    ShardingStrategy,
+    MixedPrecision,
+)
+from torch.distributed.checkpoint.state_dict import get_model_state_dict, StateDictOptions
 
-from flagscale.runner.utils import logger
+from flagscale.logger import logger
+from flagscale.train.train_config import TrainConfig, DataConfig
 from flagscale.train.datasets.transforms import ImageTransforms
 from flagscale.train.datasets.lerobot_dataset import (
     LeRobotDataset,
@@ -48,11 +52,13 @@ from flagscale.models.pi0.modeling_pi0 import PI0Policy
 from flagscale.models.pi05.configuration_pi05 import PI05Config
 from flagscale.models.pi05.modeling_pi05 import PI05Policy
 from flagscale.train.utils.logging_utils import AverageMeter, MetricsTracker
+from flagscale.train.utils.optim_setup import CosineDecayWithWarmupSchedulerConfig
 from flagscale.train.utils.train_utils import (
     save_checkpoint,
     get_step_checkpoint_dir,
     update_last_checkpoint,
 )
+from flagscale.platforms import get_platform
 
 IMAGENET_STATS = {
     "mean": [[[0.485]], [[0.456]], [[0.406]]],  # (c,1,1)
@@ -64,21 +70,36 @@ def set_seed(seed: int):
     np.random.seed(seed)
     random.seed(seed)
     torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
+    get_platform().manual_seed_all(seed)
+    if get_platform().name() == "cuda":
+        torch.backends.cudnn.enabled = True
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = False 
+        torch.backends.cuda.matmul.allow_tf32 = False
 
-    torch.backends.cudnn.enabled = True
-    torch.backends.cudnn.benchmark = True
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cuda.matmul.allow_tf32 = True
 
-
-def init_ddp():
-    local_rank = int(os.environ["LOCAL_RANK"])
-    torch.cuda.set_device(local_rank)
-    torch.distributed.init_process_group(backend="nccl", init_method="env://")
+def init_distributed():
+    local_rank = int(os.environ.get("LOCAL_RANK", 0))
+    get_platform().set_device(local_rank)
+    torch.distributed.init_process_group(backend=get_platform().dist_backend(), init_method="env://")
 
     return local_rank
+
+
+def apply_fsdp(policy):
+    mp_policy = MixedPrecision(
+        param_dtype=torch.bfloat16,
+        reduce_dtype=torch.float32,
+        buffer_dtype=torch.bfloat16,
+    )
+    policy = FSDP(
+        policy,
+        sharding_strategy=ShardingStrategy.SHARD_GRAD_OP,
+        mixed_precision=mp_policy,
+        device_id=get_platform().current_device(),
+        use_orig_params=True,
+    )
+    return policy
 
 
 # TODO: (yupu) Re-enable wandb
@@ -103,27 +124,26 @@ def init_ddp():
 #         wandb.run.log_code(epath.Path(__file__).parent.parent)
 
 
-def make_dataset(cfg, policy_config):
+def make_dataset(cfg: DataConfig, policy_config):
     # TODO: (yupu) Support image transforms
-    cfg.enable_image_transform = False
+    enable_image_transform = False
     # TODO: (yupu) Remove hard-coded video backend
-    cfg.video_backend = "pyav"
+    video_backend = "torchcodec"
 
     image_transforms = (
-        ImageTransforms(cfg.image_transforms) if cfg.enable_image_transform else None
+        ImageTransforms(cfg.image_transforms) if enable_image_transform else None
     )
     # Leave the revision to None
     ds_meta = LeRobotDatasetMetadata(root=cfg.data_path, revision=None)
     delta_timestamps = resolve_delta_timestamps(policy_config, ds_meta)
 
-    # Create dataset - both pi0 and pi0.5 use the same API
     dataset = LeRobotDataset(
         root=cfg.data_path,
         episodes=None,
         delta_timestamps=delta_timestamps,
         image_transforms=image_transforms,
         revision=None,
-        video_backend=cfg.video_backend,
+        video_backend=video_backend,
         tolerance_s=cfg.tolerance_s,
     )
 
@@ -290,7 +310,7 @@ def make_policy(
     kwargs["pretrained_name_or_path"] = cfg.pretrained_path
     policy = policy_cls.from_pretrained(cfg.pretrained_path, config=cfg)
 
-    policy.to(cfg.device)
+    policy.to(device=cfg.device, dtype=torch.bfloat16)
     assert isinstance(policy, torch.nn.Module)
 
     # policy = torch.compile(policy, mode="reduce-overhead")
@@ -377,60 +397,6 @@ def make_pre_post_processors(
     )
 
 
-@dataclass
-class CosineDecayWithWarmupSchedulerConfig:
-    """Used by Physical Intelligence to train Pi0.
-
-    Automatically scales warmup and decay steps if num_training_steps < num_decay_steps.
-    This ensures the learning rate schedule completes properly even with shorter training runs.
-    """
-
-    num_warmup_steps: int
-    num_decay_steps: int
-    peak_lr: float
-    decay_lr: float
-
-    def build(self, optimizer: Optimizer, num_training_steps: int) -> LambdaLR:
-        # Auto-scale scheduler parameters if training steps are shorter than configured decay steps
-        actual_warmup_steps = self.num_warmup_steps
-        actual_decay_steps = self.num_decay_steps
-
-        if num_training_steps < self.num_decay_steps:
-            # Calculate scaling factor to fit the schedule into the available training steps
-            scale_factor = num_training_steps / self.num_decay_steps
-            actual_warmup_steps = int(self.num_warmup_steps * scale_factor)
-            actual_decay_steps = num_training_steps
-
-            logger.info(
-                f"Auto-scaling LR scheduler: "
-                f"num_training_steps ({num_training_steps}) < num_decay_steps ({self.num_decay_steps}). "
-                f"Scaling warmup: {self.num_warmup_steps} → {actual_warmup_steps}, "
-                f"decay: {self.num_decay_steps} → {actual_decay_steps} "
-                f"(scale factor: {scale_factor:.3f})"
-            )
-
-        def lr_lambda(current_step):
-            def linear_warmup_schedule(current_step):
-                if current_step <= 0:
-                    return 1 / (actual_warmup_steps + 1)
-                frac = 1 - current_step / actual_warmup_steps
-                return (1 / (actual_warmup_steps + 1) - 1) * frac + 1
-
-            def cosine_decay_schedule(current_step):
-                step = min(current_step, actual_decay_steps)
-                cosine_decay = 0.5 * (1 + math.cos(math.pi * step / actual_decay_steps))
-                alpha = self.decay_lr / self.peak_lr
-                decayed = (1 - alpha) * cosine_decay + alpha
-                return decayed
-
-            if current_step < actual_warmup_steps:
-                return linear_warmup_schedule(current_step)
-
-            return cosine_decay_schedule(current_step)
-
-        return LambdaLR(optimizer, lr_lambda, -1)
-
-
 def has_method(cls: object, method_name: str) -> bool:
     return hasattr(cls, method_name) and callable(getattr(cls, method_name))
 
@@ -441,7 +407,6 @@ def update_policy(
     batch: Any,
     optimizer: Optimizer,
     grad_clip_norm: float,
-    accelerator: Accelerator | None,
     lr_scheduler=None,
     lock=None,
 ) -> tuple[MetricsTracker, dict]:
@@ -449,7 +414,7 @@ def update_policy(
     Performs a single training step to update the policy's weights.
 
     This function executes the forward and backward passes, clips gradients, and steps the optimizer and
-    learning rate scheduler. Supports both Accelerator and DDP for distributed training.
+    learning rate scheduler.
 
     Args:
         train_metrics: A MetricsTracker instance to record training statistics.
@@ -457,7 +422,6 @@ def update_policy(
         batch: A batch of training data.
         optimizer: The optimizer used to update the policy's parameters.
         grad_clip_norm: The maximum norm for gradient clipping.
-        accelerator: The Accelerator instance for distributed training and mixed precision, or None for DDP.
         lr_scheduler: An optional learning rate scheduler.
         lock: An optional lock for thread-safe optimizer updates.
 
@@ -469,48 +433,30 @@ def update_policy(
     start_time = time.perf_counter()
     policy.train()
 
-    # Handle mixed precision: Accelerator or torch.cuda.amp
-    if accelerator is not None:
-        with accelerator.autocast():
-            loss, output_dict = policy.forward(batch)
-    else:
-        with torch.amp.autocast("cuda"):
-            loss, output_dict = policy.forward(batch)
+    policy_model = policy.module if isinstance(policy, FSDP) else policy
+    use_amp = getattr(policy_model.config, "use_amp", False)
+
+    autocast_context = torch.amp.autocast(get_platform().amp_device_type(), dtype=torch.bfloat16) if use_amp else nullcontext()
+    with autocast_context:
+        loss, _= policy.forward(batch)
     # TODO(rcadene): policy.unnormalize_outputs(out_dict)
 
-    if accelerator is not None:
-        accelerator.backward(loss)
-    else:
-        loss.backward()
+    loss.backward()
 
     # Clip gradients if specified
     if grad_clip_norm > 0:
-        if accelerator is not None:
-            grad_norm = accelerator.clip_grad_norm_(policy.parameters(), grad_clip_norm)
-        else:
-            # For DDP, get the unwrapped model parameters
-            grad_norm = torch.nn.utils.clip_grad_norm_(
-                policy.module.parameters()
-                if isinstance(policy, DDP)
-                else policy.parameters(),
-                grad_clip_norm,
-            )
+        grad_norm = torch.nn.utils.clip_grad_norm_(
+            policy.parameters(),
+            grad_clip_norm,
+        )
     else:
         # Compute grad norm even if not clipping
-        if accelerator is not None:
-            grad_norm = torch.nn.utils.clip_grad_norm_(
-                policy.parameters(), float("inf"), error_if_nonfinite=False
-            )
-        else:
-            grad_norm = torch.nn.utils.clip_grad_norm_(
-                policy.module.parameters()
-                if isinstance(policy, DDP)
-                else policy.parameters(),
-                float("inf"),
-                error_if_nonfinite=False,
-            )
+        grad_norm = torch.nn.utils.clip_grad_norm_(
+            policy.parameters(),
+            float("inf"),
+            error_if_nonfinite=False,
+        )
 
-    # Optimizer step
     with lock if lock is not None else nullcontext():
         optimizer.step()
     optimizer.zero_grad()
@@ -520,12 +466,6 @@ def update_policy(
         lr_scheduler.step()
 
     # Update internal buffers if policy has update method
-    # Get the unwrapped model for both Accelerator and DDP
-    if accelerator is not None:
-        policy_model = accelerator.unwrap_model(policy, keep_fp32_wrapper=True)
-    else:
-        policy_model = policy.module if isinstance(policy, DDP) else policy
-
     if has_method(policy_model, "update"):
         policy_model.update()
 
@@ -534,88 +474,60 @@ def update_policy(
     train_metrics.lr = optimizer.param_groups[0]["lr"]
     train_metrics.update_s = time.perf_counter() - start_time
 
-    return train_metrics, output_dict
+    return train_metrics
 
 
-def main(config: argparse.Namespace):
-    # Accelerator or DDP, only for debugging purposes
-    use_accelerator = config.use_accelerator
-    accelerator = None
+def main(config: TrainConfig, seed: int):
+    set_seed(seed)
 
-    set_seed(config.seed)
-
-    if use_accelerator:
-        ddp_kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
-        accelerator = Accelerator(
-            step_scheduler_with_optimizer=False, kwargs_handlers=[ddp_kwargs]
-        )
-        device = accelerator.device
-        rank = accelerator.process_index
-        is_main_process = accelerator.is_main_process
-    else:
-        local_rank = init_ddp()
-        device = torch.device("cuda", local_rank)
-        rank = dist.get_rank()
-        is_main_process = rank == 0 and local_rank == 0
-
-    model_variant = config.model_variant.lower()
-    if model_variant not in ["pi0", "pi0.5"]:
+    model_name = config.model.model_name.lower()
+    if model_name not in ["pi0", "pi0.5"]:
         raise ValueError(
-            f"Invalid model_variant: {model_variant}. Must be 'pi0' or 'pi0.5'"
+            f"Invalid model_name: {model_name}. Must be 'pi0' or 'pi0.5'"
         )
 
-    if model_variant == "pi0.5":
-        policy_config = PI05Config.from_pretrained(config.checkpoint_dir)
+    # Load base config from checkpoint
+    if model_name == "pi0.5":
+        policy_config = PI05Config.from_pretrained(config.model.checkpoint_dir)
     else:
-        policy_config = PI0Config.from_pretrained(config.checkpoint_dir)
+        policy_config = PI0Config.from_pretrained(config.model.checkpoint_dir)
 
-    # Manually set the required configs
-    policy_config.pretrained_path = config.checkpoint_dir
-    policy_config.device = device
-    policy_config.n_action_steps = config.action_steps
-    policy_config.tokenizer_max_length = config.tokenizer_max_length
+    # Override with any model-specific fields from YAML
+    model_config_overrides = config.model.get_model_config_dict()
+    for key, value in model_config_overrides.items():
+        if hasattr(policy_config, key):
+            setattr(policy_config, key, value)
+        else:
+            logger.warning(f"Model config field '{key}' not found in {model_name} config, ignoring")
+
+    # Set training-specific fields
+    policy_config.pretrained_path = config.model.checkpoint_dir
+    policy_config.use_amp = config.system.use_amp
+
+    local_rank = init_distributed()
+    device = get_platform().device(local_rank)
+
+    rank = dist.get_rank()
+    is_main_process = rank == 0 and local_rank == 0
+    policy_config.device = str(device)
 
     if is_main_process:
-        logger.info(f"Policy config ({model_variant}): {policy_config}")
+        logger.info(f"Policy config ({model_name}): {policy_config}")
 
-    dataset = make_dataset(config, policy_config)
+    dataset = make_dataset(config.data, policy_config)
 
-    if use_accelerator:
-        accelerator.wait_for_everyone()
-    else:
-        dist.barrier()
+    dist.barrier()
 
-    # TODO: (yupu) This is so ugly
-    rename_map = None
-    if config.rename_map:
-        rename_map_str = config.rename_map
-        # Clean up the rename map string, remove outer quotes if present
-        if (rename_map_str.startswith("'") and rename_map_str.endswith("'")) or (
-            rename_map_str.startswith('"') and rename_map_str.endswith('"')
-        ):
-            rename_map_str = rename_map_str[1:-1]
-            print(f"rename_map_str: {rename_map_str}")
-
-        try:
-            rename_map = json.loads(rename_map_str)
-            if not isinstance(rename_map, dict):
-                raise ValueError(
-                    f"rename_map must be a dictionary, got {type(rename_map)}"
-                )
-        except json.JSONDecodeError as e:
-            raise ValueError("Invalid JSON in --rename-map") from e
+    rename_map = config.data.rename_map
 
     policy = make_policy(
         cfg=policy_config,
         ds_meta=dataset.meta,
         rename_map=rename_map,
-        model_variant=model_variant,
+        model_variant=model_name,
     )
 
-    if use_accelerator:
-        accelerator.wait_for_everyone()
-    else:
-        dist.barrier()
+    dist.barrier()
 
     # Create processors - only provide dataset_stats if not resuming from saved processors
     processor_kwargs = {}
@@ -623,7 +535,7 @@ def main(config: argparse.Namespace):
     # Only provide dataset_stats when not resuming from saved processor state
     processor_kwargs["dataset_stats"] = dataset.meta.stats
 
-    if not config.use_quantiles and model_variant == "pi0.5":
+    if not config.data.use_quantiles and model_name == "pi0.5":
         from flagscale.models.configs.types import NormalizationMode
 
         policy.config.normalization_mapping = {
@@ -642,12 +554,13 @@ def main(config: argparse.Namespace):
             },
             "norm_map": policy.config.normalization_mapping,
         },
-        "tokenizer_processor": {"tokenizer_name": config.tokenizer_path},
+        "tokenizer_processor": {"tokenizer_name": config.model.tokenizer_path},
     }
 
-    processor_kwargs["preprocessor_overrides"]["rename_observations_processor"] = {
-        "rename_map": rename_map
-    }
+    if rename_map is not None:
+        processor_kwargs["preprocessor_overrides"]["rename_observations_processor"] = {
+            "rename_map": rename_map
+        }
     postprocessor_kwargs["postprocessor_overrides"] = {
         "unnormalizer_processor": {
             "stats": dataset.meta.stats,
@@ -660,80 +573,59 @@ def main(config: argparse.Namespace):
         logger.info(f"processor_kwargs: {processor_kwargs}")
         logger.info(f"postprocessor_kwargs: {postprocessor_kwargs}")
 
-    preprocessor, _ = make_pre_post_processors(
+    preprocessor, postprocessor = make_pre_post_processors(
         pretrained_path=policy_config.pretrained_path,
         **processor_kwargs,
         **postprocessor_kwargs,
     )
 
+    policy = apply_fsdp(policy)
+
     # Convert optimizer_betas to tuple if it's a list
-    if isinstance(config.optimizer_betas, list):
-        config.optimizer_betas = tuple(config.optimizer_betas)
+    optimizer_betas = config.model.optimizer.betas
+    if isinstance(optimizer_betas, list):
+        optimizer_betas = tuple(optimizer_betas)
 
     # TODO: (yupu) Should we let the user choose between config and policy preset?
     optimizer = torch.optim.AdamW(
         policy.parameters(),
-        lr=config.optimizer_lr,
-        betas=config.optimizer_betas,
-        eps=config.optimizer_eps,
-        weight_decay=config.optimizer_weight_decay,
+        lr=config.model.optimizer.lr,
+        betas=optimizer_betas,
+        eps=config.model.optimizer.eps,
+        weight_decay=config.model.optimizer.weight_decay,
     )
     scheduler_config = CosineDecayWithWarmupSchedulerConfig(
-        num_warmup_steps=config.scheduler_warmup_steps,
-        num_decay_steps=config.scheduler_decay_steps,
-        peak_lr=config.optimizer_lr,
-        decay_lr=config.scheduler_decay_lr,
+        num_warmup_steps=config.model.optimizer.scheduler.warmup_steps,
+        num_decay_steps=config.model.optimizer.scheduler.decay_steps,
+        peak_lr=config.model.optimizer.lr,
+        decay_lr=config.model.optimizer.scheduler.decay_lr,
     )
-    lr_scheduler = scheduler_config.build(optimizer, config.train_steps)
+    lr_scheduler = scheduler_config.build(optimizer, config.system.train_steps)
 
-    config.num_workers = 4
-    shuffle = config.shuffle
+    num_workers = config.system.num_workers
+    shuffle = config.system.shuffle
 
-    if not use_accelerator:
-        # DistributedSampler ensures each rank gets different data
-        sampler = torch.utils.data.distributed.DistributedSampler(
-            dataset,
-            num_replicas=dist.get_world_size(),
-            rank=dist.get_rank(),
-            shuffle=shuffle,
-            drop_last=False,
-        )
+    # DistributedSampler ensures each rank gets different data
+    sampler = torch.utils.data.distributed.DistributedSampler(
+        dataset,
+        num_replicas=dist.get_world_size(),
+        rank=dist.get_rank(),
+        shuffle=shuffle,
+        drop_last=False,
+    )
 
-        dataloader = torch.utils.data.DataLoader(
-            dataset,
-            num_workers=config.num_workers,
-            batch_size=config.batch_size,
-            shuffle=False,  # Must be False when using sampler
-            sampler=sampler,
-            pin_memory=True,  # Assume all data is on GPU
-            drop_last=False,
-            prefetch_factor=2 if config.num_workers > 0 else None,
-        )
-    else:
-        dataloader = torch.utils.data.DataLoader(
-            dataset,
-            num_workers=config.num_workers,
-            batch_size=config.batch_size,
-            shuffle=shuffle,
-            sampler=None,
-            pin_memory=True,  # Assume all data is on GPU
-            drop_last=False,
-            prefetch_factor=2 if config.num_workers > 0 else None,
-        )
+    dataloader = torch.utils.data.DataLoader(
+        dataset,
+        num_workers=num_workers,
+        batch_size=config.system.batch_size,
+        shuffle=False,  # Must be False when using sampler
+        sampler=sampler,
+        pin_memory=True,  # Assume all data is on GPU
+        drop_last=False,
+        prefetch_factor=2 if num_workers > 0 else None,
+    )
 
-    if use_accelerator:
-        accelerator.wait_for_everyone()
-        policy, optimizer, dataloader, lr_scheduler = accelerator.prepare(
-            policy, optimizer, dataloader, lr_scheduler
-        )
-    else:
-        policy = DDP(
-            policy,
-            device_ids=[local_rank],
-            find_unused_parameters=True,
-            output_device=local_rank,
-        )
-        dist.barrier()
+    dist.barrier()
 
     dl_iter = cycle(dataloader)
 
@@ -747,11 +639,7 @@ def main(config: argparse.Namespace):
         "dataloading_s": AverageMeter("data_s", ":.3f"),
     }
 
-    # Use effective batch size for proper epoch calculation in distributed training
-    if use_accelerator:
-        effective_batch_size = config.batch_size * accelerator.num_processes
-    else:
-        effective_batch_size = config.batch_size * dist.get_world_size()
+    effective_batch_size = config.system.batch_size * dist.get_world_size()
 
     step = 0
 
@@ -761,36 +649,31 @@ def main(config: argparse.Namespace):
         dataset.num_episodes,
         train_metrics,
         initial_step=step,
-        accelerator=accelerator,
     )
 
     # To ensures proper data shuffling across epochs in distributed training
     epoch = 0
     samples_per_epoch = None
-    if not use_accelerator:
-        dataloader.sampler.set_epoch(epoch)
-        samples_per_epoch = len(dataset) // effective_batch_size
+    dataloader.sampler.set_epoch(epoch)
+    samples_per_epoch = len(dataset) // effective_batch_size
 
-    for _ in range(step, config.train_steps):
+    for _ in range(step, config.system.train_steps):
         start_time = time.perf_counter()
         batch = next(dl_iter)
-
-        if not use_accelerator:
-            batch = {
-                k: v.to(device, non_blocking=True) if isinstance(v, torch.Tensor) else v
-                for k, v in batch.items()
-            }
+        batch = {
+            k: v.to(device, non_blocking=True) if isinstance(v, torch.Tensor) else v
+            for k, v in batch.items()
+        }
 
         batch = preprocessor(batch)
         train_tracker.dataloading_s = time.perf_counter() - start_time
 
-        train_tracker, output_dict = update_policy(
+        train_tracker = update_policy(
             train_tracker,
             policy,
             batch,
             optimizer,
-            config.grad_clip_norm,
-            accelerator=accelerator,
+            config.system.grad_clip_norm,
             lr_scheduler=lr_scheduler,
         )
 
@@ -801,133 +684,70 @@ def main(config: argparse.Namespace):
 
         # Update epoch counter for sampler.set_epoch() when we've processed one epoch worth of samples
         # This ensures proper data shuffling across epochs in distributed training
-        if not use_accelerator:
-            if step % samples_per_epoch == 0:
-                epoch += 1
-                dataloader.sampler.set_epoch(epoch)
+        if step % samples_per_epoch == 0:
+            epoch += 1
+            dataloader.sampler.set_epoch(epoch)
 
-        if step % config.log_freq == 0 and is_main_process:
+        if step % config.system.log_freq == 0 and is_main_process:
             logger.info(f"step: {step} loss: {train_tracker}")
 
-        if config.save_checkpoint and step % config.save_freq == 0:
-            # Synchronize all processes before checkpoint saving
-            if use_accelerator:
-                accelerator.wait_for_everyone()
-            else:
-                dist.barrier()
-
+        if config.system.checkpoint.save_checkpoint and step % config.system.checkpoint.save_freq == 0:
+            dist.barrier()
+            state_dict = get_model_state_dict(
+                policy,
+                options=StateDictOptions(full_state_dict=True, cpu_offload=True),
+            )
             if is_main_process:
                 logger.info(f"Saving checkpoint at step {step}")
-                output_dir = Path(config.output_directory)
+                output_dir = Path(config.system.checkpoint.output_directory)
                 checkpoint_dir = get_step_checkpoint_dir(
-                    output_dir, config.train_steps, step
-                )
-                policy_to_save = (
-                    accelerator.unwrap_model(policy)
-                    if use_accelerator
-                    else policy.module
+                    output_dir, config.system.train_steps, step
                 )
                 save_checkpoint(
                     checkpoint_dir=checkpoint_dir,
-                    policy=policy_to_save,
+                    step=step,
+                    config=config,
+                    policy=policy.module,
+                    lr_scheduler=lr_scheduler,
+                    preprocessor=preprocessor,
+                    postprocessor=postprocessor,
+                    state_dict=state_dict,
                 )
                 update_last_checkpoint(checkpoint_dir)
-
-            # Synchronize all processes after checkpoint saving
-            if use_accelerator:
-                accelerator.wait_for_everyone()
-            else:
-                dist.barrier()
+            dist.barrier()
 
     if is_main_process:
         logger.info("Training completed")
 
     # Properly clean up the distributed process group
-    if use_accelerator:
-        accelerator.wait_for_everyone()
-        accelerator.end_training()
-    else:
-        dist.barrier()
-        dist.destroy_process_group()
+    dist.barrier()
+    dist.destroy_process_group()
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="Train PI0/PI0.5 model. This script is typically called by the flagscale runner, not directly."
+    )
+    parser.add_argument(
+        "--config-file", type=str, required=True, help="Path to the configuration YAML file"
+    )
+    args = parser.parse_args()
 
-    # ============================== System Configs ==============================
-    parser.add_argument(
-        "--use-accelerator",
-        action="store_true",
-        default=False,
-        help="Whether to use HuggingFace Accelerator (like lerobot) or manual DDP",
-    )
-    parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--batch-size", type=int, default=1)
-    parser.add_argument("--train-steps", type=int, default=100000)
-    parser.add_argument("--log-freq", type=int, default=10)
-    parser.add_argument(
-        "--output-directory", type=str, default="", help="Path to the output directory"
-    )
-    parser.add_argument("--save-checkpoint", action="store_true")
-    parser.add_argument("--save-freq", type=int, default=1000)
-    parser.add_argument("--optimizer-lr", type=float, default=2.5e-5)
-    parser.add_argument("--optimizer-betas", nargs=2, type=float, default=[0.9, 0.95])
-    parser.add_argument("--optimizer-eps", type=float, default=1e-8)
-    parser.add_argument("--optimizer-weight-decay", type=float, default=0.01)
-    parser.add_argument("--optimizer-grad-clip-norm", type=float, default=1.0)
-    parser.add_argument("--scheduler-warmup-steps", type=int, default=1000)
-    parser.add_argument("--scheduler-decay-steps", type=int, default=30000)
-    parser.add_argument("--scheduler-decay-lr", type=float, default=2.5e-6)
-    parser.add_argument("--grad-clip-norm", type=float, default=1.0)
-    parser.add_argument("--shuffle", action="store_true")
-    parser.add_argument("--tensor-model-parallel-size", type=int, default=1)
-    parser.add_argument("--pipeline-model-parallel-size", type=int, default=1)
-    parser.add_argument("--context-parallel-size", type=int, default=1)
-    parser.add_argument("--wandb-enabled", action="store_true")
-    parser.add_argument("--project-name", type=str, default="default_project")
-    parser.add_argument("--exp-name", type=str, default="default_exp")
+    config_file_path = args.config_file
 
-    # ============================== Model Configs ==============================
-    parser.add_argument(
-        "--checkpoint-dir",
-        type=str,
-        default="",
-        help="Path to the pretrained model checkpoint directory",
-    )
-    parser.add_argument(
-        "--model-variant",
-        type=str,
-        default="pi0",
-        choices=["pi0", "pi0.5"],
-        help="Model variant to use: 'pi0' or 'pi0.5'",
-    )
-    parser.add_argument(
-        "--tokenizer-path", type=str, default="", help="Path to the tokenizer"
-    )
-    parser.add_argument("--tokenizer-max-length", type=int, default=48)
-    parser.add_argument("--action-steps", type=int, default=50)
+    # Load config from YAML file (Hydra-generated config.yaml contains both train and experiment)
+    config = OmegaConf.load(config_file_path)
 
-    # ============================== Data Configs ==============================
-    parser.add_argument("--enable-image-transform", action="store_true")
-    parser.add_argument("--tolerance-s", type=float, default=0.0001)
-    parser.add_argument("--use-imagenet-stats", action="store_true")
-    parser.add_argument("--video-backend", type=str, default="pyav")
-    parser.add_argument(
-        "--data-path", type=str, default="", help="Path to the training dataset"
-    )
-    parser.add_argument(
-        "--rename-map",
-        type=str,
-        default="",
-        help=(
-            "JSON string mapping dataset feature keys to policy feature keys, "
-            'e.g., \'{"observation.images.cam_high": "observation.images.base_0_rgb"}\''
-        ),
-    )
-    parser.add_argument("--use-quantiles", action="store_true")
+    # Extract train config and convert to Pydantic TrainConfig
+    train_config = TrainConfig.from_hydra_config(config)
 
-    config = parser.parse_args()
+    # Extract experiment config (seed, exp_dir, etc.)
+    experiment_config = OmegaConf.to_container(config.experiment, resolve=True)
+    seed = experiment_config.get('seed', 42)
 
     logger.info("=" * 100)
-    logger.info(f"train_pi0_base.py config: {config}")
-    main(config)
+    logger.info(f"Experiment: {experiment_config}")
+    logger.info(f"Train config: {train_config}")
+
+    # Run training with both configs
+    main(train_config, seed)

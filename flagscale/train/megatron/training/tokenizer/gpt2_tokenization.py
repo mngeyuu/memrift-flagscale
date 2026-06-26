@@ -15,16 +15,15 @@
 
 """Tokenization classes for OpenAI GPT."""
 
-from __future__ import absolute_import, division, print_function, unicode_literals
+from __future__ import (absolute_import, division, print_function,
+                        unicode_literals)
 
+import sys
 import json
 import logging
 import os
-import sys
-
-from io import open
-
 import regex as re
+from io import open
 
 try:
     from functools import lru_cache
@@ -35,18 +34,114 @@ except ImportError:
     def lru_cache():
         return lambda func: func
 
-
-from megatron.training.tokenizer.tokenization_utils import Trie
+from collections import OrderedDict
 
 logger = logging.getLogger(__name__)
 
+
+class Trie:
+    """
+    Trie in Python. Creates a Trie out of a list of words. The trie is used to split on `added_tokens` in one pass.
+    Loose reference https://en.wikipedia.org/wiki/Trie
+    """
+
+    def __init__(self):
+        self.data = {}
+
+    def add(self, word: str):
+        if not word:
+            return
+        ref = self.data
+        for char in word:
+            ref[char] = char in ref and ref[char] or {}
+            ref = ref[char]
+        ref[""] = 1
+
+    def split(self, text: str):
+        states = OrderedDict()
+        offsets = [0]
+        skip = 0
+        for current, current_char in enumerate(text):
+            if skip and current < skip:
+                continue
+            to_remove = set()
+            reset = False
+            for start, trie_pointer in states.items():
+                if "" in trie_pointer:
+                    for lookstart, looktrie_pointer in states.items():
+                        if lookstart > start:
+                            break
+                        elif lookstart < start:
+                            lookahead_index = current + 1
+                            end = current + 1
+                        else:
+                            lookahead_index = current
+                            end = current
+                        next_char = text[lookahead_index] if lookahead_index < len(text) else None
+                        if "" in looktrie_pointer:
+                            start = lookstart
+                            end = lookahead_index
+                            skip = lookahead_index
+                        while next_char in looktrie_pointer:
+                            looktrie_pointer = looktrie_pointer[next_char]
+                            lookahead_index += 1
+                            if "" in looktrie_pointer:
+                                start = lookstart
+                                end = lookahead_index
+                                skip = lookahead_index
+                            if lookahead_index == len(text):
+                                break
+                            next_char = text[lookahead_index]
+                    offsets.append(start)
+                    offsets.append(end)
+                    reset = True
+                    break
+                elif current_char in trie_pointer:
+                    trie_pointer = trie_pointer[current_char]
+                    states[start] = trie_pointer
+                else:
+                    to_remove.add(start)
+            if reset:
+                states = {}
+            else:
+                for start in to_remove:
+                    del states[start]
+            if current >= skip and current_char in self.data:
+                states[current] = self.data[current_char]
+        for start, trie_pointer in states.items():
+            if "" in trie_pointer:
+                end = len(text)
+                offsets.append(start)
+                offsets.append(end)
+                break
+        return self._cut_text(text, offsets)
+
+    def _cut_text(self, text, offsets):
+        offsets.append(len(text))
+        tokens = []
+        start = 0
+        for end in offsets:
+            if start > end:
+                logger.error(
+                    "There was a bug in Trie algorithm in tokenization. "
+                    "Attempting to recover. Please report it anyway."
+                )
+                continue
+            elif start == end:
+                continue
+            tokens.append(text[start:end])
+            start = end
+        return tokens
+
 PRETRAINED_VOCAB_ARCHIVE_MAP = {
-    'gpt2': "https://s3.amazonaws.com/models.huggingface.co/bert/gpt2-vocab.json"
+    'gpt2': "https://s3.amazonaws.com/models.huggingface.co/bert/gpt2-vocab.json",
 }
 PRETRAINED_MERGES_ARCHIVE_MAP = {
-    'gpt2': "https://s3.amazonaws.com/models.huggingface.co/bert/gpt2-merges.txt"
+    'gpt2': "https://s3.amazonaws.com/models.huggingface.co/bert/gpt2-merges.txt",
 }
-PRETRAINED_VOCAB_POSITIONAL_EMBEDDINGS_SIZE_MAP = {'gpt2': 1024}
+PRETRAINED_VOCAB_POSITIONAL_EMBEDDINGS_SIZE_MAP = {
+    'gpt2': 1024,
+}
 VOCAB_NAME = 'vocab.json'
 MERGES_NAME = 'merges.txt'
 SPECIAL_TOKENS_NAME = 'special_tokens.txt'
@@ -64,11 +159,8 @@ def bytes_to_unicode():
     And avoids mapping to whitespace/control characters the bpe code barfs on.
     """
     _chr = unichr if sys.version_info[0] == 2 else chr
-    bs = (
-        list(range(ord("!"), ord("~") + 1))
-        + list(range(ord("¡"), ord("¬") + 1))
-        + list(range(ord("®"), ord("ÿ") + 1))
-    )
+    bs = list(range(ord("!"), ord("~") + 1)) + list(range(ord("¡"), ord("¬") + 1)) + \
+        list(range(ord("®"), ord("ÿ") + 1))
     cs = bs[:]
     n = 0
     for b in range(2**8):
@@ -98,7 +190,6 @@ class GPT2Tokenizer(object):
     GPT-2 BPE tokenizer. Peculiarities:
         - Byte-level BPE
     """
-
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path, cache_dir=None, *inputs, **kwargs):
         """
@@ -120,7 +211,6 @@ class GPT2Tokenizer(object):
         # redirect to the cache, if necessary
         try:
             from .file_utils import cached_path
-
             resolved_vocab_file = cached_path(vocab_file, cache_dir=cache_dir)
             resolved_merges_file = cached_path(merges_file, cache_dir=cache_dir)
         except EnvironmentError:
@@ -131,23 +221,16 @@ class GPT2Tokenizer(object):
                     pretrained_model_name_or_path,
                     ', '.join(PRETRAINED_VOCAB_ARCHIVE_MAP.keys()),
                     pretrained_model_name_or_path,
-                    vocab_file,
-                    merges_file,
-                )
-            )
+                    vocab_file, merges_file))
             return None
         if resolved_vocab_file == vocab_file and resolved_merges_file == merges_file:
             logger.info("loading vocabulary file {}".format(vocab_file))
             logger.info("loading merges file {}".format(merges_file))
         else:
-            logger.info(
-                "loading vocabulary file {} from cache at {}".format(
-                    vocab_file, resolved_vocab_file
-                )
-            )
-            logger.info(
-                "loading merges file {} from cache at {}".format(merges_file, resolved_merges_file)
-            )
+            logger.info("loading vocabulary file {} from cache at {}".format(
+                vocab_file, resolved_vocab_file))
+            logger.info("loading merges file {} from cache at {}".format(
+                merges_file, resolved_merges_file))
         if pretrained_model_name_or_path in PRETRAINED_VOCAB_POSITIONAL_EMBEDDINGS_SIZE_MAP:
             # if we're using a pretrained model, ensure the tokenizer wont index sequences longer
             # than the number of positional embeddings
@@ -164,13 +247,11 @@ class GPT2Tokenizer(object):
             resolved_merges_file,
             special_tokens=special_tokens,
             *inputs,
-            **kwargs
-        )
+            **kwargs)
         return tokenizer
 
-    def __init__(
-        self, vocab_file, merges_file, errors='replace', special_tokens=None, max_len=None
-    ):
+    def __init__(self, vocab_file, merges_file, errors='replace',
+                 special_tokens=None, max_len=None):
         self.max_len = max_len if max_len is not None else int(1e12)
         with open(vocab_file) as f:
             self.encoder = json.load(f)
@@ -187,8 +268,7 @@ class GPT2Tokenizer(object):
         # Should haved added re.IGNORECASE so BPE merges can happen for
         # capitalized versions of contractions
         self.pat = re.compile(
-            r"""'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
-        )
+            r"""'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+""")
 
         self.special_tokens = {}
         self.special_tokens_decoder = {}
@@ -198,17 +278,16 @@ class GPT2Tokenizer(object):
         return len(self.encoder) + len(self.special_tokens)
 
     def set_special_tokens(self, special_tokens):
-        """Add a list of additional tokens to the encoder.
-        The additional tokens are indexed starting from the last index of the
-        current vocabulary in the order of the `special_tokens` list.
+        """ Add a list of additional tokens to the encoder.
+            The additional tokens are indexed starting from the last index of the
+            current vocabulary in the order of the `special_tokens` list.
         """
         if not special_tokens:
             self.special_tokens = {}
             self.special_tokens_decoder = {}
             return
-        self.special_tokens = dict(
-            (tok, len(self.encoder) + i) for i, tok in enumerate(special_tokens)
-        )
+        self.special_tokens = dict((tok, len(self.encoder) + i)
+                                   for i, tok in enumerate(special_tokens))
         self.special_tokens_decoder = {v: k for k, v in self.special_tokens.items()}
         logger.info("Special tokens {}".format(self.special_tokens))
 
@@ -254,7 +333,7 @@ class GPT2Tokenizer(object):
         return word
 
     def tokenize(self, text):
-        """Tokenize a string."""
+        """ Tokenize a string. """
         bpe_tokens = []
         for token in re.findall(self.pat, text):
             if sys.version_info[0] == 2:
@@ -265,7 +344,7 @@ class GPT2Tokenizer(object):
         return bpe_tokens
 
     def convert_tokens_to_ids(self, tokens):
-        """Converts a sequence of tokens into ids using the vocab."""
+        """ Converts a sequence of tokens into ids using the vocab. """
         ids = []
         if isinstance(tokens, str) or (sys.version_info[0] == 2 and isinstance(tokens, unicode)):
             if tokens in self.special_tokens:
@@ -282,8 +361,7 @@ class GPT2Tokenizer(object):
                 "Token indices sequence length is longer than the specified maximum "
                 " sequence length for this OpenAI GPT model ({} > {}). Running this"
                 " sequence through the model will result in indexing errors".format(
-                    len(ids), self.max_len
-                )
+                    len(ids), self.max_len)
             )
         return ids
 
@@ -323,10 +401,8 @@ class GPT2Tokenizer(object):
             writer.write(u'#version: 0.2\n')
             for bpe_tokens, token_index in sorted(self.bpe_ranks.items(), key=lambda kv: kv[1]):
                 if index != token_index:
-                    logger.warning(
-                        "Saving vocabulary to {}: BPE merge indices are not consecutive."
-                        " Please check that the tokenizer is not corrupted!".format(merge_file)
-                    )
+                    logger.warning("Saving vocabulary to {}: BPE merge indices are not consecutive."
+                                   " Please check that the tokenizer is not corrupted!".format(merge_file))
                     index = token_index
                 writer.write(' '.join(bpe_tokens) + u'\n')
                 index += 1
@@ -335,12 +411,8 @@ class GPT2Tokenizer(object):
         with open(special_tokens_file, 'w', encoding='utf-8') as writer:
             for token, token_index in sorted(self.special_tokens.items(), key=lambda kv: kv[1]):
                 if index != token_index:
-                    logger.warning(
-                        "Saving special tokens vocabulary to {}: BPE indices are not consecutive."
-                        " Please check that the tokenizer is not corrupted!".format(
-                            special_tokens_file
-                        )
-                    )
+                    logger.warning("Saving special tokens vocabulary to {}: BPE indices are not consecutive."
+                                   " Please check that the tokenizer is not corrupted!".format(special_tokens_file))
                     index = token_index
                 writer.write(token + u'\n')
                 index += 1
@@ -349,12 +421,10 @@ class GPT2Tokenizer(object):
 
 
 class AquilaTokenizer(GPT2Tokenizer):
-    def __init__(
-        self, vocab_file, merges_file, errors='replace', special_tokens=None, max_len=None
-    ):
-        super().__init__(
-            vocab_file, merges_file, errors=errors, special_tokens=special_tokens, max_len=max_len
-        )
+    def __init__(self, vocab_file, merges_file, errors='replace',
+                 special_tokens=None, max_len=None):
+        super().__init__(vocab_file, merges_file, errors=errors,
+                         special_tokens=special_tokens, max_len=max_len)
 
         self.tokens_trie = Trie()
         if len(self.special_tokens) > 0:
@@ -366,7 +436,7 @@ class AquilaTokenizer(GPT2Tokenizer):
             self.encoder[v] = k
 
     def _tokenize(self, text):
-        """Tokenize a string."""
+        """ Tokenize a string. """
         bpe_tokens = []
         for token in re.findall(self.pat, text):
             if sys.version_info[0] == 2:

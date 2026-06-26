@@ -1,16 +1,14 @@
 import torch
 
 import megatron.training.global_vars as mcore_global_vars
-
+from megatron.core.tokenizers.text.libraries.null_tokenizer import NullTokenizer
 from megatron.plugin.hetero.parallel_context import ParallelContext
 from megatron.training.arguments import parse_args
-from megatron.training.arguments_fs import FSTrainArguments  # noqa
-from megatron.training.tokenizer.tokenizer import _NullTokenizer
+from megatron.training.arguments_fs import FSTrainArguments
 from tests.unit_tests.test_utilities import Utils as MegatronUtils
 
 
 def init_parallel_context() -> ParallelContext:
-
     args = parse_args(ignore_unknown_args=True)
     args.tensor_model_parallel_size = 2
     args.pipeline_model_parallel_size = 3
@@ -68,7 +66,7 @@ def init_parallel_context() -> ParallelContext:
     train_args.post_validate_args()
 
     # for building datasets
-    mcore_global_vars._GLOBAL_TOKENIZER = _NullTokenizer(vocab_size=64)
+    mcore_global_vars._GLOBAL_TOKENIZER = NullTokenizer(vocab_size=64)
     para_ctx = ParallelContext(args)
     return para_ctx
 

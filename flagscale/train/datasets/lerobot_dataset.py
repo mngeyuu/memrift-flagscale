@@ -20,7 +20,6 @@ import contextlib
 import logging
 import shutil
 import tempfile
-
 from collections.abc import Callable
 from pathlib import Path
 
@@ -31,7 +30,6 @@ import pandas as pd
 import PIL.Image
 import torch
 import torch.utils
-
 from huggingface_hub import HfApi, snapshot_download
 from huggingface_hub.errors import RevisionNotFoundError
 
@@ -45,7 +43,6 @@ from flagscale.train.datasets.utils import (
     INFO_PATH,
     _validate_feature_names,
     check_delta_timestamps,
-    check_version_compatibility,
     create_empty_dataset_info,
     create_lerobot_dataset_card,
     embed_images,
@@ -53,9 +50,7 @@ from flagscale.train.datasets.utils import (
     get_delta_indices,
     get_file_size_in_mb,
     get_hf_features_from_features,
-    get_safe_version,
     hf_transform_to_torch,
-    is_valid_version,
     load_episodes,
     load_info,
     load_nested_dataset,
@@ -514,7 +509,7 @@ class LeRobotDatasetMetadata:
         feature_keys = list(self.features)
         return (
             f"{self.__class__.__name__}({{\n"
-            f"    Repository ID: '{self.repo_id}',\n"
+            f"    Root: '{self.root}',\n"
             f"    Total episodes: '{self.total_episodes}',\n"
             f"    Total frames: '{self.total_frames}',\n"
             f"    Features: '{feature_keys}',\n"
@@ -1091,6 +1086,7 @@ class LeRobotDataset(torch.utils.data.Dataset):
         # Add task as a string
         task_idx = item["task_index"].item()
         item["task"] = self.meta.tasks.iloc[task_idx].name
+
         return item
 
     def __repr__(self):

@@ -7,22 +7,123 @@ import shlex
 import socket
 import subprocess
 import sys
+import threading
 import time
 import traceback
-
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, Optional, Tuple
 
 import aiohttp
 import numpy as np
-
 from omegaconf import DictConfig, OmegaConf
+from omegaconf.listconfig import ListConfig
 from tqdm.asyncio import tqdm
 
 from flagscale.logger import logger
 
 AIOHTTP_TIMEOUT = aiohttp.ClientTimeout(total=6 * 60 * 60)
+
+
+def resolve_path(path, config_key="", check_exists=False, raise_missing=False):
+    """Resolve a config path to an absolute path and optionally validate it.
+
+    Handles all path forms consistently:
+      - Absolute paths (starting with '/') are returned as-is.
+      - Relative paths ('./…', '../…', or bare like 'data/…') are resolved
+        against the current working directory via ``os.path.abspath``.
+
+    Note: ``run.py`` restores the original cwd before any runner code executes
+    (equivalent to ``hydra.job.chdir=False``), so ``os.path.abspath`` always
+    resolves against the user's project directory, not Hydra's output dir.
+
+    Args:
+        path: The path string to resolve.
+        config_key: Dotted config key for log messages (e.g. 'train.data.tokenizer.vocab_file').
+        check_exists: If True, log a warning when the resolved path does not exist.
+        raise_missing: If True, raise FileNotFoundError when the resolved path does not exist.
+            Takes precedence over *check_exists*.
+    """
+    resolved = os.path.abspath(path)
+    if not os.path.exists(resolved):
+        if raise_missing:
+            raise FileNotFoundError(
+                f"Config '{config_key}': resolved path '{path}' to '{resolved}', "
+                f"but the path does not exist."
+            )
+        if check_exists:
+            logger.warning(
+                f"Config '{config_key}': resolved path '{path}' to '{resolved}', "
+                f"but the path does not exist."
+            )
+    return resolved
+
+
+def setup_exp_dir(config):
+    """Resolve experiment directory and ensure it exists.
+
+    Common setup shared by all task types: resolves ``config.experiment.exp_dir``
+    to an absolute path, creates it if necessary, and returns the resolved path.
+    """
+    exp_dir = resolve_path(config.experiment.exp_dir, "experiment.exp_dir")
+    os.makedirs(exp_dir, exist_ok=True)
+    return exp_dir
+
+
+def get_pkg_dir():
+    """Return the root directory of the FlagScale package/repo.
+
+    Used to locate package-internal files (``flagscale/train/``, scripts, etc.)
+    in generated run scripts for PYTHONPATH, ``cd``, and script paths.
+
+    Resolves to the parent of the ``flagscale/`` package directory, which
+    works both for development (repo root) and pip-installed layouts.
+    """
+    # flagscale/runner/utils.py -> flagscale/runner/ -> flagscale/ -> repo root
+    return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+def get_cwd_dir(override=None):
+    """Return the working directory for user-facing path resolution.
+
+    If *override* is given (e.g. from a per-node ``build_dir``),
+    it is resolved to an absolute path and validated.
+    Otherwise the current working directory is returned.
+    """
+    if override is not None:
+        return resolve_path(override, "root_dir", raise_missing=True)
+    return os.getcwd()
+
+
+def setup_logging_dirs(logging_config, exp_dir, log_subdir="logs"):
+    """Set up standard logging directory layout under exp_dir.
+
+    Creates the directory tree and writes paths back into *logging_config*::
+
+        <exp_dir>/<log_subdir>/
+        ├── scripts/
+        └── pids/
+
+    Args:
+        logging_config: The OmegaConf logging section to update in-place.
+        exp_dir: Absolute path to the experiment directory.
+        log_subdir: Name of the logging subdirectory under exp_dir.
+
+    Returns:
+        The absolute log_dir path.
+    """
+    log_dir = (
+        resolve_path(logging_config.log_dir, "logging.log_dir")
+        if logging_config.get("log_dir", None)
+        else os.path.join(exp_dir, log_subdir)
+    )
+    scripts_dir = os.path.join(log_dir, "scripts")
+    pids_dir = os.path.join(log_dir, "pids")
+
+    logging_config.log_dir = log_dir
+    logging_config.scripts_dir = scripts_dir
+    logging_config.pids_dir = pids_dir
+
+    return log_dir
 
 
 class JobStatus(Enum):
@@ -36,9 +137,61 @@ def log_and_raise_error(message):
     raise ValueError(message)
 
 
+def validate_serve_config(config: DictConfig):
+    """Validate that config has serve field with correct structure.
+
+    Requirements:
+    - config must have 'serve' field
+    - config.serve must be ListConfig or list type
+    - Each element in the list must be a dict and contain 'serve_id' field
+
+    Args:
+        config: DictConfig object to validate
+
+    Raises:
+        ValueError: If config doesn't have 'serve' field or elements lack 'serve_id'
+        TypeError: If config.serve is not ListConfig/list or elements are not dicts
+    """
+    if not hasattr(config, "serve"):
+        logger.error(f"Config content:\n{OmegaConf.to_yaml(config)}")
+        raise ValueError("config must have 'serve' field")
+
+    serve_config = config.serve
+
+    # Check if serve_config is ListConfig or list type
+    if not isinstance(serve_config, (ListConfig, list)):
+        logger.error(
+            f"Config validation failed: config.serve must be ListConfig or list type, "
+            f"got {type(serve_config).__name__}"
+        )
+        logger.error(f"Config.serve content: {serve_config}")
+        raise TypeError(
+            f"config.serve must be ListConfig or list type, got {type(serve_config).__name__}"
+        )
+
+    # Check each element is a dict and contains serve_id field
+    for idx, item in enumerate(serve_config):
+        if not isinstance(item, (dict, DictConfig)):
+            logger.error(f"Element at index {idx} content: {item}")
+            raise TypeError(
+                f"Element at index {idx} in serve list must be a dict or DictConfig, "
+                f"got {type(item).__name__}"
+            )
+
+        # Convert DictConfig to dict for checking keys
+        if isinstance(item, DictConfig):
+            item_dict = OmegaConf.to_container(item, resolve=False)
+        else:
+            item_dict = item
+
+        if "serve_id" not in item_dict:
+            logger.error(f"Element at index {idx} content: {item_dict}")
+            raise ValueError(f"Element at index {idx} in serve list must contain 'serve_id' field")
+
+
 def is_ray_master_running(
     master_ip: str, port: int = 6379, timeout: float = 5.0
-) -> Tuple[bool, Optional[str]]:
+) -> tuple[bool, str | None]:
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.settimeout(timeout)
@@ -46,14 +199,14 @@ def is_ray_master_running(
             result = s.connect_ex((master_ip, port))
 
             if result != 0:
-                return False, f"waitting for master node {master_ip}:{port}"
+                return False, f"waiting for master node {master_ip}:{port}"
             else:
-                return True, f"master node is ready"
+                return True, "master node is ready"
 
-    except socket.timeout:
+    except TimeoutError:
         return False, f"connect {master_ip}:{port} timeout"
     except Exception as e:
-        return False, f"check the error: {str(e)}"
+        return False, f"check the error: {e!s}"
 
 
 def wait_for_ray_master(
@@ -104,8 +257,8 @@ def parse_hostfile(hostfile_path):
         else:
             log_and_raise_error(f"Invalid entry in hostfile: {line}.")
 
-    assert all(info["type"] == None for _, info in resources.items()) or all(
-        info["type"] != None for _, info in resources.items()
+    assert all(info["type"] is None for _, info in resources.items()) or all(
+        info["type"] is not None for _, info in resources.items()
     ), "All hosts must have the a machine type or no machine type specified."
 
     if len(resources) == 0:
@@ -161,49 +314,18 @@ def get_addr():
     return socket.gethostname()
 
 
-def run_local_command(cmd, dryrun=False, query=False):
+def run_local_command(cmd, dryrun=False, query=False, stream_output=False):
     logger.info(f"Run the local command: {cmd}")
     if dryrun:
         return
-    if query:
-        result = subprocess.run(
-            cmd,
-            shell=True,
-            check=True,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-        )
-        return result
-    else:
-        result = subprocess.run(
-            cmd,
-            shell=True,
-            check=True,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-        )
+    if stream_output:
+        # Stdout/stderr go directly to the console (no capture).
+        result = subprocess.run(cmd, shell=True, check=False)
         if result.returncode != 0:
-            print(f"Command {cmd} failed with return code {result.returncode}.")
-            print(f"Output: {result.stdout}")
-            print(f"Error: {result.stderr}")
             sys.exit(result.returncode)
-
-
-def run_ssh_command(host, cmd, port=None, dryrun=False, query=False):
-    if port:
-        ssh_cmd = f"ssh -f -n -p {port} {host} '{cmd}'"
-    else:
-        ssh_cmd = f"ssh -f -n {host} '{cmd}'"
-    if not query:
-        logger.info(f"Running the ssh command: {ssh_cmd}")
-    if dryrun:
         return
     result = subprocess.run(
-        ssh_cmd,
+        cmd,
         shell=True,
         check=True,
         capture_output=True,
@@ -211,7 +333,45 @@ def run_ssh_command(host, cmd, port=None, dryrun=False, query=False):
         encoding="utf-8",
         errors="replace",
     )
+    if query:
+        return result
     if result.returncode != 0:
+        print(f"Command {cmd} failed with return code {result.returncode}.")
+        print(f"Output: {result.stdout}")
+        print(f"Error: {result.stderr}")
+        sys.exit(result.returncode)
+
+
+def run_ssh_command(
+    host, cmd, port=None, dryrun=False, query=False, background=True, stream_output=False
+):
+    # Build SSH command — only background mode adds -f
+    flags = "-f -n" if (background and not stream_output) else "-n"
+    port_flag = f"-p {port} " if port else ""
+    ssh_cmd = f"ssh {flags} {port_flag}{host} '{cmd}'"
+
+    if not query:
+        logger.info(f"Running the ssh command: {ssh_cmd}")
+    if dryrun:
+        return
+
+    if stream_output:
+        # Stdout/stderr stream directly to the login node console.
+        result = subprocess.run(ssh_cmd, shell=True, check=False)
+        if result.returncode != 0:
+            sys.exit(result.returncode)
+        return
+
+    result = subprocess.run(
+        ssh_cmd,
+        shell=True,
+        check=(background),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    if result.returncode != 0 and not query:
         print(f"SSH command {ssh_cmd} failed with return code {result.returncode}.")
         print(f"Output: {result.stdout}")
         print(f"Error: {result.stderr}")
@@ -297,15 +457,13 @@ def flatten_dict_to_args_verl(config_dict, pre_str=""):
     for key, value in config_dict.items():
         if isinstance(value, dict):
             if key == "append_kargs":
-                target_str = f"+"
+                target_str = "+"
             else:
                 target_str = f"{key}."
             args.extend(flatten_dict_to_args_verl(value, pre_str + target_str))
         elif isinstance(value, list):
-            v_str = ""
-            for v in value:
-                v_str += f"{v}"
-            args.append(f"{pre_str + key}=" + v_str)
+            json_str = json.dumps(value)
+            args.append(f"{pre_str + key}={json_str}")
         elif isinstance(value, bool):
             args.append(f"{pre_str + key}={value}")
         else:
@@ -318,8 +476,6 @@ def flatten_dict_to_args(config_dict, ignore_keys=[], do_dash_replace=True):
     args = []
     for key, value in config_dict.items():
         if key in ignore_keys:
-            continue
-        if value is None:
             continue
         if do_dash_replace:
             key = key.replace("_", "-")
@@ -392,7 +548,7 @@ def update_nodes_envs(env_config, ip_addr, resource_info):
     nodes_envs = cur_node_config.pop("node_specific", None)
     if device_types_envs is None and nodes_envs is None:
         logger.warning(
-            f"type in hostfile is not specified. All the nodes use the same arguments inlucding evnironment variables."
+            "type in hostfile is not specified. All the nodes use the same arguments inlucding evnironment variables."
         )
         return cur_node_config
 
@@ -403,6 +559,24 @@ def update_nodes_envs(env_config, ip_addr, resource_info):
     if nodes_envs is not None:
         cur_node_config.update(nodes_envs.get(ip_addr, {}))
 
+    return cur_node_config
+
+
+def add_decive_extra_config(config, device_type):
+    if device_type is None:
+        return OmegaConf.to_container(config, resolve=True)
+    cur_node_config = {}
+    temp_dict = {}
+    if isinstance(config, DictConfig):
+        temp_dict = OmegaConf.to_container(config, resolve=True)
+    else:
+        temp_dict = config
+    for key, value in temp_dict.items():
+        if isinstance(value, dict):
+            if key == device_type:
+                cur_node_config.update(value)
+            else:
+                cur_node_config[key] = value
     return cur_node_config
 
 
@@ -452,10 +626,7 @@ def is_ip_addr(master):
         return False
     pattern = r"^((25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)$"
     result = re.match(pattern, master)
-    if result:
-        return True
-    else:
-        return False
+    return bool(result)
 
 
 def is_master_node(lws_leader_address):
@@ -492,7 +663,7 @@ def is_master(config, resources=None):
         raise ValueError("In the multi-node mode, please set the hostfile")
 
     if resources:
-        master = list(resources.keys())[0]
+        master = next(iter(resources.keys()))
         if is_ip_addr(master):
             return get_ip_addr() in [master, "127.0.0.1"]
         else:
@@ -505,6 +676,131 @@ def is_master(config, resources=None):
     return True
 
 
+def find_latest_stdout_log(start_path):
+    """Find the latest stdout.log for the highest rank in the latest attempt.
+
+    Used to locate the training log to tail on the login node console.
+    Directory structure created by torchrun::
+
+        start_path/host_0_*/timestamp/run_id/attempt_N/rank/stdout.log
+
+    Returns the path to stdout.log, or None if not found.
+    """
+    if not os.path.exists(start_path):
+        return None
+
+    folders_with_attempts = []
+    for root, dirs, _ in os.walk(start_path):
+        attempt_dirs = [d for d in dirs if d.startswith("attempt_")]
+        if attempt_dirs:
+            folders_with_attempts.append(root)
+
+    if not folders_with_attempts:
+        return None
+
+    folders_with_attempts.sort(reverse=True)
+    latest_folder = folders_with_attempts[0]
+
+    attempt_dirs = [d for d in os.listdir(latest_folder) if d.startswith("attempt_")]
+    if not attempt_dirs:
+        return None
+
+    attempt_dirs.sort(
+        key=lambda x: int(x.split("_")[1]) if x.split("_")[1].isdigit() else -1,
+        reverse=True,
+    )
+    latest_attempt = os.path.join(latest_folder, attempt_dirs[0])
+
+    try:
+        rank_dirs = os.listdir(latest_attempt)
+        rank_dirs.sort(key=lambda x: int(x) if x.isdigit() else float("inf"), reverse=True)
+        for rank_dir in rank_dirs:
+            log_path = os.path.join(latest_attempt, rank_dir, "stdout.log")
+            if os.path.exists(log_path):
+                return log_path
+    except OSError:
+        pass
+
+    return None
+
+
+def tail_log_to_console(log_file_or_finder, stop_event, poll_interval=1.0):
+    """Tail a log file and print new lines to the login node console.
+
+    Runs in a daemon thread. Opens the log file in **read-only** mode, so
+    Ctrl+C or any interruption on the login node will never corrupt or
+    affect the log files written by the worker nodes.
+
+    Args:
+        log_file_or_finder: Either a file path string, or a callable returning
+            a file path (for dynamic discovery, e.g. training stdout.log).
+        stop_event: threading.Event to signal when to stop tailing.
+        poll_interval: Seconds between polls for new content.
+    """
+    try:
+        log_file = None
+        while not stop_event.is_set():
+            if callable(log_file_or_finder):
+                log_file = log_file_or_finder()
+            else:
+                log_file = log_file_or_finder
+            if log_file and os.path.exists(log_file):
+                break
+            stop_event.wait(poll_interval)
+
+        if stop_event.is_set() or not log_file:
+            return
+
+        with open(log_file, "r") as f:
+            while not stop_event.is_set():
+                line = f.readline()
+                if line:
+                    print(line, end="", flush=True)
+                else:
+                    stop_event.wait(poll_interval)
+    except Exception:
+        # Silently exit on any error (file deleted, permission change, etc.).
+        # The log files in log_dir are unaffected since we only read them.
+        pass
+
+
+def get_node0_log_file(logging_config, no_shared_fs, resources=None):
+    """Return the log file path for node 0.
+
+    Args:
+        logging_config: Config object with a ``log_dir`` attribute.
+        no_shared_fs: If True, use a generic ``host.output`` name.
+        resources: Ordered dict of host → info.  The first key is node 0's host.
+
+    Returns:
+        Absolute path to the expected output file for node 0.
+    """
+    if no_shared_fs:
+        return os.path.join(logging_config.log_dir, "host.output")
+    node0_host = next(iter(resources)) if resources else "localhost"
+    return os.path.join(logging_config.log_dir, f"host_0_{node0_host}.output")
+
+
+def start_tail_log(log_file_or_finder):
+    """Start tailing a log file in a daemon thread on the login node.
+
+    Args:
+        log_file_or_finder: Either a file path string, or a callable returning
+            a file path (for dynamic discovery, e.g. training stdout.log).
+
+    Returns:
+        Tuple of (thread, stop_event). Call stop_event.set() to stop tailing.
+    """
+    stop_event = threading.Event()
+    thread = threading.Thread(
+        target=tail_log_to_console,
+        args=(log_file_or_finder, stop_event),
+        daemon=True,
+    )
+    thread.start()
+    return thread, stop_event
+
+
 @dataclass
 class RequestFuncInput:
     prompt: str
@@ -512,11 +808,11 @@ class RequestFuncInput:
     prompt_len: int
     output_len: int
     model: str
-    model_name: Optional[str] = None
+    model_name: str | None = None
     best_of: int = 1
-    logprobs: Optional[int] = None
-    extra_body: Optional[dict] = None
-    multi_modal_content: Optional[dict] = None
+    logprobs: int | None = None
+    extra_body: dict | None = None
+    multi_modal_content: dict | None = None
     ignore_eos: bool = False
 
 
@@ -527,7 +823,7 @@ class RequestFuncOutput:
     latency: float = 0.0
     output_tokens: int = 0
     ttft: float = 0.0  # Time to first token
-    itl: List[float] = field(default_factory=list)  # List of inter-token latencies
+    itl: list[float] = field(default_factory=list)  # List of inter-token latencies
     tpot: float = 0.0  # avg next-token latencies
     prompt_len: int = 0
     error: str = ""
@@ -554,12 +850,12 @@ def dummy_random_input(
 
 
 async def async_request_openai_chat_completions(
-    request_func_input: RequestFuncInput, pbar: Optional[tqdm] = None
+    request_func_input: RequestFuncInput, pbar: tqdm | None = None
 ) -> RequestFuncOutput:
     api_url = request_func_input.api_url
-    assert api_url.endswith(
-        ("chat/completions", "profile")
-    ), "OpenAI Chat Completions API URL must end with 'chat/completions'."
+    assert api_url.endswith(("chat/completions", "profile")), (
+        "OpenAI Chat Completions API URL must end with 'chat/completions'."
+    )
 
     async with aiohttp.ClientSession(trust_env=True, timeout=AIOHTTP_TIMEOUT) as session:
         content = [{"type": "text", "text": request_func_input.prompt}]

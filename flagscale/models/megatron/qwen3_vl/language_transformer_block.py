@@ -6,27 +6,24 @@ from dataclasses import dataclass
 from typing import List, Optional, Union
 
 import torch
-
 from torch import Tensor, nn
 
+
+from megatron.core.transformer.transformer_block import TransformerBlock
+from megatron.core.fusions.fused_layer_norm import FusedLayerNorm
 from megatron.core import parallel_state, tensor_parallel
 from megatron.core.enums import Fp8Recipe
 from megatron.core.fp4_utils import get_fp4_context
 from megatron.core.fp8_utils import get_fp8_context
-from megatron.core.fusions.fused_layer_norm import FusedLayerNorm
 from megatron.core.inference.contexts import BaseInferenceContext
 from megatron.core.packed_seq_params import PackedSeqParams
-from megatron.core.tensor_parallel.mappings import (
-    gather_from_sequence_parallel_region,
-    scatter_to_sequence_parallel_region,
-)
-from megatron.core.transformer.transformer_block import TransformerBlock
 from megatron.core.utils import (
     WrappedTensor,
     deprecate_inference_params,
     get_pg_rank,
     make_viewless_tensor,
 )
+from megatron.core.tensor_parallel.mappings import (gather_from_sequence_parallel_region, scatter_to_sequence_parallel_region)
 
 try:
     import transformer_engine.pytorch as te  # pylint: disable=unused-import
@@ -157,14 +154,14 @@ class LanguageTransformerBlock(TransformerBlock):
                 # layer_idx += self.config.recompute_num_layers
 
                 # NOTE: Assume that this is first pipeline stage that has at least three layers.
-                #       The other stages will just pass None for visual_pos_masks and deepstack_visual_embeds.
+                    #       The other stages will just pass None for visual_pos_masks and deepstack_visual_embeds.
                 if visual_pos_masks is not None and deepstack_visual_embeds is not None:
-                    assert len(self.layers) >= len(
-                        deepstack_visual_embeds
-                    ), f"First pipeline stage should have at least {len(self.layers)} layers for deepstack."
+                    assert len(self.layers) >= len(deepstack_visual_embeds), f"First pipeline stage should have at least {len(self.layers)} layers for deepstack."
                     if layer_idx < len(deepstack_visual_embeds):
                         hidden_states = self._deepstack_process(
-                            hidden_states, visual_pos_masks, deepstack_visual_embeds[layer_idx]
+                            hidden_states,
+                            visual_pos_masks,
+                            deepstack_visual_embeds[layer_idx],
                         )
 
                 layer_idx += self.config.recompute_num_layers
@@ -195,8 +192,8 @@ class LanguageTransformerBlock(TransformerBlock):
 
         return hidden_states
 
-    """Transformer class."""
 
+    """Transformer class."""
     def forward(
         self,
         hidden_states: Union[Tensor, WrappedTensor],
@@ -302,10 +299,8 @@ class LanguageTransformerBlock(TransformerBlock):
         with rng_context, outer_quantization_context:
             # Forward pass.
             if self.config.recompute_granularity == 'full' and self.training:
-                assert (
-                    self.config.recompute_method == 'uniform'
-                    and self.config.recompute_num_layers == 1
-                ), f"Only uniform recompute with recompute_num_layers=1 is supported for full recompute in Qwen3-VL."
+                assert self.config.recompute_method == 'uniform' and self.config.recompute_num_layers == 1, \
+                    f"Only uniform recompute with recompute_num_layers=1 is supported for full recompute in Qwen3-VL."
                 hidden_states = self._checkpointed_forward(
                     hidden_states=hidden_states,
                     attention_mask=attention_mask,
@@ -315,8 +310,8 @@ class LanguageTransformerBlock(TransformerBlock):
                     attention_bias=attention_bias,
                     packed_seq_params=packed_seq_params,
                     use_inner_quantization_context=use_inner_quantization_context,
-                    visual_pos_masks=visual_pos_masks,
-                    deepstack_visual_embeds=deepstack_visual_embeds,
+                    visual_pos_masks = visual_pos_masks,
+                    deepstack_visual_embeds = deepstack_visual_embeds,
                 )
             else:
                 for l_no, layer in enumerate(self.layers):
@@ -353,12 +348,12 @@ class LanguageTransformerBlock(TransformerBlock):
                     # NOTE: Assume that this is first pipeline stage that has at least three layers.
                     #       The other stages will just pass None for visual_pos_masks and deepstack_visual_embeds.
                     if visual_pos_masks is not None and deepstack_visual_embeds is not None:
-                        assert len(self.layers) >= len(
-                            deepstack_visual_embeds
-                        ), f"First pipeline stage should have at least {len(self.layers)} layers for deepstack."
+                        assert len(self.layers) >= len(deepstack_visual_embeds), f"First pipeline stage should have at least {len(self.layers)} layers for deepstack."
                         if l_no < len(deepstack_visual_embeds):
                             hidden_states = self._deepstack_process(
-                                hidden_states, visual_pos_masks, deepstack_visual_embeds[l_no]
+                                hidden_states,
+                                visual_pos_masks,
+                                deepstack_visual_embeds[l_no],
                             )
                     if (
                         torch.is_grad_enabled()
@@ -384,11 +379,9 @@ class LanguageTransformerBlock(TransformerBlock):
 
         return hidden_states
 
+
     def _deepstack_process(
-        self,
-        hidden_states: torch.Tensor,
-        visual_pos_masks: torch.Tensor,
-        visual_embeds: torch.Tensor,
+        self, hidden_states: torch.Tensor, visual_pos_masks: torch.Tensor, visual_embeds: torch.Tensor
     ):
         visual_pos_masks = visual_pos_masks.to(hidden_states.device)
         visual_embeds = visual_embeds.to(hidden_states.device, hidden_states.dtype)

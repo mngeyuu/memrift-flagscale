@@ -1,30 +1,36 @@
 # Copyright (c) 2025, BAAI. All rights reserved.
 
 from collections import OrderedDict
-from typing import Dict, List, Literal, Optional
+from typing import Dict, Literal, Optional, List
 
 import torch
-
 from torch import Tensor
 
-from megatron.core import parallel_state, tensor_parallel
+from megatron.plugin.platform import get_platform
+
+cur_platform = get_platform()
+
+
+from megatron.core import tensor_parallel
 from megatron.core.config_logger import has_config_logger_enabled, log_config_to_disk
+from megatron.core import parallel_state
+from megatron.core.models.common.language_module.language_module import LanguageModule
+from megatron.core.packed_seq_params import PackedSeqParams
+from megatron.core.quantization.utils import get_quant_config_or_none
+from megatron.core.transformer.enums import ModelType
 from megatron.core.models.common.embeddings.rope_utils import (  # for backward compatibility; pylint: disable=unused-import
     get_pos_emb_on_this_cp_rank,
 )
-from megatron.core.models.common.language_module.language_module import LanguageModule
-from megatron.core.models.gpt.gpt_model import GPTModel
-from megatron.core.packed_seq_params import PackedSeqParams
-from megatron.core.process_groups_config import ProcessGroupCollection
-from megatron.core.quantization.utils import get_quant_config_or_none
-from megatron.core.transformer.enums import ModelType
 from megatron.core.transformer.spec_utils import ModuleSpec
+
 from megatron.core.transformer.transformer_config import TransformerConfig
 from megatron.core.utils import WrappedTensor, deprecate_inference_params
+from megatron.core.models.gpt.gpt_model import GPTModel
+from megatron.core.process_groups_config import ProcessGroupCollection
 
 from .language_transformer_block import LanguageTransformerBlock
-from flagscale.models.megatron.qwen2_5_vl.language_module import QwenVLLanguageModelEmbedding
 
+from flagscale.models.megatron.qwen2_5_vl.language_module import QwenVLLanguageModelEmbedding
 
 ######### New Impl for Qwen3-VL Language Model #########
 # reference from https://github.com/huggingface/transformers/blob/d08b98b965176ea9cf8c8e8b24995c955b7e2ec9/src/transformers/models/qwen3_vl/modeling_qwen3_vl.py#L278
@@ -65,7 +71,7 @@ class Qwen3VLLanguageRotaryEmbedding(torch.nn.Module):
         inv_freq = 1.0 / (
             rotary_base
             ** (
-                torch.arange(0, dim, 2, dtype=torch.float32, device=torch.cuda.current_device())
+                torch.arange(0, dim, 2, dtype=torch.float32, device=cur_platform.current_device())
                 / dim
             )
         )
@@ -89,8 +95,8 @@ class Qwen3VLLanguageRotaryEmbedding(torch.nn.Module):
         """
         freqs_t = freqs[0]  # just overwrite the first dimension T
         for dim, offset in enumerate((1, 2), start=1):  # H, W
-            length = mrope_section[dim] * 3  # 20 * 3 = 60
-            idx = slice(offset, length, 3)  # 1, 4, 7, ..., 59 for H; 2, 5, 8, ..., 59 for W
+            length = mrope_section[dim] * 3 # 20 * 3 = 60
+            idx = slice(offset, length, 3) # 1, 4, 7, ..., 59 for H; 2, 5, 8, ..., 59 for W
             freqs_t[..., idx] = freqs[dim, ..., idx]
         return freqs_t
 
@@ -105,17 +111,13 @@ class Qwen3VLLanguageRotaryEmbedding(torch.nn.Module):
         Returns:
             Tensor: Embeddings after applying RoPE.
         """
-        seq = position_ids.to(
-            device=self.inv_freq.device, dtype=torch.float32
-        )  # shape (3, bs, seq_length)
+        seq = position_ids.to(device=self.inv_freq.device, dtype=torch.float32)  # shape (3, bs, seq_length)
 
         if self.seq_len_interpolation_factor is not None:
             seq *= 1 / self.seq_len_interpolation_factor
 
         # shape (3, bs, dim, 1)
-        inv_freq_expanded = (
-            self.inv_freq[None, None, :, None].float().expand(3, seq.shape[1], -1, 1)
-        )
+        inv_freq_expanded = self.inv_freq[None, None, :, None].float().expand(3, seq.shape[1], -1, 1)
         # shape (3, bs, 1, seq_length)
         seq_expanded = seq[:, :, None, :].float()
         # shape (3, bs, seq_length, dim)
@@ -140,7 +142,6 @@ class Qwen3VLLanguageRotaryEmbedding(torch.nn.Module):
             # CP rank
             emb = get_pos_emb_on_this_cp_rank(emb, 0, self.cp_group)
         return emb
-
 
 class Qwen3VLLanguageModule(GPTModel):
     """Qwen3-VL Language Module.
@@ -241,6 +242,7 @@ class Qwen3VLLanguageModule(GPTModel):
                 self.mrope_section is not None
             ), "mrope require mrope_section setting, but we got None from TransformerConfig"
 
+
         # Cache for RoPE tensors which do not change between iterations.
         self.rotary_pos_emb_cache = {}
 
@@ -304,24 +306,15 @@ class Qwen3VLLanguageModule(GPTModel):
                 quant_config = get_quant_config_or_none(name, self.config.quant_recipe)
                 module.finish_init(quant_config)
 
-    def forward(
-        self,
-        input_ids,
-        position_ids,
-        attention_mask,
-        decoder_input=None,
-        labels=None,
-        inference_context=None,
-        packed_seq_params=None,
-        extra_block_kwargs=None,
-        runtime_gather_output=None,
-        # args for deepstack
-        visual_pos_masks: Optional[torch.Tensor] = None,
-        deepstack_visual_embeds: Optional[list[torch.Tensor]] = None,
-        *,
-        inference_params=None,
-        loss_mask=None,
-    ):
+    def forward(self, input_ids, position_ids, attention_mask,
+                decoder_input = None, labels = None, inference_context = None,
+                packed_seq_params = None, extra_block_kwargs = None,
+                runtime_gather_output = None,
+                # args for deepstack
+                visual_pos_masks: Optional[torch.Tensor] = None,
+                deepstack_visual_embeds: Optional[list[torch.Tensor]] = None,
+                *, inference_params = None,
+                loss_mask = None):
 
         inference_context = deprecate_inference_params(inference_context, inference_params)
 
@@ -345,8 +338,8 @@ class Qwen3VLLanguageModule(GPTModel):
             rotary_pos_sin=rotary_pos_sin,
             packed_seq_params=packed_seq_params,
             sequence_len_offset=sequence_len_offset,
-            visual_pos_masks=visual_pos_masks,
-            deepstack_visual_embeds=deepstack_visual_embeds,
+            visual_pos_masks = visual_pos_masks,
+            deepstack_visual_embeds = deepstack_visual_embeds,
             **(extra_block_kwargs or {}),
         )
 

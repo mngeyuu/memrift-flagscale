@@ -4,8 +4,7 @@
 
 
 import math
-
-from .utils import print_rank_0
+from .utils import is_hybrid_model, print_rank_0
 
 NUM_BYTES_IN_MEGABYTE = 1024 * 1024
 
@@ -20,7 +19,7 @@ def compute_weight_and_optimizer_memory(args, verbose=False):
     # MoE.
     num_experts = 1 if args.num_experts is None else args.num_experts
     gated_linear_multiplier = 3 / 2 if args.swiglu else 1
-
+    
     shared_expert_ffn_hidden_size = (
         0
         if args.moe_shared_expert_intermediate_size is None
@@ -57,32 +56,25 @@ def compute_weight_and_optimizer_memory(args, verbose=False):
         mtp_num_moe_layers = 0
         mtp_num_dense_layers = 0
 
+    # RMSNorm does not have bias, but LayerNorm has.
+    norm_size = 1 if args.normalization == "RMSNorm" else 2
+
     if args.multi_latent_attention:
         assert not args.group_query_attention
         if args.q_lora_rank is None:
-            q_term = (
-                args.hidden_size
-                * args.num_attention_heads
-                * (args.qk_head_dim + args.qk_pos_emb_head_dim)
-            )
+            q_term = args.hidden_size * args.num_attention_heads * (args.qk_head_dim + args.qk_pos_emb_head_dim)
         else:
             ## q lora + rope + q norm
-            q_term = args.q_lora_rank * (
-                args.hidden_size
-                + args.num_attention_heads * (args.qk_head_dim + args.qk_pos_emb_head_dim)
-                + 1
-            )
-
+            q_term = args.q_lora_rank * (args.hidden_size + args.num_attention_heads * (args.qk_head_dim + args.qk_pos_emb_head_dim) + norm_size) 
+        
         self_attn_term = (
             q_term
+
             ## kv lora + rope + kv norm
             + args.kv_lora_rank
-            * (
-                args.hidden_size
-                + args.num_attention_heads * (args.qk_head_dim + args.v_head_dim)
-                + 1
-            )
+            * (args.hidden_size + args.num_attention_heads * (args.qk_head_dim + args.v_head_dim) + norm_size)
             + args.hidden_size * args.qk_pos_emb_head_dim
+
             ## o proj
             + (args.num_attention_heads * args.v_head_dim) * args.hidden_size
         )
@@ -107,7 +99,7 @@ def compute_weight_and_optimizer_memory(args, verbose=False):
             # Dense MoE MLP.
             (args.ffn_hidden_size * gated_linear_multiplier)
             # Transformer layernorms.
-            + (2)
+            + norm_size
         )
         + self_attn_term
     )
@@ -116,7 +108,20 @@ def compute_weight_and_optimizer_memory(args, verbose=False):
         * args.hidden_size
         * (
             # MoE MLP.
-            +(moe_ffn_hidden_size * num_experts * gated_linear_multiplier)
+            + (moe_ffn_hidden_size * num_experts * gated_linear_multiplier)
+            # Shared MoE MLP.
+            + (shared_expert_ffn_hidden_size * gated_linear_multiplier)
+            # Transformer layernorms.
+            + norm_size
+        )
+        + self_attn_term
+    )
+    num_active_parameters_in_transformer_layer_moe = (
+        2
+        * args.hidden_size
+        * (
+            # MoE MLP.
+            + (moe_ffn_hidden_size * args.moe_router_topk * gated_linear_multiplier)
             # Shared MoE MLP.
             + (shared_expert_ffn_hidden_size * gated_linear_multiplier)
             # Transformer layernorms.
@@ -125,7 +130,7 @@ def compute_weight_and_optimizer_memory(args, verbose=False):
         + self_attn_term
     )
     embedding_size = args.hidden_size * args.padded_vocab_size
-    final_layernorm = 2 * args.hidden_size
+    final_layernorm = norm_size * args.hidden_size
     if args.untie_embeddings_and_output_weights:
         num_parameters_in_embedding_layers = 2 * embedding_size
     else:
@@ -133,6 +138,11 @@ def compute_weight_and_optimizer_memory(args, verbose=False):
     num_parameters_in_transformer_block = (
         num_parameters_in_transformer_layer_dense * num_dense_layers
         + num_parameters_in_transformer_layer_moe * num_moe_layers
+        + final_layernorm
+    )
+    num_active_parameters_in_transformer_block = (
+        num_parameters_in_transformer_layer_dense * num_dense_layers
+        + num_active_parameters_in_transformer_layer_moe * num_moe_layers
         + final_layernorm
     )
     num_parameters_in_mtp_block = (
@@ -144,10 +154,19 @@ def compute_weight_and_optimizer_memory(args, verbose=False):
         + num_parameters_in_mtp_block
         + num_parameters_in_embedding_layers
     )
+    num_active_parameters = (
+        num_active_parameters_in_transformer_block
+        + num_parameters_in_mtp_block
+        + num_parameters_in_embedding_layers
+    )
     if verbose:
         print(
             f"Number of parameters in transformer block in billions: "
             f"{num_parameters_in_transformer_block / 10**9: .2f}"
+        )
+        print(
+            f"Number of active parameters in transformer block in billions: "
+            f"{num_active_parameters_in_transformer_block / 10**9: .2f}"
         )
         if args.mtp_num_layers is not None:
             print(
@@ -159,6 +178,7 @@ def compute_weight_and_optimizer_memory(args, verbose=False):
             f"{num_parameters_in_embedding_layers / 10**9:.2f}"
         )
         print(f"Total number of parameters in billions: {num_total_parameters / 10**9:.2f}")
+        print(f"Total number of active parameters in billions: {num_active_parameters / 10**9:.2f}")
 
     # Most loaded model shard has (1/pp_size transformer layers + 1 mtp block + 1 embedding layer) / tp_size.
     num_parameters_on_most_loaded_model_shard = (
@@ -275,12 +295,7 @@ def compute_activation_memory_without_sp(args, num_microbatches, verbose=False):
     """Compute activation memory without sequence parallelism"""
 
     # 4. Compute per-layer memory
-    per_layer_memory = (
-        args.seq_length
-        * args.micro_batch_size
-        * args.hidden_size
-        * (10 + (24 / args.tensor_model_parallel_size))
-    )
+    per_layer_memory = args.seq_length * args.micro_batch_size * args.hidden_size * (10 + (24 / args.tensor_model_parallel_size))
 
     if verbose:
         print(
@@ -351,10 +366,8 @@ def compute_activation_memory_without_sp(args, num_microbatches, verbose=False):
 
 
 def report_theoretical_memory(args, num_microbatches=None, verbose=False):
-    if args.is_hybrid_model:
-        print(
-            "Theoretical memory footprints not yet supported for hybrid Mamba-Transformer models."
-        )
+    if is_hybrid_model(args):
+        print("Theoretical memory footprints not yet supported for hybrid Mamba-Transformer models.")
         return
 
     weight_and_optimizer_memory = (
@@ -371,9 +384,7 @@ def report_theoretical_memory(args, num_microbatches=None, verbose=False):
     else:
         print_rank_0("compute_activation_memory_without_sp")
         activation_memory = (
-            compute_activation_memory_without_sp(
-                args, num_microbatches=num_microbatches, verbose=verbose
-            )
+            compute_activation_memory_without_sp(args, num_microbatches=num_microbatches, verbose=verbose)
             / NUM_BYTES_IN_MEGABYTE
         )
 

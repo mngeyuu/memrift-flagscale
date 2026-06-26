@@ -2,24 +2,30 @@ import multiprocessing
 import os
 import shlex
 import time
-
 from datetime import datetime
 
+from hydra.core.hydra_config import HydraConfig
 from omegaconf import DictConfig, OmegaConf
 
 from flagscale.runner.elastic.monitor_service import MonitorService
 from flagscale.runner.runner_base_legacy import JobStatus, RunnerBase
 from flagscale.runner.utils import (
+    find_latest_stdout_log,
     flatten_dict_to_args,
     get_free_port,
     get_host_name_or_ip,
     get_nnodes,
     get_nproc_per_node,
+    get_pkg_dir,
     logger,
     parse_hostfile,
+    resolve_path,
     run_local_command,
     run_scp_command,
     run_ssh_command,
+    setup_exp_dir,
+    setup_logging_dirs,
+    start_tail_log,
     update_cmd_with_node_specific_config,
     update_nodes_envs,
 )
@@ -28,9 +34,9 @@ _MAX_CPU_COUNT = multiprocessing.cpu_count()
 
 
 def _get_args_megatron(config: DictConfig):
-    assert (
-        config.experiment.task.backend == "megatron"
-    ), "This function only supports megatron backend."
+    assert config.experiment.task.backend == "megatron", (
+        "This function only supports megatron backend."
+    )
 
     # Convert the DictConfig to a regular dictionary
     config_dict = OmegaConf.to_container(config, resolve=True)
@@ -40,118 +46,96 @@ def _get_args_megatron(config: DictConfig):
     new_config_dict.update(config_dict["system"])
     new_config_dict.update(config_dict["model"])
     new_config_dict.update(config_dict["data"])
-    if "trainer" in config_dict:
-        new_config_dict.update(config_dict["trainer"])
 
-    # run_foreground is only used by runner to generate script (tee vs nohup), not passed to train_gpt.py
-    ignore_keys = ["log_dir", "details_dir", "scripts_dir", "pids_dir", "run_foreground"]
+    ignore_keys = ["log_dir", "details_dir", "scripts_dir", "pids_dir"]
     # Flatten the dictionary to a list of arguments
     args = flatten_dict_to_args(new_config_dict, ignore_keys)
 
     return args
 
 
-def _get_args_robotics(config: DictConfig):
-    assert (
-        config.experiment.task.backend == "robotics"
-    ), "This function only supports robotics backend."
+def _get_args_native(config: DictConfig):
+    """
+    Use Hydra-generated config.yaml for native backend.
+    """
+    assert config.experiment.task.backend in (
+        "native",
+        "native_train",
+    ), "This function only supports native train backend."
 
-    # Convert the DictConfig to a regular dictionary
-    config_dict = OmegaConf.to_container(config, resolve=True)
-    config_dict = config_dict["train"]
-    args = flatten_dict_to_args({"config_path": config_dict["config_path"]})
-    return args
+    # Use Hydra's generated config.yaml (same pattern as backend_native_compress.py)
+    # See: https://github.com/facebookresearch/hydra/discussions/2750
 
+    hydra_config = HydraConfig.get()
+    output_dir = hydra_config.runtime.output_dir
+    output_subdir = hydra_config.output_subdir
+    config_path = os.path.join(output_dir, f"{output_subdir}/config.yaml")
+    config_path = resolve_path(config_path, "hydra.config_path", raise_missing=True)
 
-def _get_args_pi0(config: DictConfig):
-    assert config.experiment.task.backend in [
-        "pi0",
-        "lerobot",
-    ], "This function only supports pi0 or lerobot backend."
-
-    # Convert the DictConfig to a regular dictionary
-    config_dict = OmegaConf.to_container(config, resolve=True)
-    config_dict = config_dict["train"]
-
-    new_config_dict = {}
-    new_config_dict.update(config_dict["system"])
-    new_config_dict.update(config_dict["model"])
-    new_config_dict.update(config_dict["data"])
-
-    ignore_keys = [
-        "log_dir",
-        "details_dir",
-        "scripts_dir",
-        "pids_dir",
-        "save",
-        "output_dir",
-        "load",
-        "tensorboard_dir",
-        "wandb_save_dir",
-    ]
-    # Flatten the dictionary to a list of arguments
-    args = flatten_dict_to_args(new_config_dict, ignore_keys=ignore_keys)
-    return args
+    # Return the path to Hydra's config.yaml
+    return [f"--config-file={config_path}"]
 
 
 def _update_config_train(config: DictConfig):
-    exp_dir = os.path.abspath(config.experiment.exp_dir)
-    if not os.path.isdir(exp_dir):
-        os.makedirs(exp_dir)
-    assert os.path.isdir(exp_dir), f"Directory {exp_dir} does not exist."
+    exp_dir = setup_exp_dir(config)
 
     OmegaConf.set_struct(config, False)
 
     if config.experiment.runner.get("no_shared_fs", False):
         config.train.system.no_shared_fs = True
 
-    config = config.train.system
+    system = config.train.system
 
-    if config.get("checkpoint", None) is None:
-        config.checkpoint = DictConfig({})
+    if system.get("checkpoint", None) is None:
+        system.checkpoint = DictConfig({})
 
-    if config.get("logging", None) is None:
-        config.logging = DictConfig({})
+    if system.get("logging", None) is None:
+        system.logging = DictConfig({})
 
-    ckpt_save_dir = (
-        os.path.abspath(config.checkpoint.save)
-        if config.checkpoint.get("save", None)
+    # Checkpoint directories
+    system.checkpoint.save = (
+        resolve_path(system.checkpoint.save, "checkpoint.save")
+        if system.checkpoint.get("save", None)
         else os.path.join(exp_dir, "checkpoints")
     )
-    ckpt_load_dir = (
-        os.path.abspath(config.checkpoint.load)
-        if config.checkpoint.get("load", None)
+    system.checkpoint.load = (
+        resolve_path(system.checkpoint.load, "checkpoint.load")
+        if system.checkpoint.get("load", None)
         else os.path.join(exp_dir, "checkpoints")
     )
-    wandb_dir = (
-        os.path.abspath(config.logging.wandb_save_dir)
-        if config.logging.get("wandb_save_dir", None)
-        else os.path.join(exp_dir, "wandb")
-    )
-    tensorboard_dir = (
-        os.path.abspath(config.logging.tensorboard_dir)
-        if config.logging.get("tensorboard_dir", None)
+
+    # Logging directories
+    log_dir = setup_logging_dirs(system.logging, exp_dir)
+    system.logging.details_dir = os.path.join(log_dir, "details")
+    system.logging.tensorboard_dir = (
+        resolve_path(system.logging.tensorboard_dir, "logging.tensorboard_dir")
+        if system.logging.get("tensorboard_dir", None)
         else os.path.join(exp_dir, "tensorboard")
     )
-    log_dir = (
-        os.path.abspath(config.logging.log_dir)
-        if config.logging.get("log_dir", None)
-        else os.path.join(exp_dir, "logs")
+    system.logging.wandb_save_dir = (
+        resolve_path(system.logging.wandb_save_dir, "logging.wandb_save_dir")
+        if system.logging.get("wandb_save_dir", None)
+        else os.path.join(exp_dir, "wandb")
     )
-    scripts_dir = os.path.join(log_dir, "scripts")
-    pids_dir = os.path.join(log_dir, "pids")
-    details_dir = os.path.join(log_dir, "details")
 
-    config.checkpoint.save = ckpt_save_dir
-    config.checkpoint.load = ckpt_load_dir
-    config.logging.log_dir = log_dir
-    config.logging.scripts_dir = scripts_dir
-    config.logging.pids_dir = pids_dir
-    config.logging.details_dir = details_dir
-    config.logging.tensorboard_dir = tensorboard_dir
-    config.logging.wandb_save_dir = wandb_dir
+    # Tokenizer file paths — resolve before passing to the training subprocess,
+    # which may run with a different cwd (e.g. site-packages when pip-installed).
+    data = config.train.get("data", None)
+    if data:
+        tokenizer = data.get("tokenizer", None)
+        if tokenizer:
+            _TOKENIZER_FILE_KEYS = (
+                "vocab_file",
+                "merge_file",
+                "special_tokens_file",
+                "tokenizer_model",
+            )
+            for key in _TOKENIZER_FILE_KEYS:
+                val = tokenizer.get(key, None)
+                if val is not None:
+                    tokenizer[key] = resolve_path(val, f"data.tokenizer.{key}", raise_missing=True)
 
-    OmegaConf.set_struct(config, False)
+    OmegaConf.set_struct(system, False)
 
 
 def _get_runner_cmd_train(
@@ -167,10 +151,10 @@ def _get_runner_cmd_train(
 
     rdzv_id = runner_config.get("rdzv_id", "default")
     log_dir = runner_config.get("log_dir", logging_config.details_dir)
-    log_dir = os.path.abspath(log_dir)
+    log_dir = resolve_path(log_dir, "runner.log_dir")
     no_shared_fs = runner_config.get("no_shared_fs", False)
     if no_shared_fs:
-        log_dir = os.path.join(log_dir, f"host")
+        log_dir = os.path.join(log_dir, "host")
     else:
         log_dir = os.path.join(log_dir, f"host_{node_rank}_{host}")
     log_dir = os.path.join(log_dir, datetime.now().strftime("%Y%m%d_%H%M%S.%f"))
@@ -226,9 +210,8 @@ def _generate_run_script_train(
     host,
     node_rank,
     cmd,
-    background=True,
-    with_test=False,
-    root_dir=None,
+    background=False,
+    pkg_dir=None,
     enable_monitoring=False,
 ):
     system_config = config.train.system
@@ -236,7 +219,7 @@ def _generate_run_script_train(
 
     no_shared_fs = config.experiment.runner.get("no_shared_fs", False)
     if no_shared_fs:
-        host_output_file = os.path.join(logging_config.log_dir, f"host.output")
+        host_output_file = os.path.join(logging_config.log_dir, "host.output")
     else:
         host_output_file = os.path.join(logging_config.log_dir, f"host_{node_rank}_{host}.output")
     host_run_script_file = os.path.join(
@@ -245,12 +228,11 @@ def _generate_run_script_train(
     host_pid_file = os.path.join(logging_config.pids_dir, f"host_{node_rank}_{host}.pid")
 
     os.makedirs(logging_config.scripts_dir, exist_ok=True)
-    if root_dir is not None:
-        root_dir = os.path.abspath(root_dir)
-    else:
-        root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    assert os.path.exists(root_dir), f"ROOT_DIR {root_dir} does not exist."
-    megatron_dir = os.path.join(root_dir, "flagscale", "train")
+    pkg_dir = (
+        get_pkg_dir() if pkg_dir is None else resolve_path(pkg_dir, "build_dir", raise_missing=True)
+    )
+    assert os.path.exists(pkg_dir), f"PKG_DIR {pkg_dir} does not exist."
+    megatron_dir = os.path.join(pkg_dir, "flagscale", "train")
     cmds_config = config.experiment.get("cmds", None)
     if cmds_config:
         before_start = cmds_config.get("before_start", "")
@@ -266,45 +248,40 @@ def _generate_run_script_train(
         f.write(f"mkdir -p {system_config.logging.details_dir}\n")
         f.write(f"mkdir -p {system_config.logging.tensorboard_dir}\n")
         f.write(f"mkdir -p {system_config.logging.wandb_save_dir}\n")
-        f.write(f"\n")
-        f.write(f"cd {root_dir}\n")
-        f.write(f"\n")
-        f.write(f"export PYTHONPATH={root_dir}:{megatron_dir}:${{PYTHONPATH}}\n")
-        f.write(f"\n")
+        f.write("\n")
+        f.write(f"cd {pkg_dir}\n")
+        f.write("\n")
+        f.write(f"export PYTHONPATH={pkg_dir}:{megatron_dir}:${{PYTHONPATH}}\n")
+        f.write("\n")
         f.write(f'cmd="{cmd}"\n')
-        f.write(f"\n")
+        f.write("\n")
         if enable_monitoring:
             monitor_launcher_path = os.path.join(
-                root_dir, "flagscale", "runner", "elastic", "monitor_launcher.py"
+                pkg_dir, "flagscale", "runner", "elastic", "monitor_launcher.py"
             )
             ssh_port = config.experiment.runner.get("ssh_port", 22)
-            f.write(f'# Start monitoring service in background\n')
-            f.write(f'python {monitor_launcher_path} \\\n')
+            f.write("# Start monitoring service in background\n")
+            f.write(f"python {monitor_launcher_path} \\\n")
             f.write(f'  --log-dir "{logging_config.log_dir}" \\\n')
             f.write(f'  --pid-file "{host_pid_file}" \\\n')
             f.write(f'  --host "{host}" \\\n')
-            f.write(f'  --node-rank {node_rank} \\\n')
-            f.write(f'  {"--no-shared-fs" if no_shared_fs else ""} \\\n')
-            f.write(f'  --ssh-port {ssh_port} \\\n')
-            f.write(f'  --interval 5 \\\n')
-            f.write(f'  --enable-log-collection \\\n')
-            f.write(f'  --enable-diagnostic \\\n')
-            f.write(f'  > /tmp/monitor_output_{node_rank}_{host}.log 2>&1 &\n')
+            f.write(f"  --node-rank {node_rank} \\\n")
+            f.write(f"  {'--no-shared-fs' if no_shared_fs else ''} \\\n")
+            f.write(f"  --ssh-port {ssh_port} \\\n")
+            f.write("  --interval 5 \\\n")
+            f.write("  --enable-log-collection \\\n")
+            f.write("  --enable-diagnostic \\\n")
+            f.write(f"  > /tmp/monitor_output_{node_rank}_{host}.log 2>&1 &\n")
             f.write(f'echo "Monitor service started in background for {host} (node {node_rank})"\n')
-        f.write(f'\n')
+        f.write("\n")
 
-        if with_test:
-            f.write(f'bash -c "$cmd; sync" \n')
+        if background:
+            f.write(
+                f'nohup bash -c "$cmd; sync" >> {host_output_file} 2>&1 & echo $! > {host_pid_file}\n'
+            )
         else:
-            # TODO: need a option to control whether to append or overwrite the output file
-            # Now, it always appends to the output file
-            if background:
-                f.write(
-                    f'nohup bash -c "$cmd; sync" >> {host_output_file} 2>&1 & echo $! > {host_pid_file}\n'
-                )
-            else:
-                # Foreground: block until training finishes, show output in real time and append to log
-                f.write(f'bash -c "$cmd; sync" 2>&1 | tee -a {host_output_file}\n')
+            f.write("set -o pipefail\n")
+            f.write(f'bash -c "$cmd; sync" 2>&1 | tee -a {host_output_file}\n')
         f.write("\n")
         f.flush()
         os.fsync(f.fileno())
@@ -359,7 +336,7 @@ def run_node(
     nnodes,
     available_ip,
     available_port,
-    with_test,
+    background,
     dryrun,
 ):
     cur_envs = update_nodes_envs(user_envs, host, resource_info)
@@ -382,7 +359,7 @@ def run_node(
         node_rank,
         nproc_per_node,
         device_type=resource_info["type"],
-        with_test=with_test,
+        background=background,
         dryrun=dryrun,
         cur_envs=cur_envs,
     )
@@ -399,10 +376,10 @@ class SSHTrainRunner(RunnerBase):
         _update_config_train(self.config)
         if self.config.experiment.task.backend == "megatron":
             self.user_args = _get_args_megatron(self.config)
-        elif self.config.experiment.task.backend == "robotics":
-            self.user_args = _get_args_robotics(self.config)
-        elif self.config.experiment.task.backend in ["pi0", "lerobot"]:
-            self.user_args = _get_args_pi0(self.config)
+        elif self.config.experiment.task.backend == "native":
+            self.user_args = _get_args_native(self.config)
+        else:
+            raise ValueError(f"Unsupported backend: {self.config.experiment.task.backend}")
         self.rdzv_id = datetime.now().strftime("%Y%m%d_%H%M%S.%f")
         self.user_envs = self.config.experiment.get("envs", {})
         self.user_script = self.config.experiment.task.entrypoint
@@ -421,7 +398,7 @@ class SSHTrainRunner(RunnerBase):
         node_rank,
         nproc_per_node,
         device_type=None,
-        with_test=False,
+        background=True,
         dryrun=False,
         cur_envs=None,
         enable_monitoring=True,
@@ -453,15 +430,13 @@ class SSHTrainRunner(RunnerBase):
         cmd = update_cmd_with_node_specific_config(cmd, node_specific_config)
 
         logging_config = self.config.train.system.logging
-        run_foreground = getattr(self.config.train.system, "run_foreground", False)
         host_run_script_file = _generate_run_script_train(
             self.config,
             host,
             node_rank,
             cmd,
-            background=not run_foreground,
-            with_test=with_test,
-            root_dir=node_specific_config.get("build_dir", None),
+            background=background,
+            pkg_dir=node_specific_config.get("build_dir", None),
             enable_monitoring=enable_monitoring,
         )
 
@@ -478,12 +453,30 @@ class SSHTrainRunner(RunnerBase):
                 )
 
             # Step 3: run the host_run_script_file on the remote host
-            run_ssh_command(host, f"bash {host_run_script_file}", ssh_port, dryrun)
+            # For foreground + node 0, stream stdout through SSH to the login
+            # node console so logs are visible without depending on shared FS.
+            run_ssh_command(
+                host,
+                f"bash {host_run_script_file}",
+                ssh_port,
+                dryrun,
+                stream_output=(not background and node_rank == 0),
+            )
         else:
-            run_local_command(f"bash {host_run_script_file}", dryrun)
+            run_local_command(
+                f"bash {host_run_script_file}",
+                dryrun,
+                stream_output=(not background and node_rank == 0),
+            )
 
     def run(
-        self, with_test=False, dryrun=False, monitor=False, interval=10, enable_monitoring=None
+        self,
+        background=True,
+        dryrun=False,
+        monitor=False,
+        interval=10,
+        enable_monitoring=None,
+        **kwargs,
     ):
         # Read from config if not explicitly provided
         if enable_monitoring is None:
@@ -492,70 +485,82 @@ class SSHTrainRunner(RunnerBase):
         num_visible_devices = None
         runner_config = self.config.experiment.runner
 
-        # If hostfile is provided, use the resources from the hostfile
-        if self.resources is not None:
-            nnodes_from_hostfile = len(self.resources.keys())
-            nnodes_from_args = runner_config.get("nnodes", None)
-            nnodes = get_nnodes(nnodes_from_hostfile, nnodes_from_args)
-            available_ip = list(self.resources.keys())[0]
-            available_port = get_free_port()
-            num_processes = min(nnodes, _MAX_CPU_COUNT)
-            with multiprocessing.Pool(processes=num_processes) as pool:
-                tasks = []
-                for node_rank, (host, resource_info) in enumerate(self.resources.items()):
-                    if node_rank >= nnodes:
-                        break
-                    args = (
-                        self._run_each,
-                        node_rank,
-                        host,
-                        resource_info,
-                        self.user_envs,
-                        runner_config,
-                        nnodes,
-                        available_ip,
-                        available_port,
-                        with_test,
-                        dryrun,
-                    )
-                    tasks.append(args)
-                pool.starmap(run_node, tasks)
-        else:
-            # If hostfile is not provided, run the job on localhost
-            visible_devices = self.user_envs.get("CUDA_VISIBLE_DEVICES", None)
-            if visible_devices is not None and isinstance(visible_devices, str):
-                visible_devices = visible_devices.split(",")
-                num_visible_devices = len(visible_devices)
-            nproc_from_args = runner_config.get("nproc_per_node", None)
-            nproc_per_node = get_nproc_per_node(None, nproc_from_args, num_visible_devices)
-            available_addr = runner_config.get("master_addr", "localhost")
-            available_port = runner_config.get("master_port", get_free_port())
-            self._run_each(
-                "localhost",
-                available_addr,
-                available_port,
-                1,
-                0,
-                nproc_per_node,
-                with_test=with_test,
-                dryrun=dryrun,
-                cur_envs=self.user_envs,
-                enable_monitoring=enable_monitoring,
-            )
-        # If need monitor, query status continually
-        if monitor:
-            # sleep to wait task already started
-            time.sleep(interval)
-            try:
-                while True:
-                    status = self._query_status()
-                    logger.info(f"Job Status: {status.name}")
-                    if status == JobStatus.COMPLETED_OR_IDLE:
-                        break
-                    time.sleep(interval)
-                logger.info("Job Ended.")
-            except Exception as e:
-                logger.info(e)
+        # In background mode, tail node 0's log file on the login node console.
+        # In foreground mode, tee already streams stdout directly.
+        _tail_stop = None
+        if not dryrun and background:
+            details_dir = self.config.train.system.logging.details_dir
+            _, _tail_stop = start_tail_log(lambda: find_latest_stdout_log(details_dir))
+
+        try:
+            # If hostfile is provided, use the resources from the hostfile
+            if self.resources is not None:
+                nnodes_from_hostfile = len(self.resources.keys())
+                nnodes_from_args = runner_config.get("nnodes", None)
+                nnodes = get_nnodes(nnodes_from_hostfile, nnodes_from_args)
+                available_ip = next(iter(self.resources.keys()))
+                available_port = get_free_port()
+                num_processes = min(nnodes, _MAX_CPU_COUNT)
+                with multiprocessing.Pool(processes=num_processes) as pool:
+                    tasks = []
+                    for node_rank, (host, resource_info) in enumerate(self.resources.items()):
+                        if node_rank >= nnodes:
+                            break
+                        args = (
+                            self._run_each,
+                            node_rank,
+                            host,
+                            resource_info,
+                            self.user_envs,
+                            runner_config,
+                            nnodes,
+                            available_ip,
+                            available_port,
+                            background,
+                            dryrun,
+                        )
+                        tasks.append(args)
+                    pool.starmap(run_node, tasks)
+            else:
+                # If hostfile is not provided, run the job on localhost
+                visible_devices = self.user_envs.get("CUDA_VISIBLE_DEVICES", None)
+                if visible_devices is not None and isinstance(visible_devices, str):
+                    visible_devices = visible_devices.split(",")
+                    num_visible_devices = len(visible_devices)
+                nproc_from_args = runner_config.get("nproc_per_node", None)
+                nproc_per_node = get_nproc_per_node(None, nproc_from_args, num_visible_devices)
+                available_addr = runner_config.get("master_addr", "localhost")
+                available_port = runner_config.get("master_port", get_free_port())
+                self._run_each(
+                    "localhost",
+                    available_addr,
+                    available_port,
+                    1,
+                    0,
+                    nproc_per_node,
+                    background=background,
+                    dryrun=dryrun,
+                    cur_envs=self.user_envs,
+                    enable_monitoring=enable_monitoring,
+                )
+
+            # If need monitor, query status continually
+            if monitor:
+                # sleep to wait task already started
+                time.sleep(interval)
+                try:
+                    while True:
+                        status = self._query_status()
+                        logger.info(f"Job Status: {status.name}")
+                        if status == JobStatus.COMPLETED_OR_IDLE:
+                            break
+                        time.sleep(interval)
+                    logger.info("Job Ended.")
+                except Exception as e:
+                    logger.info(e)
+        finally:
+            if _tail_stop:
+                _tail_stop.set()
 
         return None
 
@@ -833,8 +838,6 @@ class CloudTrainRunner(RunnerBase):
         _update_config_train(self.config)
         if self.config.experiment.task.backend == "megatron":
             self.user_args = _get_args_megatron(self.config)
-        elif self.config.experiment.task.backend == "robotics":
-            self.user_args = _get_args_robotics(self.config)
         logger.info("\n************** configuration ***********")
         logger.info(f"\n{OmegaConf.to_yaml(self.config)}")
 
@@ -846,7 +849,7 @@ class CloudTrainRunner(RunnerBase):
         nnodes,
         node_rank,
         nproc_per_node,
-        with_test=False,
+        background=False,
         dryrun=False,
     ):
         export_cmd = []
@@ -860,12 +863,12 @@ class CloudTrainRunner(RunnerBase):
         cmd = shlex.join(export_cmd + runner_cmd + [self.user_script] + self.user_args)
 
         host_run_script_file = _generate_run_script_train(
-            self.config, host, node_rank, cmd, background=False, with_test=with_test
+            self.config, host, node_rank, cmd, background=background
         )
 
         run_local_command(f"bash {host_run_script_file}", dryrun)
 
-    def run(self, with_test=False, dryrun=False):
+    def run(self, background=False, dryrun=False):
         if dryrun:
             logger.info("Dryrun mode is not supported in CloudRunner.")
             return
@@ -892,6 +895,6 @@ class CloudTrainRunner(RunnerBase):
             nnodes,
             node_rank,
             nproc_per_node,
-            with_test=with_test,
+            background=background,
             dryrun=dryrun,
         )

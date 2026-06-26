@@ -5,10 +5,9 @@ from omegaconf import OmegaConf
 
 
 class Generator:
-
     def __init__(self, config):
         self.config = config
-        # TODO: Just a temporary solution, need to be configurated by user
+        # TODO: Just a temporary solution, need to be configured by user
         if "args_mapping" in config.experiment.auto_tuner:
             self.args_mapping = config.experiment.auto_tuner.args_mapping
         else:
@@ -49,7 +48,7 @@ class Generator:
         # Logging interval should be 1
         config.train.system.logging.log_interval = 1
 
-        # Set redict and tee
+        # Set redirect and tee
         config.experiment.runner.tee = 3
         config.experiment.runner.redirects = 3
 
@@ -125,22 +124,20 @@ class ServeGenerator(Generator):
         serve_config = config.serve
         model_config = None
         for item in serve_config:
-            if item.get("serve_id", None) in ("vllm_model", "sglang_model"):
+            if item.get("serve_id", None) is not None:
                 model_config = item
                 break
             else:
                 raise ValueError(
-                    f"No 'vllm_model' or 'sglang_model' configuration found in task config: {serve_config}"
+                    f"No 'serve_id' configuration found in task config: {serve_config}"
                 )
 
         if not model_config.get("resources", None):
             model_config["resources"] = {}
         if model_config is None:
-            raise ValueError(
-                f"No 'vllm_model' or 'sglang_model' configuration found in task config: {serve_config}"
-            )
+            raise ValueError(f"No valid configuration found in task config: {serve_config}")
 
-        backend_value = config.get('experiment', {}).get('task', {}).get('backend')
+        backend_value = config.get("experiment", {}).get("task", {}).get("backend")
         if backend_value is None:
             engine = model_config.get("engine", None)
         else:

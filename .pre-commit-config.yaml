@@ -1,81 +1,52 @@
 exclude: |
     (?x)^(
-        flagscale/backends/.*|
-        third_party/.*|
-        megatron-energon/.*|
-        hardware/.*\.patch|
-        .*\.md|
-        .*\.sh|
-        .*\.txt|
-        .*\.yaml|
-        .*\.yml$
+        flagscale/train/megatron/.*|
+        flagscale/train/train.*\.py|
+        flagscale/models/megatron/.*|
+        tools/checkpoint/loader.*\.py|
+        tools/checkpoint/saver.*\.py|
+        tools/checkpoint/qwen3_engram/modeling_hf/.*|
+        examples/aquila/tokenizer*|
     )$
 repos:
 -   repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.4.0
+    rev: v5.0.0
     hooks:
     -   id: check-merge-conflict
     -   id: check-symlinks
     -   id: detect-private-key
     -   id: end-of-file-fixer
     -   id: trailing-whitespace
--   repo: https://github.com/Lucas-C/pre-commit-hooks.git
-    rev: v1.5.1
-    hooks:
-    -   id: remove-crlf
-    -   id: remove-tabs
-        name: Tabs remover (Python)
-        files: (.*\.(py))$
-        args: [--whitespaces-count, '4']
--   repo: https://github.com/psf/black
-    rev: 24.4.2
-    hooks:
-    -   id: black
-        exclude: |
-            (?x)^(
-                flagscale/backends/.*|
-                third_party/.*|
-                megatron-energon/.*|
-                hardware/.*\.patch|
-                flagscale/inference/processing_emu3.py|
-                flagscale/train/train.*\.py|
-                flagscale/train/models/.*|
-                flagscale/train/hetero/.*|
-                scripts/checkpoint/loader.*\.py|
-                scripts/checkpoint/saver.*\.py|
-                .*\.md|
-                .*\.sh|
-                .*\.txt|
-                .*\.yaml|
-                .*\.yml$
-            )$
--   repo: https://github.com/PyCQA/isort
-    rev: 5.13.2
-    hooks:
-    -   id: isort
-        exclude: |
-            (?x)^(
-                flagscale/backends/.*|
-                third_party/.*|
-                megatron-energon/.*|
-                hardware/.*\.patch|
-                flagscale/inference/processing_emu3.py|
-                flagscale/train/train.*\.py|
-                flagscale/train/models/.*|
-                flagscale/train/hetero/.*|
-                scripts/checkpoint/loader.*\.py|
-                scripts/checkpoint/saver.*\.py|
-                .*\.md|
-                .*\.sh|
-                .*\.txt|
-                .*\.yaml|
-                .*\.yml$
-            )$
+- repo: https://github.com/astral-sh/ruff-pre-commit
+  rev: v0.14.0
+  hooks:
+  - id: ruff-check
+    args: [--output-format, github, --fix]
+  - id: ruff-format
+- repo: https://github.com/crate-ci/typos
+  rev: v1.38.1
+  hooks:
+  - id: typos
+    args: [--force-exclude]
+# - repo: https://github.com/pre-commit/mirrors-mypy
+#   rev: v1.11.1
+#   hooks:
+#     - id: mypy
+#       args: [--python-version=3.10]
+#       additional_dependencies:
+#         - regex
+#         - types-cachetools
+#         - types-setuptools
+#         - types-PyYAML
+#         - types-requests
+#         - types-torch
+#         - pydantic
+
 # -   repo: local
 #     hooks:
 #     -   id: check-header
 #         name: check-header
-#         entry: python ./scripts/codestyle/check_header.py
+#         entry: python ./tools/codestyle/check_header.py
 #         language: python
 #         types: [python]
 #         exclude: |
@@ -86,7 +57,7 @@ repos:
 #                 flagscale/train/train.*\.py|
 #                 flagscale/train/models/.*|
 #                 flagscale/train/hetero/.*|
-#                 scripts/checkpoint/loader.*\.py|
-#                 scripts/checkpoint/saver.*\.py|
+#                 tools/checkpoint/loader.*\.py|
+#                 tools/checkpoint/saver.*\.py|
 #                 .*\.sh$  # Exclude all .sh files
 #             )$

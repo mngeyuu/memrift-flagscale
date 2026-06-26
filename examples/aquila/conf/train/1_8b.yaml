@@ -60,6 +60,7 @@ model:
   clip_grad: 1.0
   train_samples: 8192  #8192 #29297664 #120B tokens 100step
   eval_iters: 0
+  eval_interval: 1000
   micro_batch_size: 8
   global_batch_size: 1024
   seed: 42
@@ -84,4 +85,3 @@ data:
     tokenizer_path: xxx xxxx # Please replace with your actual tokenizer path
     vocab_size: xxx # Please replace with your actual vocab size
     make_vocab_size_divisible_by: 64
-

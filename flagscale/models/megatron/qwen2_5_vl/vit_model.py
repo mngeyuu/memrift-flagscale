@@ -3,17 +3,18 @@
 from typing import Optional
 
 import torch
-
 from torch import nn
 from torch.nn import functional as F
 
-from megatron.core import InferenceParams
+from packaging import version
+
 from megatron.core.models.common.vision_module.vision_module import VisionModule
-from megatron.core.models.vision.multimodal_projector import MultimodalProjector
-from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.transformer.enums import ModelType
 from megatron.core.transformer.spec_utils import ModuleSpec
 from megatron.core.transformer.transformer_config import TransformerConfig
+from megatron.core.packed_seq_params import PackedSeqParams
+from megatron.core import InferenceParams
+from megatron.core.models.vision.multimodal_projector import MultimodalProjector
 
 from flagscale.models.megatron.qwen2_5_vl.vision_transformer_block import VisionTransformerBlock
 
@@ -42,16 +43,39 @@ class PatchEmbed(nn.Module):
         self.temporal_patch_size = temporal_patch_size
         self.in_channels = in_channels
         self.embed_dim = embed_dim
-
-        kernel_size = [temporal_patch_size, patch_size, patch_size]
-        self.proj = nn.Conv3d(
-            in_channels, embed_dim, kernel_size=kernel_size, stride=kernel_size, bias=bias
-        )
+        self.kernel_size = [temporal_patch_size, patch_size, patch_size]
+        self.stride = self.kernel_size
+        if self.enable_linear():
+            flat_dim = in_channels * temporal_patch_size * patch_size * patch_size
+            self.proj = nn.Linear(flat_dim, embed_dim, bias=bias)
+        else:
+            self.proj = nn.Conv3d(in_channels, embed_dim, kernel_size=self.kernel_size, stride=self.stride, bias=bias)
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         """
         hidden_states: [tiles, in_chanels] --> (num_patches, embed_dim)
         """
+        assert hidden_states.dim() == 2
+        if self.enable_linear():
+            return self._forward_matmul(hidden_states)
+        return self._forward_conv(hidden_states)
+
+    def enable_linear(self):
+        # PyTorch 2.9.0+ disabled CUDNN's Conv3D, which caused a
+        # significant performance regression.
+        # See: https://github.com/vllm-project/vllm/issues/27406
+        # and https://github.com/pytorch/pytorch/issues/166122
+        # and https://github.com/huggingface/transformers/pull/45041
+        # By default, we use CUDNN's convolution ops with optimization.
+        return self.kernel_size == self.stride and \
+                version.parse(torch.__version__) > version.parse('2.9.0')
+
+    def _forward_matmul(self, hidden_states):
+        target_dtype = self.proj.weight.dtype
+        hidden_states = self.proj(hidden_states.to(dtype=target_dtype))
+        return hidden_states
+
+    def _forward_conv(self, hidden_states):
         target_dtype = self.proj.weight.dtype
         hidden_states = hidden_states.view(
             -1, self.in_channels, self.temporal_patch_size, self.patch_size, self.patch_size
@@ -59,11 +83,11 @@ class PatchEmbed(nn.Module):
         hidden_states = self.proj(hidden_states.to(dtype=target_dtype)).view(-1, self.embed_dim)
         return hidden_states
 
-
 # copied from https://github.com/huggingface/transformers/blob/main/src/transformers/models/qwen2_vl/modeling_qwen2_vl.py
 class VisionRotaryEmbedding(nn.Module):
-    """ """
+    """
 
+    """
     def __init__(self, dim: int, theta: float = 10000.0) -> None:
         super().__init__()
         # NOTE(lizhiyu): print inv_freq to check it.
@@ -75,7 +99,6 @@ class VisionRotaryEmbedding(nn.Module):
         # freqs [seq_len, dim // 2]
         freqs = torch.outer(seq, self.inv_freq)
         return freqs
-
 
 # reference from https://github.com/huggingface/transformers/blob/0ad3710d4767d4ac7ee95f33f8554373e59efade/src/transformers/models/qwen2_5_vl/modular_qwen2_5_vl.py#L243
 class Qwen2_5VisionModel(VisionModule):
@@ -99,8 +122,9 @@ class Qwen2_5VisionModel(VisionModule):
         projection_config: TransformerConfig,
         projection_layer_spec: ModuleSpec,
         projection_type: str = "mlp",
+
         pre_process: bool = True,
-        post_process: bool = False,
+        post_process: bool = False
     ) -> None:
         super().__init__(config=transformer_config)
 
@@ -140,7 +164,7 @@ class Qwen2_5VisionModel(VisionModule):
             spec=transformer_layer_spec,
             pre_process=self.pre_process,
             post_process=self.post_process,
-            post_layer_norm=True,
+            post_layer_norm=True
         )
 
         self.merge_hidden_size = projection_config.ffn_hidden_size
@@ -151,7 +175,7 @@ class Qwen2_5VisionModel(VisionModule):
                 projection_config,
                 projection_layer_spec,
                 projection_type,
-                projection_config.ffn_hidden_size,
+                projection_config.ffn_hidden_size
             )
         else:
             self.projection = None
@@ -164,7 +188,7 @@ class Qwen2_5VisionModel(VisionModule):
         Args:
             input_tensor (Tensor): Sets the input tensor for the model.
         """
-        if self.pre_process:  # always True
+        if self.pre_process: # always True
             self.input_tensor = input_tensor
         else:
             raise NotImplementedError()
@@ -210,21 +234,21 @@ class Qwen2_5VisionModel(VisionModule):
 
         for grid_t, grid_h, grid_w in grid_thw:
             llm_grid_h, llm_grid_w = (
-                grid_h // self.spatial_merge_size,  # 224 // 2 = 112
+                grid_h // self.spatial_merge_size, # 224 // 2 = 112
                 grid_w // self.spatial_merge_size,
             )
-            index = torch.arange(grid_t * llm_grid_h * llm_grid_w).reshape(
-                grid_t, llm_grid_h, llm_grid_w
-            )
-            pad_h = (
-                vit_merger_window_size - llm_grid_h % vit_merger_window_size
-            )  # vit_merger_window_size = 4
+            index = torch.arange(grid_t * llm_grid_h * llm_grid_w).reshape(grid_t, llm_grid_h, llm_grid_w)
+            pad_h = vit_merger_window_size - llm_grid_h % vit_merger_window_size # vit_merger_window_size = 4
             pad_w = vit_merger_window_size - llm_grid_w % vit_merger_window_size
-            num_windows_h = (llm_grid_h + pad_h) // vit_merger_window_size  # 向上取整
+            num_windows_h = (llm_grid_h + pad_h) // vit_merger_window_size # 向上取整
             num_windows_w = (llm_grid_w + pad_w) // vit_merger_window_size
             index_padded = F.pad(index, (0, pad_w, 0, pad_h), "constant", -100)
             index_padded = index_padded.reshape(
-                grid_t, num_windows_h, vit_merger_window_size, num_windows_w, vit_merger_window_size
+                grid_t,
+                num_windows_h,
+                vit_merger_window_size,
+                num_windows_w,
+                vit_merger_window_size,
             )
             index_padded = index_padded.permute(0, 1, 3, 2, 4).reshape(
                 grid_t,
@@ -269,33 +293,31 @@ class Qwen2_5VisionModel(VisionModule):
         assert inference_params is None
 
         # Rotary positional embeddings (embedding is None for PP intermediate devices)
-        # vision_data (t, 3) --> (t, embed_dim)
+        #vision_data (t, 3) --> (t, embed_dim)
         vision_data = self.patch_embed(vision_data)
         # window_index: [tiles, num_windows]   cu_window_seqlens: [tiles * num_windows]
         window_index, cu_window_seqlens = self.get_window_index(grid_thw)
         cu_window_seqlens = torch.tensor(
-            cu_window_seqlens, device=vision_data.device, dtype=torch.int32
+            cu_window_seqlens,
+            device=vision_data.device,
+            dtype=torch.int32,
         )
         cu_window_seqlens = torch.unique_consecutive(cu_window_seqlens)
 
         seq_len, _ = vision_data.size()
-        vision_data = vision_data.reshape(
-            seq_len // self.spatial_merge_unit, self.spatial_merge_unit, -1
-        )
+        vision_data = vision_data.reshape(seq_len // self.spatial_merge_unit, self.spatial_merge_unit, -1)
         vision_data = vision_data[window_index, :, :]
         vision_data = vision_data.reshape(seq_len, 1, -1)
 
         rotary_pos_emb = self.rot_pos_emb(grid_thw)
-        rotary_pos_emb = rotary_pos_emb.reshape(
-            seq_len // self.spatial_merge_unit, self.spatial_merge_unit, -1
-        )
+        rotary_pos_emb = rotary_pos_emb.reshape(seq_len // self.spatial_merge_unit, self.spatial_merge_unit, -1)
         rotary_pos_emb = rotary_pos_emb[window_index, :, :]
         rotary_pos_emb = rotary_pos_emb.reshape(seq_len, 1, 1, -1).repeat(1, 1, 1, 2)
 
         hidden_states = self.decoder(
-            hidden_states=vision_data,
-            attention_mask=None,
-            inference_params=inference_params,
+            hidden_states = vision_data,
+            attention_mask = None,
+            inference_params = inference_params,
             rotary_pos_emb=rotary_pos_emb,
             packed_seq_params=self.build_packed_seq_params(None, cu_window_seqlens),
             packed_seq_params_full=self.build_packed_seq_params(grid_thw),
@@ -308,14 +330,16 @@ class Qwen2_5VisionModel(VisionModule):
         return hidden_states[reverse_indices, :]
 
     def build_packed_seq_params(
-        self, grid_thw: Optional[torch.Tensor], cu_seqlens: Optional[torch.Tensor] = None
+        self,
+        grid_thw: Optional[torch.Tensor],
+        cu_seqlens: Optional[torch.Tensor] = None,
     ) -> PackedSeqParams:
         # NOTE: each frame is a sequence (rather than each grid)
         if grid_thw is not None:
             seqlens = torch.repeat_interleave(grid_thw[:, 1] * grid_thw[:, 2], grid_thw[:, 0])
             cu_seqlens = seqlens.cumsum(dim=0)
             cu_seqlens = F.pad(cu_seqlens, (1, 0), value=0).int()
-        else:  # the step of cu_seqlens is window_size, not sampel seq_length
+        else: # the step of cu_seqlens is window_size, not sampel seq_length
             seqlens = cu_seqlens[1:] - cu_seqlens[:-1]
 
         max_seqlen_q = seqlens.max()
@@ -324,5 +348,5 @@ class Qwen2_5VisionModel(VisionModule):
             cu_seqlens_kv=cu_seqlens,
             qkv_format='thd',
             max_seqlen_q=max_seqlen_q,
-            max_seqlen_kv=max_seqlen_q,
+            max_seqlen_kv=max_seqlen_q
         )

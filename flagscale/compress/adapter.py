@@ -1,5 +1,4 @@
 import torch
-
 from compressed_tensors.quantization import (
     QuantizationConfig,
     QuantizationScheme,
@@ -34,7 +33,6 @@ QUANT_MAPPING_NAMES = {"gptq": GPTQWrapper}
 
 
 class LLMCompressorAdapter:
-    # 入口
     def __init__(
         self,
         model,
@@ -79,7 +77,6 @@ class LLMCompressorAdapter:
             self.run_blockwise_calib_forward()
         self.model.apply(freeze_module_quantization)
 
-    # 配置生成，将用户传入的scheneme和targets转化为QuantizationConfig对象
     def init_quant_config(self):
         if self.scheme is not None:
             # takes precedence over config_groups
@@ -111,7 +108,6 @@ class LLMCompressorAdapter:
             ignore=self.ignore,
         )
 
-    # 初始化压缩器
     def init_compressor(self):
         for name, layer in self.model.named_modules():
             name = fix_fsdp_module_name(name)
@@ -122,7 +118,7 @@ class LLMCompressorAdapter:
             except:
                 continue
 
-            if matches := find_name_or_class_matches(name, layer, self.ignore):
+            if find_name_or_class_matches(name, layer, self.ignore):
                 continue
             logger.info(f"prepare compressor for layer {name}")
             compressor = LayerCompressor(
@@ -139,10 +135,9 @@ class LLMCompressorAdapter:
     def add_hook(self):
         pass
 
-    # 核心校准流程，执行算法的关键，采用block-wise的方法校准
     @torch.no_grad()
     def run_blockwise_calib_forward(self):
-        logger.info(f"start calibration")
+        logger.info("start calibration")
         self.model.apply(disable_quantization)
         with DisableKVCache(self.model):
             intermediates = run_calibration_forward(

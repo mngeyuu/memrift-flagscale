@@ -61,6 +61,7 @@ model:
   clip_grad: 1.0
   train_iters: 62
   eval_iters: 0 # no valid
+  eval_interval: 1000
   micro_batch_size: 1
   global_batch_size: 16
   allow_missing_vision_projection_checkpoint: False
@@ -105,6 +106,6 @@ data:
   tokenizer:
     tokenizer_type: Qwen2VLTokenizer
     tokenizer_path: ${tokenizer_path:??}
-    # vocab_size: 151936 # 
+    # vocab_size: 151936 #
     extra_vocab_size: 293 # Qwen3-VL specific. total vocab size: 151936 = 151643 + extra_vocab_size
     make_vocab_size_divisible_by: 64

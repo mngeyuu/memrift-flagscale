@@ -18,7 +18,7 @@ MAX_JOBS=32 pip install --no-build-isolation -v .
 ### Prepare Emu3.5
 ```bash
 pip install flash_attn==2.8.3 --no-build-isolation
-cd FalgScale
+cd FlagScale
 git clone --no-checkout https://github.com/baaivision/Emu3.5.git tmp_repo
 cd tmp_repo
 git sparse-checkout init --cone
@@ -46,7 +46,7 @@ experiment:
   exp_dir: outputs/${experiment.exp_name}
   vq_model: BAAI/Emu3.5-VisionTokenizer
   model: BAAI/Emu3.5-image
-  tokenizer: src/tokenizer_emu3_ibq/ # from Emu3.5 repo, please prepare Emu3.5's src&assers
+  tokenizer: src/tokenizer_emu3_ibq/ # from Emu3.5 repo, please prepare Emu3.5's src&assets
   cmds:
     before_start: source /root/miniconda3/bin/activate flagscale-inference # a conda env with vllm installed
 ```
@@ -77,11 +77,15 @@ generate:
 entrypoint: `./flagscale/inference/inference_emu3p5.py`
 
 ```bash
-python run.py --config-path examples/emu3.5/conf/ --config-name image_generation.yaml
+flagscale inference emu3.5 --config ./examples/emu3.5/conf/image_generation.yaml
+# or
+flagscale inference emu3.5 -c ./examples/emu3.5/conf/image_generation.yaml
 ```
 
 ```bash
-python run.py --config-path examples/emu3.5/conf/ --config-name interleaved_generation.yaml
+flagscale inference emu3.5 --config ./examples/emu3.5/conf/interleaved_generation.yaml
+# or
+flagscale inference emu3.5 -c ./examples/emu3.5/conf/interleaved_generation.yaml
 ```
 
 ## Online Serve
@@ -104,7 +108,9 @@ Note:  You can also directly run command `python emu3p5.py`, with setting the en
 
 ```bash
 # Start emu3.5 serve
-python run.py --config-path examples/emu3.5/conf/ --config-name serve_emu3p5 action=run
+flagscale serve emu3.5 --config ./examples/emu3.5/conf/serve_emu3p5.yaml
+# or
+flagscale serve emu3.5 -c ./examples/emu3.5/conf/serve_emu3p5.yaml
 ```
 
 ```bash
@@ -114,7 +120,9 @@ python client.py
 
 ```bash
 # Stop emu3.5 serve
-python run.py --config-path examples/emu3.5/conf/ --config-name serve_emu3p5 action=stop
+flagscale serve emu3.5 --config ./examples/emu3.5/conf/serve_emu3p5.yaml --stop
+# or
+flagscale serve emu3.5 -c ./examples/emu3.5/conf/serve_emu3p5.yaml --stop
 ```
 
 ```python

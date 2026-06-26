@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import warnings
-
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
@@ -12,7 +11,6 @@ if TYPE_CHECKING:
 import logging
 
 import torch
-
 from torch import Tensor
 
 from megatron.core import parallel_state
@@ -89,7 +87,6 @@ def _rotate_half(x: Tensor, rotary_interleaved: bool) -> Tensor:
         x2 = x[:, :, :, 1::2]
         x_new = torch.stack((-x2, x1), dim=-1)
         return x_new.view(x_new.shape[0], x_new.shape[1], x_new.shape[2], -1)
-
 
 # NOTE(lizhiyu): The difference from the original _apply_rotary_pos_emb_bshd is that we use float not half.
 def _apply_rotary_pos_emb_bshd(

@@ -2,10 +2,9 @@
 import os
 
 import torch
+from flagscale.models.megatron.llava_onevision.dataset_helpers import print_error_handler, AnyResTaskEncoder
 
 from megatron.core import mpu
-from megatron.core.num_microbatches_calculator import get_num_microbatches
-from megatron.core.parallel_state import get_tensor_model_parallel_rank
 from megatron.energon import (
     LimitDataset,
     RepeatDataset,
@@ -15,13 +14,10 @@ from megatron.energon import (
     get_train_dataset,
     get_val_datasets,
 )
+from megatron.core.num_microbatches_calculator import get_num_microbatches
+from megatron.core.parallel_state import get_tensor_model_parallel_rank
 from megatron.training import get_args, print_rank_0
 from megatron.training.checkpointing import get_checkpoint_name
-
-from flagscale.models.megatron.llava_onevision.dataset_helpers import (
-    AnyResTaskEncoder,
-    print_error_handler,
-)
 
 
 def datasets_provider(worker_config=None):
@@ -104,13 +100,15 @@ def train_valid_test_dataloaders_provider(train_val_test_num_samples):
             )
             if os.path.exists(data_save_name):
                 try:
-                    dataset_state_dict = torch.load(
-                        data_save_name, map_location="cpu", weights_only=False
+                    dataset_state_dict = torch.load(data_save_name, map_location="cpu", weights_only=False)
+                    train_dataloader.restore_state_rank(
+                        dataset_state_dict["dataloader_state_dict"]
                     )
-                    train_dataloader.restore_state_rank(dataset_state_dict["dataloader_state_dict"])
                     print_rank_0(f"restored dataset state from {data_save_name}")
                 except Exception as e:
-                    print_rank_0("loading dataloader checkpoint failed. Skipping. " + str(e))
+                    print_rank_0(
+                        "loading dataloader checkpoint failed. Skipping. " + str(e)
+                    )
     if args.training_dataset_only:
         return (
             EnergonDataloader(train_dataloader),

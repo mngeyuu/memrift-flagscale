@@ -9,20 +9,7 @@ logs
 .vscode
 log_file/*
 outputs
-output/
 *.log
-
-# MemRift 鍘嬬缉鏉冮噸鐩綍锛堜笉鎺ㄩ€侊級
-memrift_weights/
-
-# 璁粌/妯″瀷澶ф枃浠讹紙涓嶆帹閫侊級
-checkpoints/
-**/checkpoints/
-*.safetensors
-data/
-pretrained/
-*.sqlite
-*.nsys-rep
 *.out
 .idea/
 third_party/*
@@ -36,4 +23,4 @@ template_conf.yaml
 template_funcs.py
 
 # data files
-assets/
+# assets/

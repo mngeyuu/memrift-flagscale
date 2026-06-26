@@ -1,0 +1,210 @@
+name: Common Unit Tests
+
+on:
+  workflow_call:
+    inputs:
+      platform:
+        required: true
+        type: string
+        description: Platform name (e.g., cuda, default)
+      device:
+        required: true
+        type: string
+        description: Device type (e.g., a100, a800, h100, generic)
+      image:
+        required: true
+        type: string
+      runs_on:
+        required: true
+        type: string
+      container_volumes:
+        required: true
+        type: string
+      container_options:
+        required: true
+        type: string
+      pkg_mgr:
+        required: false
+        type: string
+        description: Package manager (pip, uv, conda). Default uv.
+        default: "uv"
+      env_name:
+        required: false
+        type: string
+        description: Conda environment name (for conda only)
+        default: ""
+      env_path:
+        required: false
+        type: string
+        description: Environment path (venv path for uv, conda installation path for conda)
+        default: "/opt/venv"
+
+jobs:
+  unit_test:
+    defaults:
+      run:
+        shell: bash
+    env:
+      PROJECT_ROOT: ${{ github.workspace }}/FlagScale
+      COVERAGE_REPORT_DIR: /tmp/coverage-report
+    runs-on: ${{ fromJson(inputs.runs_on) }}
+    name: unit-${{ inputs.device }}
+    container:
+      image: ${{ inputs.image }}
+      ports:
+        - 80
+      volumes: ${{ fromJson(inputs.container_volumes) }}
+      options: ${{ inputs.container_options }}
+    steps:
+      - name: Checkout code (attempt 1)
+        id: checkout_attempt_1
+        uses: actions/checkout@v4
+        continue-on-error: true
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.ref || github.ref }}
+          path: FlagScale
+          ssh-strict: true
+          ssh-user: git
+          persist-credentials: false
+          clean: true
+          sparse-checkout-cone-mode: true
+          fetch-tags: false
+          show-progress: true
+          lfs: false
+          submodules: false
+          set-safe-directory: true
+
+      - name: Checkout code (attempt 2)
+        if: steps.checkout_attempt_1.outcome == 'failure'
+        id: checkout_attempt_2
+        uses: actions/checkout@v4
+        continue-on-error: true
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.ref || github.ref }}
+          path: FlagScale
+          ssh-strict: true
+          ssh-user: git
+          persist-credentials: false
+          clean: true
+          sparse-checkout-cone-mode: true
+          fetch-tags: false
+          show-progress: true
+          lfs: false
+          submodules: false
+          set-safe-directory: true
+
+      - name: Checkout code (attempt 3)
+        if: steps.checkout_attempt_2.outcome == 'failure'
+        id: checkout_attempt_3
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.ref || github.ref }}
+          path: FlagScale
+          ssh-strict: true
+          ssh-user: git
+          persist-credentials: false
+          clean: true
+          sparse-checkout-cone-mode: true
+          fetch-tags: false
+          show-progress: true
+          lfs: false
+          submodules: false
+          set-safe-directory: true
+
+      - name: Set safe directory
+        run: |
+          git config --global --add safe.directory $PROJECT_ROOT
+
+      - name: Check environment info
+        run: cd $PROJECT_ROOT && bash ./tests/test_utils/runners/check_env.sh
+
+      - name: Setup unit test environment
+        run: |
+          set -euo pipefail
+          cd $PROJECT_ROOT
+
+          bash ./tests/test_utils/runners/setup_training_test_env.sh \
+            --platform '${{ inputs.platform }}' \
+            --pkg-mgr '${{ inputs.pkg_mgr }}' \
+            --env-name '${{ inputs.env_name }}' \
+            --env-path '${{ inputs.env_path }}' \
+            --install-common-deps \
+            --copy-data
+        timeout-minutes: 30
+
+      - name: Run unit tests
+        id: unit_test
+        run: |
+          set -euo pipefail
+          cd $PROJECT_ROOT
+
+          PKG_MGR='${{ inputs.pkg_mgr }}'
+          ENV_NAME='${{ inputs.env_name }}'
+          ENV_PATH='${{ inputs.env_path }}'
+
+          source ./tools/install/utils/pyenv_utils.sh
+          case "$PKG_MGR" in
+            conda)
+              if [ -n "$ENV_NAME" ]; then
+                activate_conda "$ENV_NAME" "$ENV_PATH" || echo "Conda activation failed"
+              fi
+              ;;
+            uv)
+              if [ -n "$ENV_PATH" ] && [ -d "$ENV_PATH" ]; then
+                activate_uv_env "$ENV_PATH" || echo "UV activation failed"
+              fi
+              ;;
+            pip)
+              echo "Running tests with pip/system Python"
+              ;;
+            *)
+              echo "Unsupported package manager: $PKG_MGR"
+              exit 1
+              ;;
+          esac
+
+          echo "Python location: $(command -v python)"
+          echo "Python version: $(python --version)"
+
+          set +e
+          export PYTHONPATH="${PYTHONPATH:-}:$PROJECT_ROOT/flagscale/train"
+          bash ./tests/test_utils/runners/run_unit_tests.sh \
+            --platform '${{ inputs.platform }}' \
+            --device '${{ inputs.device }}' \
+            --coverage-dir "$COVERAGE_REPORT_DIR"
+          exit_code=$?
+          set -e
+
+          if [ $exit_code -eq 0 ]; then
+            echo "Unit tests passed for ${{ inputs.platform }}/${{ inputs.device }}"
+          else
+            echo "Unit tests failed for ${{ inputs.platform }}/${{ inputs.device }} (exit code: $exit_code)"
+          fi
+
+          echo "exit_code=$exit_code" >> $GITHUB_OUTPUT
+          exit $exit_code
+        timeout-minutes: 15
+
+      - name: Upload coverage report
+        if: steps.unit_test.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ inputs.platform }}-${{ inputs.device }}
+          path: ${{ env.COVERAGE_REPORT_DIR }}/coverage.json
+          retention-days: 7
+
+      - name: Upload coverage report to FlagCICD
+        if: steps.unit_test.outcome == 'success'
+        continue-on-error: true
+        uses: flagos-ai/FlagOps/actions/post-pytest-report@v2.0.4
+        env:
+          NO_PROXY: "flagcicd.flagos.net"
+        with:
+          user_id: '000000000000000000'
+          backend_url: 'http://flagcicd-inner.flagos.net:8000/metrics/'
+          report_path: '${{ env.COVERAGE_REPORT_DIR }}/coverage.json'
+          fail_on_error: 'false'
+          runner_set_name: ${{ fromJson(inputs.runs_on)[0] }}

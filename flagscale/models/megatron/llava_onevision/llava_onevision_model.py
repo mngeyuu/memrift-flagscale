@@ -1,9 +1,8 @@
 # Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 import ast
-import logging
-import math
 import re
-
+import math
+import logging
 from collections import namedtuple
 from functools import partial
 from typing import List, Optional
@@ -11,13 +10,13 @@ from typing import List, Optional
 import torch
 
 from megatron.core.config_logger import has_config_logger_enabled, log_config_to_disk
-from megatron.core.fusions.fused_layer_norm import FusedLayerNorm
 from megatron.core.models.gpt import GPTModel
 from megatron.core.models.vision.multimodal_projector import MultimodalProjector
 from megatron.core.transformer import MegatronModule
 from megatron.core.transformer.spec_utils import ModuleSpec
 from megatron.core.transformer.transformer_config import TransformerConfig
 from megatron.training import get_args, get_tokenizer
+from megatron.core.fusions.fused_layer_norm import FusedLayerNorm
 
 from .clip_vit_model import CLIPViTModel, get_num_image_embeddings
 
@@ -86,7 +85,9 @@ class LLaVAOneVisionModel(MegatronModule):
         super().__init__(config=language_transformer_config)
 
         if has_config_logger_enabled(language_transformer_config):
-            log_config_to_disk(language_transformer_config, locals(), prefix=type(self).__name__)
+            log_config_to_disk(
+                language_transformer_config, locals(), prefix=type(self).__name__
+            )
 
         logging.getLogger(__name__).warning(
             "LLaVA OneVision model is under active development. "
@@ -107,13 +108,17 @@ class LLaVAOneVisionModel(MegatronModule):
         args = self.args
         # Init image_newline
         if "unpad" in args.mm_patch_merge_type:
-            embed_std = 1 / torch.sqrt(torch.tensor(args.hidden_size, dtype=torch.bfloat16))
+            embed_std = 1 / torch.sqrt(
+                torch.tensor(args.hidden_size, dtype=torch.bfloat16)
+            )
             self.image_newline = torch.nn.Parameter(
                 torch.randn(args.hidden_size, dtype=torch.bfloat16) * embed_std
             )
 
         # Add share_embeddings_and_output_weights to the language model.
-        self.share_embeddings_and_output_weights = not args.untie_embeddings_and_output_weights
+        self.share_embeddings_and_output_weights = (
+            not args.untie_embeddings_and_output_weights
+        )
 
         if self.add_decoder:
             self.language_model = GPTModel(
@@ -168,11 +173,15 @@ class LLaVAOneVisionModel(MegatronModule):
                     if "_extra_state" in name:
                         vision_extra_state_param_names.append(f"vision_model.{name}")
                 self.vision_projection.register_load_state_dict_post_hook(
-                    partial(_load_state_dict_hook_ignore_param_names, vision_projection_param_names)
+                    partial(
+                        _load_state_dict_hook_ignore_param_names,
+                        vision_projection_param_names,
+                    )
                 )
                 self.vision_model.register_load_state_dict_post_hook(
                     partial(
-                        _load_state_dict_hook_ignore_param_names, vision_extra_state_param_names
+                        _load_state_dict_hook_ignore_param_names,
+                        vision_extra_state_param_names,
                     )
                 )
                 llava_param_names = ["image_newline"]
@@ -205,7 +214,10 @@ class LLaVAOneVisionModel(MegatronModule):
             self.language_model.set_input_tensor(input_tensor[0])
 
     def freeze(
-        self, freeze_language_model: bool, freeze_vision_model: bool, freeze_vision_projection: bool
+        self,
+        freeze_language_model: bool,
+        freeze_vision_model: bool,
+        freeze_vision_projection: bool,
     ):
         """Freeze model modules.
 
@@ -256,7 +268,9 @@ class LLaVAOneVisionModel(MegatronModule):
         if vision_tower is None or images is None or input_ids.shape[1] == 1:
             # [BugFix]: comment out the embed_tokens
             # input_ids = self.embed_tokens(input_ids)
-            loss_mask = torch.where(labels == IGNORE_INDEX, torch.tensor(0), torch.tensor(1))
+            loss_mask = torch.where(
+                labels == IGNORE_INDEX, torch.tensor(0), torch.tensor(1)
+            )
             return input_ids, position_ids, attention_mask, labels, loss_mask
 
         if isinstance(modalities, str):
@@ -360,7 +374,9 @@ class LLaVAOneVisionModel(MegatronModule):
                                 image_feature = torch.cat(
                                     (
                                         image_feature,
-                                        self.image_newline[None].to(image_feature.device),
+                                        self.image_newline[None].to(
+                                            image_feature.device
+                                        ),
                                     ),
                                     dim=0,
                                 )
@@ -376,7 +392,9 @@ class LLaVAOneVisionModel(MegatronModule):
                         base_image_feature = image_feature[0]
                         # Patch iamge features
                         image_feature = image_feature[1:]
-                        assert args.img_h == args.img_w, "Only support square image size."
+                        assert (
+                            args.img_h == args.img_w
+                        ), "Only support square image size."
                         height = width = args.img_h // args.patch_dim
                         assert height * width == base_image_feature.shape[0]
 
@@ -385,24 +403,33 @@ class LLaVAOneVisionModel(MegatronModule):
                                 r"anyres_max_(\d+)", image_aspect_ratio
                             )
                             if matched_anyres_max_num_patches:
-                                max_num_patches = int(matched_anyres_max_num_patches.group(1))
+                                max_num_patches = int(
+                                    matched_anyres_max_num_patches.group(1)
+                                )
 
-                        if image_aspect_ratio == "anyres" or "anyres_max" in image_aspect_ratio:
+                        if (
+                            image_aspect_ratio == "anyres"
+                            or "anyres_max" in image_aspect_ratio
+                        ):
                             vision_tower_image_size = args.img_h
                             assert (
                                 args.image_grid_pinpoints is not None
                             ), "image_grid_pinpoints must be provided."
-                            num_patch_width, num_patch_height = get_anyres_image_grid_shape(
-                                image_sizes[image_idx],
-                                args.image_grid_pinpoints,
-                                vision_tower_image_size,
+                            num_patch_width, num_patch_height = (
+                                get_anyres_image_grid_shape(
+                                    image_sizes[image_idx],
+                                    args.image_grid_pinpoints,
+                                    vision_tower_image_size,
+                                )
                             )
                             image_feature = image_feature.view(
                                 num_patch_height, num_patch_width, height, width, -1
                             )
 
                         if "maxpool2x2" in mm_patch_merge_type:
-                            image_feature = image_feature.permute(4, 0, 2, 1, 3).contiguous()
+                            image_feature = image_feature.permute(
+                                4, 0, 2, 1, 3
+                            ).contiguous()
                             image_feature = image_feature.flatten(1, 2).flatten(2, 3)
                             image_feature = nn.functional.max_pool2d(image_feature, 2)
                             image_feature = image_feature.flatten(1, 2).transpose(0, 1)
@@ -412,9 +439,13 @@ class LLaVAOneVisionModel(MegatronModule):
                             and matched_anyres_max_num_patches
                         ):
                             unit = image_feature.shape[2]
-                            image_feature = image_feature.permute(4, 0, 2, 1, 3).contiguous()
+                            image_feature = image_feature.permute(
+                                4, 0, 2, 1, 3
+                            ).contiguous()
                             image_feature = image_feature.flatten(1, 2).flatten(2, 3)
-                            image_feature = unpad_image(image_feature, image_sizes[image_idx])
+                            image_feature = unpad_image(
+                                image_feature, image_sizes[image_idx]
+                            )
                             c, h, w = image_feature.shape
                             times = math.sqrt(h * w / (max_num_patches * unit**2))
                             if times > 1.1:
@@ -435,9 +466,13 @@ class LLaVAOneVisionModel(MegatronModule):
                             )
                             image_feature = image_feature.flatten(1, 2).transpose(0, 1)
                         elif "unpad" in mm_patch_merge_type:
-                            image_feature = image_feature.permute(4, 0, 2, 1, 3).contiguous()
+                            image_feature = image_feature.permute(
+                                4, 0, 2, 1, 3
+                            ).contiguous()
                             image_feature = image_feature.flatten(1, 2).flatten(2, 3)
-                            image_feature = unpad_image(image_feature, image_sizes[image_idx])
+                            image_feature = unpad_image(
+                                image_feature, image_sizes[image_idx]
+                            )
                             image_feature = torch.cat(
                                 (
                                     image_feature,
@@ -449,12 +484,16 @@ class LLaVAOneVisionModel(MegatronModule):
                             )
                             image_feature = image_feature.flatten(1, 2).transpose(0, 1)
                         else:
-                            image_feature = image_feature.permute(0, 2, 1, 3, 4).contiguous()
+                            image_feature = image_feature.permute(
+                                0, 2, 1, 3, 4
+                            ).contiguous()
                             image_feature = image_feature.flatten(0, 3)
                         if "nobase" in mm_patch_merge_type:
                             pass
                         else:
-                            image_feature = torch.cat((base_image_feature, image_feature), dim=0)
+                            image_feature = torch.cat(
+                                (base_image_feature, image_feature), dim=0
+                            )
                         new_image_features.append(image_feature)
                     else:  # single image operations
                         image_feature = image_feature[0]
@@ -465,7 +504,9 @@ class LLaVAOneVisionModel(MegatronModule):
                         new_image_features.append(image_feature)
                 image_features = new_image_features
             else:
-                raise ValueError(f"Unexpected mm_patch_merge_type: {args.mm_patch_merge_type}")
+                raise ValueError(
+                    f"Unexpected mm_patch_merge_type: {args.mm_patch_merge_type}"
+                )
         else:
             image_features = self.encode_images(images)
 
@@ -503,7 +544,9 @@ class LLaVAOneVisionModel(MegatronModule):
             if num_images == 0:
                 cur_image_features = image_features[cur_image_idx]
                 cur_input_embeds_1 = self.embed_tokens(cur_input_ids)
-                cur_input_embeds = torch.cat([cur_input_embeds_1, cur_image_features[0:0]], dim=0)
+                cur_input_embeds = torch.cat(
+                    [cur_input_embeds_1, cur_image_features[0:0]], dim=0
+                )
                 new_input_embeds.append(cur_input_embeds)
                 new_labels.append(labels[batch_idx])
                 cur_image_idx += 1
@@ -519,7 +562,9 @@ class LLaVAOneVisionModel(MegatronModule):
             cur_labels_noim = []
             for i in range(len(image_token_indices) - 1):
                 cur_input_ids_noim.append(
-                    cur_input_ids[image_token_indices[i] + 1 : image_token_indices[i + 1]]
+                    cur_input_ids[
+                        image_token_indices[i] + 1 : image_token_indices[i + 1]
+                    ]
                 )
                 cur_labels_noim.append(
                     cur_labels[image_token_indices[i] + 1 : image_token_indices[i + 1]]
@@ -559,9 +604,13 @@ class LLaVAOneVisionModel(MegatronModule):
         tokenizer_model_max_length = args.max_position_embeddings
 
         new_input_embeds = [
-            x[:tokenizer_model_max_length] for x, modality in zip(new_input_embeds, modalities)
+            x[:tokenizer_model_max_length]
+            for x, modality in zip(new_input_embeds, modalities)
         ]
-        new_labels = [x[:tokenizer_model_max_length] for x, modality in zip(new_labels, modalities)]
+        new_labels = [
+            x[:tokenizer_model_max_length]
+            for x, modality in zip(new_labels, modalities)
+        ]
         # Combine them
         max_len = max(x.shape[0] for x in new_input_embeds)
         batch_size = len(new_input_embeds)
@@ -574,14 +623,18 @@ class LLaVAOneVisionModel(MegatronModule):
             device=new_labels[0].device,
         )
         attention_mask = torch.zeros(
-            (batch_size, max_len), dtype=attention_mask.dtype, device=attention_mask.device
+            (batch_size, max_len),
+            dtype=attention_mask.dtype,
+            device=attention_mask.device,
         )
         position_ids = torch.zeros(
             (batch_size, max_len), dtype=position_ids.dtype, device=position_ids.device
         )
 
         tokenizer = get_tokenizer()
-        for i, (cur_new_embed, cur_new_labels) in enumerate(zip(new_input_embeds, new_labels)):
+        for i, (cur_new_embed, cur_new_labels) in enumerate(
+            zip(new_input_embeds, new_labels)
+        ):
             cur_len = cur_new_embed.shape[0]
             if tokenizer.padding_side == "left":
                 new_input_embeds_padded.append(
@@ -631,7 +684,9 @@ class LLaVAOneVisionModel(MegatronModule):
             loss_mask = None
         else:
             new_labels = new_labels_padded
-            loss_mask = torch.where(new_labels == IGNORE_INDEX, torch.tensor(0), torch.tensor(1))
+            loss_mask = torch.where(
+                new_labels == IGNORE_INDEX, torch.tensor(0), torch.tensor(1)
+            )
 
         if _attention_mask is None:
             attention_mask = None
@@ -670,7 +725,13 @@ class LLaVAOneVisionModel(MegatronModule):
 
         input_embeds, position_ids, attention_mask, labels, loss_mask = (
             self.prepare_inputs_labels_for_multimodal(
-                input_ids, position_ids, attention_mask, labels, images, modalities, image_sizes
+                input_ids,
+                position_ids,
+                attention_mask,
+                labels,
+                images,
+                modalities,
+                image_sizes,
             )
         )
         # Attention mask should be None for the language model forward.
@@ -715,7 +776,9 @@ class LLaVAOneVisionModel(MegatronModule):
             )
 
         else:
-            raise ValueError(f"Unexpected mm_spatial_pool_mode: {args.mm_spatial_pool_mode}")
+            raise ValueError(
+                f"Unexpected mm_spatial_pool_mode: {args.mm_spatial_pool_mode}"
+            )
         image_feature = image_feature.permute(0, 2, 3, 1)
         image_feature = image_feature.view(num_frames, -1, num_dim)
         return image_feature

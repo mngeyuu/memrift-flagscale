@@ -6,26 +6,24 @@ from dataclasses import dataclass
 from typing import List, Optional, Union
 
 import torch
-
 from torch import Tensor, nn
 
+from megatron.core.transformer.transformer_block import TransformerBlock
+from megatron.core.fusions.fused_layer_norm import FusedLayerNorm
 from megatron.core import parallel_state, tensor_parallel
 from megatron.core.enums import Fp8Recipe
 from megatron.core.fp4_utils import get_fp4_context
 from megatron.core.fp8_utils import get_fp8_context
-from megatron.core.fusions.fused_layer_norm import FusedLayerNorm
 from megatron.core.inference.contexts import BaseInferenceContext
-from megatron.core.models.vision.multimodal_projector import MultimodalProjector
 from megatron.core.packed_seq_params import PackedSeqParams
-from megatron.core.transformer.spec_utils import ModuleSpec, build_module
-from megatron.core.transformer.transformer_block import TransformerBlock
 from megatron.core.utils import (
     WrappedTensor,
     deprecate_inference_params,
     get_pg_rank,
     make_viewless_tensor,
 )
-
+from megatron.core.models.vision.multimodal_projector import MultimodalProjector
+from megatron.core.transformer.spec_utils import ModuleSpec, build_module
 try:
     import transformer_engine.pytorch as te  # pylint: disable=unused-import
 
@@ -67,30 +65,19 @@ class VisionTransformerBlock(TransformerBlock):
      1. It adds deepstack merger and norm layers
      2. It returns hidden_states and deepstack features in the forward function
     """
-
-    def __init__(
-        self,
-        config,
-        spec,
-        post_layer_norm=True,
-        pre_process=True,
-        post_process=True,
-        pg_collection=None,
-        vp_stage=None,
-        projection_config=None,  # Note: DeepStack
-        projection_layer_spec=None,  # Note: DeepStack
-        projection_type='mlp',  # Note: DeepStack):
-    ):
-        super().__init__(
-            config, spec, post_layer_norm, pre_process, post_process, pg_collection, vp_stage
-        )
+    def __init__(self, config, spec,
+                 post_layer_norm = True, pre_process = True, post_process = True,
+                 pg_collection = None, vp_stage = None,
+                 projection_config = None,  # Note: DeepStack
+                 projection_layer_spec = None,  # Note: DeepStack
+                 projection_type = 'mlp',  # Note: DeepStack):
+                ):
+        super().__init__(config, spec, post_layer_norm, pre_process, post_process, pg_collection, vp_stage)
 
         if self.final_layernorm != None:
             # NOTE(lizhiyu): replace final layernorm with TENorm if using TE
             self.final_layernorm = None
-            self.final_layernorm = torch.nn.LayerNorm(
-                normalized_shape=self.config.hidden_size, eps=self.config.layernorm_epsilon
-            )
+            self.final_layernorm = torch.nn.LayerNorm(normalized_shape=self.config.hidden_size, eps=self.config.layernorm_epsilon,)
 
         # NOTE: DeepStack
         self.deepstack_visual_indexes = self.config.deepstack_visual_indexes
@@ -100,7 +87,7 @@ class VisionTransformerBlock(TransformerBlock):
                     projection_config,
                     projection_layer_spec,
                     projection_type,
-                    projection_config.ffn_hidden_size,
+                    projection_config.ffn_hidden_size
                 )
                 for _ in range(len(self.config.deepstack_visual_indexes))
             ]
@@ -115,10 +102,7 @@ class VisionTransformerBlock(TransformerBlock):
                 #     eps=self.config.layernorm_epsilon,
                 # ),
                 # NOTE(lizhiyu): replace with torch LayerNorm
-                torch.nn.LayerNorm(
-                    normalized_shape=projection_config.ffn_hidden_size,
-                    eps=self.config.layernorm_epsilon,
-                )
+                torch.nn.LayerNorm(normalized_shape = projection_config.ffn_hidden_size, eps = self.config.layernorm_epsilon,)
                 for _ in range(len(self.config.deepstack_visual_indexes))
             ]
         )
@@ -259,7 +243,6 @@ class VisionTransformerBlock(TransformerBlock):
         return hidden_states
 
     """Transformer class."""
-
     def forward(
         self,
         hidden_states: Union[Tensor, WrappedTensor],
@@ -362,10 +345,8 @@ class VisionTransformerBlock(TransformerBlock):
         with rng_context, outer_quantization_context:
             # Forward pass.
             if self.config.recompute_granularity == 'full' and self.training:
-                assert (
-                    self.config.recompute_method == 'uniform'
-                    and self.config.recompute_num_layers == 1
-                ), f"Only uniform recompute with recompute_num_layers=1 is supported for full recompute in Qwen3-VL."
+                assert self.config.recompute_method == 'uniform' and self.config.recompute_num_layers == 1, \
+                    f"Only uniform recompute with recompute_num_layers=1 is supported for full recompute in Qwen3-VL."
                 hidden_states = self._checkpointed_forward(
                     hidden_states=hidden_states,
                     attention_mask=attention_mask,
@@ -375,7 +356,7 @@ class VisionTransformerBlock(TransformerBlock):
                     attention_bias=attention_bias,
                     packed_seq_params=packed_seq_params,
                     use_inner_quantization_context=use_inner_quantization_context,
-                    deepstack_feature_lists=deepstack_feature_lists,  # Note: DeepStack
+                    deepstack_feature_lists = deepstack_feature_lists,  # Note: DeepStack
                 )
             else:
                 for l_no, layer in enumerate(self.layers):

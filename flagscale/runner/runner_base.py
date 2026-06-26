@@ -1,5 +1,4 @@
 from abc import ABC
-from enum import Enum
 
 from omegaconf import DictConfig
 
@@ -9,7 +8,7 @@ from flagscale.runner.utils import parse_hostfile
 # None --> native
 # native --> native_{task_type} in inner Factory registry
 TASK_TO_BACKEND_MAP = {
-    "train": ["megatron"],  # TODO: add "pi0", "robotics"
+    "train": ["megatron", "native"],
     "inference": ["vllm"],
     "compress": ["native", None],
     "serve": ["vllm", "sglang", "llama_cpp", "native", None],
@@ -23,12 +22,16 @@ class Runner(ABC):
         hostfile = self.config.experiment.runner.get("hostfile", None)
         self.resources = parse_hostfile(hostfile) if hostfile else None
         self.task_type = getattr(self.config.experiment.task, "type", None)
+        self.launcher_type = self.config.experiment.runner.get("type", "ssh")
         assert self.task_type in TASK_TO_BACKEND_MAP, f"Unsupported task type: {self.task_type}"
 
         backend_attr = getattr(self.config.experiment.task, "backend", None)
         if self.task_type == "serve":
-            if backend_attr is None and not self.config.experiment.task.get("entrypoint", None):
-                backend_attr = self.config.serve[0]["engine"]
+            if self.launcher_type == "cloud":
+                backend_attr = "vllm"  # do not support other backend
+            elif backend_attr is None and not self.config.experiment.task.get("entrypoint", None):
+                backend_attr = self.config.serve[0].get("engine", None)
+            backend_attr = backend_attr or "native"
 
         # backend is required for train / inference / rl
         if self.task_type in ("train", "inference", "rl"):
@@ -45,6 +48,12 @@ class Runner(ABC):
         if backend_type == "native":
             backend_type = f"native_{self.task_type}"
 
+        if backend_type == "native_serve":
+            if self.config.experiment.runner.get(
+                "deploy", None
+            ) is None or not self.config.experiment.runner.deploy.get("use_fs_serve", False):
+                raise ValueError("config.experiment.deploy.use_fs_serve in YAML should be true")
+
         self.backend_type = backend_type
 
         # validate task_type and backend_type compatibility
@@ -55,9 +64,7 @@ class Runner(ABC):
         )
 
         self.backend = RunnerFactory.get_backend(self.backend_type)(self.config)
-        self.launcher = RunnerFactory.get_launcher("ssh")(
-            self.config, self.backend
-        )  # TODO add cloud launcher_type
+        self.launcher = RunnerFactory.get_launcher(self.launcher_type)(self.config, self.backend)
 
     def run(self, *args, **kwargs):
         return self.launcher.run(*args, **kwargs)

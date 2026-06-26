@@ -3,16 +3,16 @@ import unittest
 import torch
 import torch.nn as nn
 
-from flagscale.inference.runtime_context import RuntimeContext
-from flagscale.transformations.diffusion.timestep_tracker_transformation import (
+from flagscale.inference.core.diffusion.timestep_tracker_transformation import (
     TimestepTrackerHook,
     TimestepTrackerTransformation,
 )
+from flagscale.inference.runtime_context import RuntimeContext
 from flagscale.transformations.hook import ModuleHookRegistry
 
 
 class TrackerModule(nn.Module):
-    def forward(self, x, timestep):  # noqa: D401  (signature required by hook)
+    def forward(self, x, timestep):
         return x
 
 
@@ -64,6 +64,5 @@ class TestTimestepTrackerTransformation(unittest.TestCase):
         TimestepTrackerTransformation().apply(module)
 
         ctx = RuntimeContext()
-        with ctx.session():
-            with self.assertRaises(ValueError):
-                _ = module(torch.zeros(1))
+        with ctx.session(), self.assertRaises(ValueError):
+            _ = module(torch.zeros(1))

@@ -3,22 +3,22 @@
 """
 Fault Tolerance (FT) package integration for Megatron-LM, using the FT section-based API.
 
-The FT package is included in "nvidia-resiliency-ext"
+The FT package is included in "nvidia-resiliency-ext" 
 (https://github.com/NVIDIA/nvidia-resiliency-ext).
 
 NOTE: The workload must be run using the `ft_launcher` tool provided by `nvidia-resiliency-ext.`
-NOTE: Calls to the public API of this module are no-ops if FT is not initialized
+NOTE: Calls to the public API of this module are no-ops if FT is not initialized 
 (`ft_integration.setup` was not called).
 NOTE: Default distributed process group should be initialized before calling `ft_integration.setup`
 
-The "setup" FT section is opened during FT initialization and closed before the first training or
-eval iteration. Training and evaluation steps are wrapped in the "step" section, but only after a
-few warmup iterations. This is because the initial iterations may be slower, and we want the "step"
+The "setup" FT section is opened during FT initialization and closed before the first training or 
+eval iteration. Training and evaluation steps are wrapped in the "step" section, but only after a 
+few warmup iterations. This is because the initial iterations may be slower, and we want the "step" 
 timeout to be short. These warmup steps, which are not wrapped in the "step" section, will fall into
-the out-of-section area. All checkpoint-saving-related operations (including asynchronous
+the out-of-section area. All checkpoint-saving-related operations (including asynchronous 
 checkpointing finalization) are wrapped in the "checkpointing" section.
 
-If timeout calculation is enabled (--calc-ft-timeouts),
+If timeout calculation is enabled (--calc-ft-timeouts), 
 FT timeouts are updated after each checkpoint and at the end of the run.
 Updated values are based on observed intervals.
 
@@ -41,11 +41,11 @@ import signal
 import sys
 import threading
 import time
-
 from typing import Any, Optional
 
 import torch
 
+from . import arguments
 from . import global_vars
 from .utils import is_rank0, print_rank_0
 
@@ -60,9 +60,11 @@ _seen_checkpoints_cnt = 0
 _seen_tr_iters_cnt = 0
 _curr_eval_iter_idx = 0
 
-_NUM_WARMUP_ITERS = 1
+_NUM_WARMUP_ITERS = 1  # Will be set by --ft-num-warmup-iters (default: 5)
 _MIN_ITERS_FOR_STEP_TIMEOUT_UPDATE = 16
 
+from megatron.plugin.platform import get_platform
+cur_platform = get_platform()
 
 def get_rank_monitor_client() -> Optional[Any]:
     """Returns the underlying fault tolerance client instance
@@ -73,25 +75,22 @@ def get_rank_monitor_client() -> Optional[Any]:
     return _GLOBAL_RANK_MONITOR_CLIENT
 
 
-def setup(args: argparse.Namespace) -> None:
-    """Initialize fault tolerance
+def setup() -> None:
+    """Initialize fault tolerance before initialize_megatron"""
+    args = arguments.parse_args(ignore_unknown_args=True)
+    if not args.enable_ft_package:
+        return
 
-    Args:
-        args (argparse.Namespace): parsed Megatron-LM command line arguments
-
-    Raises:
-        ValueError: if invalid config is provided
-    """
+    # Initialize fault tolerance
     from nvidia_resiliency_ext.fault_tolerance import RankMonitorClient
 
-    print_rank_0(f"FT: initializing...")
+    if os.environ.get("RANK") == "0":
+        print("FT: initializing...", flush=True)
 
     checkpoint_dir = args.save
     if not checkpoint_dir:
         raise ValueError("checkpointing save dir must be set to enable fault tolerance")
-    if is_rank0() and not os.path.exists(checkpoint_dir):
-        # MLM checkpoint dir will be needed for saving FT state.
-        # it can happen before the checkpointing, so create it in advance
+    if not os.path.exists(checkpoint_dir):
         os.makedirs(checkpoint_dir, exist_ok=True)
 
     cli = RankMonitorClient()
@@ -108,9 +107,13 @@ def setup(args: argparse.Namespace) -> None:
     global _is_calculating_timeouts
     _is_calculating_timeouts = args.calc_ft_timeouts
 
-    cli.init_workload_monitoring()
+    global _NUM_WARMUP_ITERS
+    _NUM_WARMUP_ITERS = args.ft_num_warmup_iters
+
+    cli.init_workload_monitoring(num_warmup_iters=_NUM_WARMUP_ITERS)
     _load_state_if_exists()
-    print_rank_0(f"FT: initialized. Timeouts={cli.section_timeouts}")
+    if os.environ.get("RANK") == "0":
+        print(f"FT: initialized. Timeouts={cli.section_timeouts}", flush=True)
 
     cli.start_section("setup")
     global _is_setup_section_open
@@ -327,7 +330,7 @@ def maybe_setup_simulated_fault() -> None:
     rank = torch.distributed.get_rank()
     rand_rank = rng.randint(0, torch.distributed.get_world_size() - 1)
     rank_to_fail = rank_to_fail if rank_to_fail is not None else rand_rank
-    rank_to_fail = torch.tensor([rank_to_fail], device=torch.cuda.current_device())
+    rank_to_fail = torch.tensor([rank_to_fail], device=cur_platform.current_device())
     torch.distributed.broadcast(rank_to_fail, 0)
     rank_to_fail = int(rank_to_fail.item())
 

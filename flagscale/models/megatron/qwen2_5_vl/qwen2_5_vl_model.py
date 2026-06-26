@@ -2,21 +2,20 @@
 #  Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 
 import logging
-
 from collections import namedtuple
 from typing import List
 
 import torch
 
 from megatron.core import InferenceParams
-from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.transformer import MegatronModule
 from megatron.core.transformer.spec_utils import ModuleSpec
 from megatron.core.transformer.transformer_config import TransformerConfig
+from megatron.core.packed_seq_params import PackedSeqParams
 
-from flagscale.models.megatron.qwen2_5_vl.language_module import QwenVLLanguageModel
+
 from flagscale.models.megatron.qwen2_5_vl.vit_model import Qwen2_5VisionModel
-
+from flagscale.models.megatron.qwen2_5_vl.language_module import QwenVLLanguageModel
 
 # Note: This is under development and may be missing features.
 class Qwen2_5VLModel(MegatronModule):
@@ -60,6 +59,7 @@ class Qwen2_5VLModel(MegatronModule):
         vision_projection_config: TransformerConfig,
         vision_projection_layer_spec: ModuleSpec,
         vision_projection_type: str = "mlp",
+
         allow_missing_vision_projection_checkpoint: bool = False,
         parallel_output: bool = True,
         language_position_embedding_type: str = 'rope',
@@ -70,7 +70,7 @@ class Qwen2_5VLModel(MegatronModule):
         add_decoder: bool = True,
         language_rotary_base: int = 10000,
         fp16_lm_cross_entropy: bool = False,
-        language_share_embeddings_and_output_weights: bool = False,
+        language_share_embeddings_and_output_weights: bool=False
     ) -> None:
         super().__init__(config=language_transformer_config)
 
@@ -88,9 +88,7 @@ class Qwen2_5VLModel(MegatronModule):
         self.vision_projection = None
         self.language_model = None
 
-        self.square_merge_size = (
-            vision_projection_config.ffn_hidden_size // vision_transformer_config.hidden_size
-        )
+        self.square_merge_size = vision_projection_config.ffn_hidden_size // vision_transformer_config.hidden_size
 
         # This attribute is needed to check if an all-reduce is required
         # on the word embeddings inside `finalize_model_grads._allreduce_word_embedding_grads`.
@@ -103,7 +101,7 @@ class Qwen2_5VLModel(MegatronModule):
                 vision_projection_layer_spec,
                 projection_type=vision_projection_type,
                 pre_process=True,
-                post_process=True,
+                post_process=True
             )
 
         self.language_model = QwenVLLanguageModel(
@@ -118,7 +116,7 @@ class Qwen2_5VLModel(MegatronModule):
             post_process=self.post_process,
             rotary_base=language_rotary_base,
             fp16_lm_cross_entropy=fp16_lm_cross_entropy,
-            share_embeddings_and_output_weights=language_share_embeddings_and_output_weights,
+            share_embeddings_and_output_weights=language_share_embeddings_and_output_weights
         )
         self.share_embeddings_and_output_weights = (
             self.language_model.share_embeddings_and_output_weights
@@ -176,6 +174,7 @@ class Qwen2_5VLModel(MegatronModule):
         video_start_index: int = -1,
         image_input_mask: torch.Tensor = None,
         video_input_mask: torch.Tensor = None,
+
         attention_mask: torch.Tensor = None,
         labels: torch.Tensor = None,
         inference_params: InferenceParams = None,
@@ -217,8 +216,8 @@ class Qwen2_5VLModel(MegatronModule):
                 elif self.config.fp16:
                     vision_data = vision_data.to(torch.float16)
                 vision_embeds = self.vision_model(
-                    vision_data=vision_data,  # If None, vision model should use intermediate outputs (EPP > 1)
-                    grid_thw=vision_grid_thw,  # should provided in each EPP stage
+                    vision_data=vision_data, # If None, vision model should use intermediate outputs (EPP > 1)
+                    grid_thw=vision_grid_thw # should provided in each EPP stage
                 )
 
             # If running inference, the language model KV cache will be updated for image token positions.
@@ -232,7 +231,8 @@ class Qwen2_5VLModel(MegatronModule):
             # If running inference, we can skip image token computation if they were computed already earlier for this sample.
             if use_inference_kv_cache:
                 language_embeddings: torch.Tensor = self.language_model.embedding(
-                    input_ids=input_ids, position_ids=None  # NOTE: disable
+                input_ids=input_ids,
+                position_ids=None # NOTE: disable
                 )  # [text_seq_len, b, h_language]
                 # NOTE: why not cat here? is it the combined embeddings useless?
                 combined_embeddings = language_embeddings
@@ -247,36 +247,35 @@ class Qwen2_5VLModel(MegatronModule):
                     image_embeds = vision_embeds[:video_start_index]
                     video_embeds = vision_embeds[video_start_index:]
                 else:
-                    raise ValueError(
-                        f"Expect video token start index in range [0, {vision_embeds.shape[0]}], but got {video_start_index}"
-                    )
+                    raise ValueError(f"Expect video token start index in range [0, {vision_embeds.shape[0]}], but got {video_start_index}")
 
                 if image_embeds is not None:
-                    image_input_mask = image_input_mask.T  # shape [seqlen, mbs]
+                    image_input_mask = image_input_mask.T # shape [seqlen, mbs]
                 if video_embeds is not None:
                     video_input_mask = video_input_mask.T
                 combined_embeddings = self.language_model.embedding(
                     input_ids=input_ids,
-                    position_ids=None,  # NOTE: disable
+                    position_ids=None, # NOTE: disable
                     image_input_mask=image_input_mask,
                     video_input_mask=video_input_mask,
                     image_embeds=image_embeds,
-                    video_embeds=video_embeds,
+                    video_embeds=video_embeds
                 )  # [text_seq_len, b, h_language]
             else:
                 combined_embeddings = self.language_model.embedding(
-                    input_ids=input_ids, position_ids=None  # NOTE: disable
+                    input_ids=input_ids,
+                    position_ids=None # NOTE: disable
                 )  # [text_seq_len, b, h_language]
         else:
             combined_embeddings = None
         output = self.language_model(
             input_ids=None,
-            position_ids=position_ids,  # None in encoder
-            attention_mask=attention_mask,  # None in encoder
-            decoder_input=combined_embeddings,  # only not None in the first decoder PP stage
-            labels=labels,  # only not None in the last decoder PP stage
-            inference_params=inference_params,  # currently always None
-            packed_seq_params=packed_seq_params,  # currently always None
+            position_ids=position_ids,              # None in encoder
+            attention_mask=attention_mask,          # None in encoder
+            decoder_input=combined_embeddings,      # only not None in the first decoder PP stage
+            labels=labels,                          # only not None in the last decoder PP stage
+            inference_params=inference_params,      # currently always None
+            packed_seq_params=packed_seq_params,    # currently always None
             **(extra_block_kwargs or {}),
         )
         return output
