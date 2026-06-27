@@ -14,7 +14,7 @@
 
 ## Round-trip 单测(synthetic,model-无关)
 
-`test_roundtrip_minimal.py` cases 1-2(case 3 因缺 Llama-8B 模型报错,与本改造无关):
+`test_roundtrip_minimal.py` cases 1-2(case 3 因缺 Llam··········a-8B 模型报错,与本改造无关):
 
 | case | torch.equal | max_abs_diff | n_diff |
 |------|-------------|--------------|--------|

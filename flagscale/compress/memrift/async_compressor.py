@@ -1,3 +1,5 @@
+import os
+import time
 import threading
 import concurrent.futures as fut
 from typing import Optional, Callable, Any
@@ -110,8 +112,22 @@ class AsyncCompressor:
             raise RuntimeError("zstandard not available. Install with: pip install zstandard")
         
         self.zstd_level = zstd_level
+        # concurrency_limit 允许环境变量覆盖:默认沿用调用方传入值(通常4,保守,控解压显存峰值);
+        # 真实场景显存吃紧时保持小值,显存富余时可调大 MEMRIFT_DECODE_CONCURRENCY 提高解压并发。
+        concurrency_limit = int(os.getenv("MEMRIFT_DECODE_CONCURRENCY", str(concurrency_limit)))
+        self.act_split_path = os.getenv("MEMRIFT_ACT_SPLIT_PATH", "mapped").strip().lower()
+        if self.act_split_path not in {"mapped", "copy"}:
+            raise ValueError(
+                "MEMRIFT_ACT_SPLIT_PATH must be 'mapped' or 'copy', "
+                f"got {self.act_split_path!r}"
+            )
+        self.act_split_profile = os.getenv("MEMRIFT_ACT_SPLIT_PROFILE", "0") == "1"
         self.enable_async = enable_async
-        
+        # 保存并发配置,供 _build()/reset() 重建时复用(避免写死,且 concurrency_limit 可配置)
+        self._compress_workers = compress_workers
+        self._decode_workers = decode_workers
+        self._concurrency_limit = concurrency_limit
+
         if enable_async:
             self.compress_pool = fut.ThreadPoolExecutor(compress_workers)
             self.decode_pool = fut.ThreadPoolExecutor(decode_workers)
@@ -134,8 +150,10 @@ class AsyncCompressor:
     def _build(self):
         """Rebuild pools (used after reset)."""
         if self.enable_async:
-            self.compress_pool = fut.ThreadPoolExecutor(8)
-            self.decode_pool = fut.ThreadPoolExecutor(4)
+            self.compress_pool = fut.ThreadPoolExecutor(self._compress_workers)
+            self.decode_pool = fut.ThreadPoolExecutor(self._decode_workers)
+            # 重建信号量(原 _build 漏建,reset 后解压并发控制会失效)
+            self.decomp_semaphore = threading.Semaphore(value=self._concurrency_limit)
         self.d2h_stream = torch.cuda.Stream()
         self.h2d_stream = torch.cuda.Stream()
     
@@ -207,6 +225,32 @@ class AsyncCompressor:
     # -------------------------------------------------------------------------
     #  Asynchronous compression/decompression
     # -------------------------------------------------------------------------
+
+    def _split_for_activation_async(self, t: torch.Tensor):
+        submit_start = time.perf_counter()
+        start_evt = torch.cuda.Event(enable_timing=True) if self.act_split_profile else None
+        end_evt = torch.cuda.Event(enable_timing=True) if self.act_split_profile else None
+
+        if start_evt is not None:
+            start_evt.record(self.d2h_stream)
+
+        if self.act_split_path == "copy":
+            if not hasattr(self._fs_sp, "split_copy"):
+                raise RuntimeError(
+                    "MEMRIFT_ACT_SPLIT_PATH=copy requires float_split_stride_pin.split_copy"
+                )
+            cpu_exp, sm_bits, staging_exp = self._fs_sp.split_copy(
+                t, self.d2h_stream.cuda_stream
+            )
+        else:
+            cpu_exp, sm_bits = self._fs_sp.split(t, self.d2h_stream.cuda_stream)
+            staging_exp = None
+
+        if end_evt is not None:
+            end_evt.record(self.d2h_stream)
+
+        submit_ms = (time.perf_counter() - submit_start) * 1000.0
+        return cpu_exp, sm_bits, staging_exp, start_evt, end_evt, submit_ms
     
     def kickoff_async(self, tok: PlaceHolderToken, t: torch.Tensor):
         """
@@ -219,27 +263,68 @@ class AsyncCompressor:
         
         self.d2h_stream.wait_stream(torch.cuda.current_stream())
         with torch.cuda.stream(self.d2h_stream):
-            cpu_exp, sm_bits = self._fs_sp.split(t, self.d2h_stream.cuda_stream)
+            cpu_exp, sm_bits, staging_exp, start_evt, end_evt, submit_ms = (
+                self._split_for_activation_async(t)
+            )
             evt = self.d2h_stream.record_event()
             t.record_stream(self.d2h_stream)
         
         tok.sm_bits = sm_bits
         
-        def _encode(cpu_exp, evt):
+        def _encode(cpu_exp, evt, staging_exp, start_evt, end_evt, submit_ms, shape, dtype, numel):
             arr = None
             try:
+                wait_start = time.perf_counter()
                 evt.synchronize()
+                wait_ms = (time.perf_counter() - wait_start) * 1000.0
+                cuda_event_ms = (
+                    start_evt.elapsed_time(end_evt)
+                    if start_evt is not None and end_evt is not None
+                    else 0.0
+                )
+
+                numpy_start = time.perf_counter()
                 arr = cpu_exp.numpy()
+                numpy_ms = (time.perf_counter() - numpy_start) * 1000.0
+
                 cctx = get_compression_ctx(self.zstd_level)
+                zstd_start = time.perf_counter()
                 comped_bytes = cctx.compress(arr)
-                numel = arr.size
-                return comped_bytes, numel
+                zstd_ms = (time.perf_counter() - zstd_start) * 1000.0
+
+                if self.act_split_profile:
+                    print(
+                        "[MemRiftSplitProfile] "
+                        f"path={self.act_split_path} "
+                        f"shape={shape} "
+                        f"dtype={dtype} "
+                        f"numel={numel} "
+                        f"submit={submit_ms:.3f}ms "
+                        f"wait={wait_ms:.3f}ms "
+                        f"cuda_event={cuda_event_ms:.3f}ms "
+                        f"numpy={numpy_ms:.3f}ms "
+                        f"zstd={zstd_ms:.3f}ms"
+                    )
+
+                return comped_bytes, arr.size
             finally:
                 del cpu_exp
+                del staging_exp
                 if arr is not None:
                     del arr
         
-        return self.compress_pool.submit(_encode, cpu_exp, evt)
+        return self.compress_pool.submit(
+            _encode,
+            cpu_exp,
+            evt,
+            staging_exp,
+            start_evt,
+            end_evt,
+            submit_ms,
+            t.shape,
+            t.dtype,
+            t.numel(),
+        )
     
     def decompress_async(self, tok: PlaceHolderToken, future: fut.Future):
         """

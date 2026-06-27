@@ -1,30 +1,28 @@
 #!/bin/bash
 # MemRift 单卡全路径(权重+激活)端到端验证 —— Aquila2-7B
-# 基于 memrift_full.sh,使用本环境可用的 Aquila 资源:
-#   压缩权重: memrift_weights/aquila2_7b_level18 (HF-mode split_zstd, 291 bin)
-#   模型/分词器: models/Aquila2-7B
-# Aquila2-7B arch: 32层/hidden4096/ffn11008/heads32/kv32(MHA,无GQA)/vocab143973/rope1e6
-# 用于 D2H/H2D cudaMemcpyAsync 改造的 baseline / after 对比(逐 iter loss)。
+# 适配 FlagScale v2.0.0-rc2.post1 合并分支(merge/flagscale-v2.0.0-rc2):
+#   - 环境: flagscale-train-yupu (py3.12 + megatron-core 0.17.1)
+#   - 入口: flagscale/train/megatron/train_gpt.py (上游 #1037 后新路径)
+# 资源同 memrift_full_aquila.sh。
 source /root/miniconda3/etc/profile.d/conda.sh
-conda activate myc
+conda activate myc-fl312
 cd /share/project/mengyc/code/memrift-flagscale
 
-export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-2}
+export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
 export TRANSFORMERS_OFFLINE=1
 export HF_DATASETS_OFFLINE=1
 export TORCH_DEVICE_BACKEND_AUTOLOAD=0
-export PYTHONPATH=/share/project/mengyc/code/memrift-flagscale:/share/project/mengyc/code/memrift-flagscale/flagscale/train:${PYTHONPATH}
+export PYTHONPATH=/share/project/mengyc/code/memrift-flagscale:/share/project/mengyc/code/memrift-flagscale/flagscale/train:/share/project/mengyc/code/memrift-flagscale/flagscale/train/megatron:${PYTHONPATH}
 export MEMRIFT_TE_PATCH_TRACE=0
 export MEMRIFT_DISABLE_LINEAR_BWD_PRE=0
 export MEMRIFT_HOOK_ORDER=1
-# D2H 激活压缩走 cudaMemcpyAsync(split_copy);H2D 权重 merge 保持零拷贝。
 export MEMRIFT_ACT_SPLIT_PATH=${MEMRIFT_ACT_SPLIT_PATH:-copy}
 export MEMRIFT_ACT_SPLIT_PROFILE=${MEMRIFT_ACT_SPLIT_PROFILE:-1}
 
 MODEL_PATH=/share/project/mengyc/models/Aquila2-7B
 
-torchrun --nnodes 1 --nproc_per_node 1 --master_port ${MASTER_PORT:-29519} \
-  flagscale/train/train_gpt.py \
+torchrun --nnodes 1 --nproc_per_node 1 --master_port ${MASTER_PORT:-29531} \
+  flagscale/train/megatron/train_gpt.py \
   --tensor-model-parallel-size 1 \
   --pipeline-model-parallel-size 1 \
   --disable-bias-linear \
@@ -70,6 +68,7 @@ torchrun --nnodes 1 --nproc_per_node 1 --master_port ${MASTER_PORT:-29519} \
   --global-batch-size 1 \
   --mock-data \
   --train-iters 1 \
+  --eval-interval 1000 \
   --lr 0.0002 \
   --min-lr 2e-05 \
   --weight-decay 0.1 \

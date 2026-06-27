@@ -153,16 +153,19 @@ __global__ void pack_bf16_kernel_vec2(const uint16_t* __restrict__ in,
                                       uint8_t* __restrict__ sm_out,
                                       int64_t numel) {
     int64_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 2;
-    if (idx + 1 >= numel) return;
+    if (idx >= numel) return;
 
     int64_t off = ix.offset(idx);
     uint16_t bits0 = __ldg(&in[ off ]);
-    uint16_t bits1 = __ldg(&in[ off + 1 ]);
 
     exp_out[idx]     = (bits0 >> 7) & 0xFF;
     sm_out[idx]      = ((bits0 >> 15) & 0x1) << 7 | (bits0 & 0x7F);
-    exp_out[idx + 1] = (bits1 >> 7) & 0xFF;
-    sm_out[idx + 1]  = ((bits1 >> 15) & 0x1) << 7 | (bits1 & 0x7F);
+
+    if (idx + 1 < numel) {
+        uint16_t bits1 = __ldg(&in[ off + 1 ]);
+        exp_out[idx + 1] = (bits1 >> 7) & 0xFF;
+        sm_out[idx + 1]  = ((bits1 >> 15) & 0x1) << 7 | (bits1 & 0x7F);
+    }
 }
 
 template<int N>
@@ -190,26 +193,30 @@ __global__ void pack_fp32_kernel_vec2(const float* __restrict__ in,
                                  uint8_t* __restrict__ sm_out,
                                  int64_t numel) {
     int64_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 2;
-    if (idx + 1 >= numel) return;
+    if (idx >= numel) return;
 
     int64_t off = ix.offset(idx);
     uint32_t bits = __ldg(& reinterpret_cast<const uint32_t*>(in)[ off ]);
-    uint32_t bits_1 = __ldg(& reinterpret_cast<const uint32_t*>(in)[ off + 1 ]);
     exp_out[idx]  = (bits >> 23) & 0xFF;
-    exp_out[idx+1]  = (bits_1 >> 23) & 0xFF;
 
     uint32_t sm24 = ((bits & 0x7FFFFF)      )      // mant
                   | ((bits >> 8) & 0x800000);      // sign
-    uint32_t sm24_1 = ((bits_1 & 0x7FFFFF)      )      // mant
-                  | ((bits_1 >> 8) & 0x800000);      // sign
 
     sm_out[idx*3+0] =  sm24        & 0xFF;
     sm_out[idx*3+1] = (sm24 >> 8 ) & 0xFF;
     sm_out[idx*3+2] = (sm24 >> 16) & 0xFF;
 
-    sm_out[(idx+1)*3+0] =  sm24_1        & 0xFF;
-    sm_out[(idx+1)*3+1] = (sm24_1 >> 8 ) & 0xFF;
-    sm_out[(idx+1)*3+2] = (sm24_1 >> 16) & 0xFF;
+    if (idx + 1 < numel) {
+        uint32_t bits_1 = __ldg(& reinterpret_cast<const uint32_t*>(in)[ off + 1 ]);
+        exp_out[idx+1]  = (bits_1 >> 23) & 0xFF;
+
+        uint32_t sm24_1 = ((bits_1 & 0x7FFFFF)      )      // mant
+                      | ((bits_1 >> 8) & 0x800000);      // sign
+
+        sm_out[(idx+1)*3+0] =  sm24_1        & 0xFF;
+        sm_out[(idx+1)*3+1] = (sm24_1 >> 8 ) & 0xFF;
+        sm_out[(idx+1)*3+2] = (sm24_1 >> 16) & 0xFF;
+    }
 }
 
 template<int N>
@@ -236,19 +243,22 @@ __global__ void unpack_bf16_kernel_vec2(const uint8_t* __restrict__ exp_in,
                                         uint16_t* __restrict__ out,
                                         int64_t numel) {
     int64_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 2;
-    if (idx + 1 >= numel) return;
+    if (idx >= numel) return;
 
     uint8_t sm0 = __ldg(&sm_in[idx]);
-    uint8_t sm1 = __ldg(&sm_in[idx + 1]);
     uint8_t exp0 = __ldg(&exp_in[idx]);
-    uint8_t exp1 = __ldg(&exp_in[idx + 1]);
 
     uint16_t bits0 = ((sm0 >> 7) << 15) | (static_cast<uint16_t>(exp0) << 7) | (sm0 & 0x7F);
-    uint16_t bits1 = ((sm1 >> 7) << 15) | (static_cast<uint16_t>(exp1) << 7) | (sm1 & 0x7F);
 
     int64_t off = ix.offset(idx);
     out[ off ]     = bits0;
-    out[ off + 1 ] = bits1;
+
+    if (idx + 1 < numel) {
+        uint8_t sm1 = __ldg(&sm_in[idx + 1]);
+        uint8_t exp1 = __ldg(&exp_in[idx + 1]);
+        uint16_t bits1 = ((sm1 >> 7) << 15) | (static_cast<uint16_t>(exp1) << 7) | (sm1 & 0x7F);
+        out[ off + 1 ] = bits1;
+    }
 }
 
 template<int N>
@@ -280,30 +290,36 @@ __global__ void unpack_fp32_kernel_vec2(const uint8_t* __restrict__ exp_in,
                                    float* __restrict__ out,
                                    int64_t numel) {
     int64_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 2;
-    if (idx + 1 >= numel) return;
+    if (idx >= numel) return;
 
     uint32_t sm24 =  __ldg(&sm_in[idx*3+0])
                    | (__ldg(&sm_in[idx*3+1]) << 8 )
                    | (__ldg(&sm_in[idx*3+2]) << 16);
-    uint32_t sm24_1 =  __ldg(&sm_in[(idx+1)*3+0])
-                   | (__ldg(&sm_in[(idx+1)*3+1]) << 8 )
-                   | (__ldg(&sm_in[(idx+1)*3+2]) << 16);
 
     uint32_t sign = (sm24 >> 23) & 0x1;
-    uint32_t sign_1 = (sm24_1 >> 23) & 0x1;
     uint32_t mant =  sm24 & 0x7FFFFF;
-    uint32_t mant_1 =  sm24_1 & 0x7FFFFF;
 
     uint32_t bits = (sign << 31)
                   | (static_cast<uint32_t>(__ldg(& exp_in[idx])) << 23)
                   |  mant;
-    uint32_t bits_1 = (sign_1 << 31)
-                  | (static_cast<uint32_t>(__ldg(& exp_in[idx+1])) << 23)
-                  |  mant_1;
     
     int64_t off = ix.offset(idx);
     reinterpret_cast<uint32_t*>(out)[ off ] = bits;
-    reinterpret_cast<uint32_t*>(out)[ off + 1 ] = bits_1;
+
+    if (idx + 1 < numel) {
+        uint32_t sm24_1 =  __ldg(&sm_in[(idx+1)*3+0])
+                       | (__ldg(&sm_in[(idx+1)*3+1]) << 8 )
+                       | (__ldg(&sm_in[(idx+1)*3+2]) << 16);
+
+        uint32_t sign_1 = (sm24_1 >> 23) & 0x1;
+        uint32_t mant_1 =  sm24_1 & 0x7FFFFF;
+
+        uint32_t bits_1 = (sign_1 << 31)
+                      | (static_cast<uint32_t>(__ldg(& exp_in[idx+1])) << 23)
+                      |  mant_1;
+
+        reinterpret_cast<uint32_t*>(out)[ off + 1 ] = bits_1;
+    }
 }
 
 //----------------------------------------------------------------------------
@@ -329,8 +345,59 @@ std::vector<at::Tensor> pack_tensor(const at::Tensor& t, unsigned long long stre
     int64_t sm_elems=(t.scalar_type()==at::kFloat)?N*3:N;
     auto sm = Pool::inst().get(sm_elems, at::kByte, dev_idx, false, raw);
 
-    auto exp_gpu = Pool::inst().get(N, at::kByte, dev_idx, /*pinned=*/false, raw);
+    uint8_t* host_ptr = exp_host.data_ptr<uint8_t>();
+    uint8_t* dev_ptr;
+    cudaHostGetDevicePointer(&dev_ptr, host_ptr, 0);
     auto ix  = make_indexer<4>(t);
+
+    if (t.scalar_type() == at::kFloat) {
+        if (ix.is_contig)
+            pack_fp32_kernel_vec2<4><<<grid,256,0,raw>>>(
+                t.data_ptr<float>(), ix,
+                dev_ptr,
+                sm.data_ptr<uint8_t>(), N);
+        else
+            pack_fp32_kernel<4><<<grid,256,0,raw>>>(
+                t.data_ptr<float>(), ix,
+                dev_ptr,
+                sm.data_ptr<uint8_t>(), N);
+    } else {    // bf16
+        if (ix.is_contig) 
+            pack_bf16_kernel_vec2<4><<<grid,256,0,raw>>>(
+                reinterpret_cast<const uint16_t*>(t.data_ptr<at::BFloat16>()),
+                ix,
+                dev_ptr,
+                sm.data_ptr<uint8_t>(), N);
+        else
+            pack_bf16_kernel<4><<<grid,256,0,raw>>>(
+                reinterpret_cast<const uint16_t*>(t.data_ptr<at::BFloat16>()),
+                ix,
+                dev_ptr,
+                sm.data_ptr<uint8_t>(), N);
+    }
+    return {exp_host, sm};
+}
+
+std::vector<at::Tensor> pack_tensor_copy(const at::Tensor& t, unsigned long long stream_ptr) {
+    TORCH_CHECK(t.is_cuda(), "input must be CUDA");
+    TORCH_CHECK(t.scalar_type()==at::kFloat || t.scalar_type()==at::kBFloat16,
+                "dtype must be fp32 / bf16");
+
+    int dev_idx = t.device().index();
+    TORCH_CHECK(dev_idx >= 0, "input tensor must be on CUDA");
+    cudaStream_t raw = reinterpret_cast<cudaStream_t>(stream_ptr);
+    c10::cuda::CUDAStream s = c10::cuda::getStreamFromExternal(raw, dev_idx);
+    c10::cuda::CUDAStreamGuard guard{s};
+
+    const int64_t N = t.numel();
+    dim3 grid = grid_for(N);
+
+    auto exp_host = Pool::inst().get(N, at::kByte, -1, true, raw);
+    auto exp_gpu = Pool::inst().get(N, at::kByte, dev_idx, false, raw);
+    int64_t sm_elems = (t.scalar_type()==at::kFloat) ? N * 3 : N;
+    auto sm = Pool::inst().get(sm_elems, at::kByte, dev_idx, false, raw);
+
+    auto ix = make_indexer<4>(t);
 
     if (t.scalar_type() == at::kFloat) {
         if (ix.is_contig)
@@ -343,7 +410,7 @@ std::vector<at::Tensor> pack_tensor(const at::Tensor& t, unsigned long long stre
                 t.data_ptr<float>(), ix,
                 exp_gpu.data_ptr<uint8_t>(),
                 sm.data_ptr<uint8_t>(), N);
-    } else {    // bf16
+    } else {
         if (ix.is_contig)
             pack_bf16_kernel_vec2<4><<<grid,256,0,raw>>>(
                 reinterpret_cast<const uint16_t*>(t.data_ptr<at::BFloat16>()),
@@ -357,19 +424,19 @@ std::vector<at::Tensor> pack_tensor(const at::Tensor& t, unsigned long long stre
                 exp_gpu.data_ptr<uint8_t>(),
                 sm.data_ptr<uint8_t>(), N);
     }
-    cudaError_t cpy_err = cudaMemcpyAsync(exp_host.data_ptr<uint8_t>(),
-                                          exp_gpu.data_ptr<uint8_t>(),
-                                          static_cast<size_t>(N),
-                                          cudaMemcpyDeviceToHost, raw);
-    TORCH_CHECK(cpy_err == cudaSuccess,
-                "cudaMemcpyAsync D2H failed: ", cudaGetErrorString(cpy_err));
-    // record_stream 防止 PyTorch caching allocator 在异步 memcpy 完成前回收
-    // exp_gpu 的底层显存:Pool::put 的 cudaEvent 守护的是"从池里再次取出"这条路径,
-    // record_stream 守护的是 Pool 在 bucket 满时 evict 后 allocator 自身的 free 路径。
-    // 两者都需要,勿删 record_stream。
+
+    cudaError_t err = cudaMemcpyAsync(
+        exp_host.data_ptr<uint8_t>(),
+        exp_gpu.data_ptr<uint8_t>(),
+        static_cast<size_t>(N),
+        cudaMemcpyDeviceToHost,
+        raw);
+    TORCH_CHECK(err == cudaSuccess, "cudaMemcpyAsync D2H failed: ",
+                cudaGetErrorString(err));
+
     exp_gpu.record_stream(s);
-    Pool::inst().put(std::move(exp_gpu), /*pinned=*/false, raw);
-    return {exp_host, sm};
+    sm.record_stream(s);
+    return {exp_host, sm, exp_gpu};
 }
 
 // util: 计算 offset+sizes,strides 需要的底层 storage 大小
@@ -411,19 +478,17 @@ at::Tensor unpack_tensor(at::Tensor exp,
         exp_dev_ptr = exp.data_ptr<uint8_t>();
     } else {
         TORCH_CHECK(exp.is_pinned(),
-                    "exp on CPU must be pinned for async H2D copy");
+                    "exp on CPU must be pinned for zero-copy");
 
-        const int64_t E = exp.numel();
-        auto exp_gpu = Pool::inst().get(E, at::kByte, dev_idx, /*pinned=*/false, raw);
-        cudaError_t err = cudaMemcpyAsync(exp_gpu.data_ptr<uint8_t>(),
-                                          exp.data_ptr<uint8_t>(),
-                                          static_cast<size_t>(E),
-                                          cudaMemcpyHostToDevice, raw);
-        TORCH_CHECK(err == cudaSuccess,
-                    "cudaMemcpyAsync H2D failed: ", cudaGetErrorString(err));
-        exp_gpu.record_stream(s);
-        exp_dev_ptr = exp_gpu.data_ptr<uint8_t>();
-        tmp_gpu_exp.emplace(std::move(exp_gpu));
+        cudaError_t err = cudaHostGetDevicePointer(
+                reinterpret_cast<void**>(&exp_dev_ptr),
+                exp.data_ptr(), 0);
+
+        if (err != cudaSuccess) {
+            tmp_gpu_exp.emplace(
+                exp.to(sm.device(), /*non_blocking=*/true));
+            exp_dev_ptr = tmp_gpu_exp->data_ptr<uint8_t>();
+        }
     }
     
     // allocate output tensor (原 stride)
@@ -476,6 +541,8 @@ at::Tensor unpack_tensor(at::Tensor exp,
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("split", &pack_tensor, "pack tensor -> (exp, sm)");
+    m.def("split_copy", &pack_tensor_copy,
+          "pack tensor using GPU exp staging + cudaMemcpyAsync D2H -> (exp_host, sm, exp_gpu)");
     m.def("merge", &unpack_tensor,
           "unpack (exp,sm,sizes,strides,offset,dtype,stream) -> tensor",
           py::arg("exp"), py::arg("sm"),
@@ -486,7 +553,8 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
             return Pool::inst().get(numel, dtype, -1, /*pinned=*/true, 0);
         });
     m.def("release_pin", [](at::Tensor t){
-            Pool::inst().put(std::move(t), /*pinned=*/true, 0);
+            cudaStream_t cur = c10::cuda::getCurrentCUDAStream().stream();
+            Pool::inst().put(std::move(t), /*pinned=*/true, cur);
         });
     m.def("release_cuda", [](at::Tensor t){
             cudaStream_t cur = c10::cuda::getCurrentCUDAStream().stream();

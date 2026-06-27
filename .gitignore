@@ -24,3 +24,11 @@ template_funcs.py
 
 # data files
 # assets/
+
+# MemRift data / logs / build artifacts (do not commit)
+memrift_weights/
+output/
+lm_eval_tasks/
+_run_*.log
+*.pickle
+**/*_ext.cpython-*.so

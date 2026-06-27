@@ -1,0 +1,15 @@
+# Aquila2-7B + MemRift mock data (no real data_path)
+
+defaults:
+  - aquila2_7b_lora_memrift
+
+data:
+  data_path: null
+  mock_data: true
+  split: 1,0,0
+  micro_batch_size: 1
+  global_batch_size: 8
+
+trainer:
+  train_iters: 5
+  lr_warmup_iters: 0

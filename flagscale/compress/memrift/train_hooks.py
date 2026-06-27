@@ -118,7 +118,7 @@ def inject_memrift_if_configured(
     compressed_weight_dir = getattr(args, "memrift_compressed_weight_dir", None)
     zstd_level = getattr(args, "memrift_zstd_level", 6)
     act_zstd_level = getattr(args, "memrift_act_zstd_level", 3)
-    prefetch_layers = getattr(args, "memrift_prefetch_layers", 4)
+    prefetch_layers = getattr(args, "memrift_prefetch_layers", 4) # 实际上未生效，在代码里是硬编码的
     weight_async = getattr(args, "memrift_weight_async", False)
     act_async = getattr(args, "memrift_act_async", True)
     decode_workers = getattr(args, "memrift_decode_pool_workers", 16)
@@ -182,7 +182,7 @@ def inject_memrift_if_configured(
             async_compressor = AsyncCompressor(
                 compress_workers=compress_workers,
                 decode_workers=decode_workers,
-                concurrency_limit=4,
+                concurrency_limit=4, # 完全硬编码这个参数了
                 # This compressor's level governs ONLY activation compression
                 # (weight prefetch is decompress-only). Use the activation level.
                 zstd_level=act_zstd_level,
@@ -292,6 +292,7 @@ def _inject_weight_compression(
             "linear_fc1": "mlp.linear_fc1",
             "linear_fc2": "mlp.linear_fc2",
         }
+        # 保留lora映射megatron的模块
         allowed_targets = {mg for k, mg in mapping.items() if k in lora_targets}
         if print_debug and rank == 0:
             print(f"[MemRift] LoRA target filter enabled: {sorted(allowed_targets)}")
