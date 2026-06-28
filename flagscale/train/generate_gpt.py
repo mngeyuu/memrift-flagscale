@@ -60,6 +60,16 @@ def _extra_args(parser):
         help="Maximum number of new tokens to generate.",
     )
     group.add_argument(
+        "--prompt-tokens", type=int, default=0,
+        help="If >0, build a synthetic prompt of exactly N tokens (ignores --prompt). "
+             "Used for max-context-length benchmarking.",
+    )
+    group.add_argument(
+        "--kv-quant-8bit", action="store_true",
+        help="Store the KV cache in int8 (per-token asymmetric, KIVI-style) to halve "
+             "KV memory and extend max context. Near-lossless.",
+    )
+    group.add_argument(
         "--temperature", type=float, default=1.0,
         help="Sampling temperature (1.0 = no scaling).",
     )
@@ -122,8 +132,16 @@ def generate(model, tokenizer, args):
     """
     device = torch.cuda.current_device()
 
-    # ── Tokenise prompt ──
-    prompt_tokens = tokenizer.tokenize(args.prompt)
+    # ── Build prompt (synthetic for benchmarking, or tokenise text) ──
+    if getattr(args, "prompt_tokens", 0) and args.prompt_tokens > 0:
+        # Synthetic prompt of exactly N tokens for max-context benchmarking.
+        # Use a fixed safe token id (avoids EOS / special tokens).
+        n = int(args.prompt_tokens)
+        safe_id = 100 % getattr(args, "padded_vocab_size", 32000)
+        prompt_tokens = [safe_id] * n
+        print_rank_0(f"[generate] synthetic prompt of {n} tokens (id={safe_id})")
+    else:
+        prompt_tokens = tokenizer.tokenize(args.prompt)
     if not prompt_tokens:
         print_rank_0("[generate] empty tokenisation, aborting")
         return
@@ -141,9 +159,12 @@ def generate(model, tokenizer, args):
     t_start = time.perf_counter()
 
     # ── Phase 1: Prefill ──
+    # attention_mask=None: let the flash/TE backend apply causal masking via the
+    # model's attn_mask_type + inference_context. Materializing an explicit
+    # [N, N] causal mask is O(N^2) memory (~32 GB at N=90k) and is the dominant
+    # long-context memory cost, so we avoid it entirely.
     pos_ids   = torch.arange(prompt_len, dtype=torch.long, device=device).unsqueeze(0)
-    attn_mask = _causal_mask(prompt_len, device)
-    logits = model(tokens, pos_ids, attn_mask, inference_context=ctx)
+    logits = model(tokens, pos_ids, None, inference_context=ctx, runtime_gather_output=True)
     # logits: [batch, seq_len, vocab]  (or last-token only in decode mode)
     next_id = _sample(logits[:, -1, :], args)           # [1, 1]
     tokens  = torch.cat([tokens, next_id], dim=-1)
@@ -157,9 +178,8 @@ def generate(model, tokenizer, args):
         cur_pos   = ctx.sequence_len_offset              # 0-indexed position of new token
         cur_tok   = tokens[:, -1:]                       # [1, 1]
         pos_single = torch.tensor([[cur_pos]], dtype=torch.long, device=device)
-        attn_single = _decode_mask(cur_pos + 1, device)  # attend to all previous + current
 
-        logits = model(cur_tok, pos_single, attn_single, inference_context=ctx)
+        logits = model(cur_tok, pos_single, None, inference_context=ctx, runtime_gather_output=True)
         next_id = _sample(logits[:, -1, :], args)
         tokens  = torch.cat([tokens, next_id], dim=-1)
         ctx.sequence_len_offset += 1
@@ -217,15 +237,21 @@ if __name__ == "__main__":
     tokenizer = get_tokenizer()
 
     # ── Build model ──
+    # NOTE: get_model() auto-injects the *training* MemRift hooks via
+    # inject_memrift_if_configured() when memrift_enable is set. For forward-only
+    # inference we want the inference-specific inject instead, so build the model
+    # with memrift_enable temporarily off to avoid a double-inject (which would
+    # load a second copy of the sign matrices and waste ~half the model in VRAM).
+    _memrift_enable_saved = getattr(args, "memrift_enable", False)
+    args.memrift_enable = False
     model_list = get_model(
         partial(model_provider, gpt_builder),
         ModelType.encoder_or_decoder,
         wrap_with_ddp=False,
     )
+    args.memrift_enable = _memrift_enable_saved
     model = model_list[0]
     model.eval()
-    torch.cuda.empty_cache()
-    torch.cuda.reset_peak_memory_stats()
 
     # ── Inject MemRift inference hooks ──
     if getattr(args, "memrift_enable", False):
@@ -233,6 +259,17 @@ if __name__ == "__main__":
         inject_memrift_for_inference(model, args)
     else:
         print_rank_0("[generate] MemRift disabled — running with full model in GPU")
+
+    # ── 8-bit KV cache (int8 KIVI-style) ──
+    if getattr(args, "kv_quant_8bit", False):
+        from flagscale.compress.memrift.kv_quant import install_int8_kv_cache
+        install_int8_kv_cache(print_debug=True)
+
+    # Reset peak AFTER inject so the reported peak reflects steady-state memory:
+    #   - MemRift : base weights freed -> peak = streamed layer + KV cache + activations
+    #   - Baseline: full weights resident -> peak includes them
+    torch.cuda.empty_cache()
+    torch.cuda.reset_peak_memory_stats()
 
     # ── Generate ──
     generate(model, tokenizer, args)
