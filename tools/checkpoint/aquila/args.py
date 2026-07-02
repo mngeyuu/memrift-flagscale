@@ -34,6 +34,9 @@ def load_args_hf2mg(args):
     args.seq_length = 4096
     args.global_batch_size = 1024
     args.iteration = 1  # '0', 'release' don't work
+    args.tokenizer_type = "HuggingFaceTokenizer"
+    args.tokenizer_path = args.load
+    args.tokenizer_model = args.load
     args.add_position_embedding = False
     args.group_query_attention = True
     args.normalization = "RMSNorm"

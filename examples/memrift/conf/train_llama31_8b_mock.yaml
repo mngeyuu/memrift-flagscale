@@ -1,16 +1,17 @@
-# Llama-3.1-8B MemRift train entry (mock data, memory compare).
-# See scripts/run_llama31_8b_memrift_vs_lora_output.sh
+# Llama-3.1-8B MemRift metric training entry.
+# The metric scripts override data_path to Alpaca and can switch between pure LoRA
+# and MemRift+LoRA with Hydra overrides.
 
 defaults:
   - train/llama31_8b_lora_memrift_mock
+  - _self_
 
 experiment:
-  # Disable torch third-party CUDA backend autoload (flagcx ABI mismatch on some nodes).
   envs:
     TORCH_DEVICE_BACKEND_AUTOLOAD: "0"
   cmds:
     before_start: export TORCH_DEVICE_BACKEND_AUTOLOAD=0
-  exp_name: memrift_llama31_8b
+  exp_name: memrift_metric_llama31_8b
   exp_dir: ./outputs/${experiment.exp_name}
   task:
     type: train

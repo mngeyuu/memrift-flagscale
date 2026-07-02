@@ -1,5 +1,5 @@
 from contextlib import contextmanager
-from typing import Optional, Set, Any
+from typing import Dict, List, Optional, Set, Any
 import functools
 import weakref
 
@@ -95,8 +95,38 @@ class DecoderLayerWrapper(nn.Module):
         self.do_empty = do_empty
         self.compress_activations = compress_activations
 
+        self.register_load_state_dict_pre_hook(self._load_state_dict_pre_hook)
         self.register_full_backward_pre_hook(self._bwd_pre_hook)
         self.register_full_backward_hook(self._bwd_hook)
+
+    def _load_state_dict_pre_hook(
+        self,
+        _module: nn.Module,
+        state_dict: Dict[str, Any],
+        prefix: str,
+        _local_metadata: Optional[dict],
+        _strict: bool,
+        _missing_keys: List[str],
+        _unexpected_keys: List[str],
+        _errors: List[Any],
+    ):
+        """Map checkpoint keys for the original layer into this wrapper's layer."""
+        layer_prefix = prefix + "layer."
+        streamed_weight_suffixes = (
+            "self_attention.linear_qkv.weight",
+            "self_attention.linear_proj.weight",
+            "mlp.linear_fc1.weight",
+            "mlp.linear_fc2.weight",
+        )
+        for key in list(state_dict.keys()):
+            if not key.startswith(prefix) or key.startswith(layer_prefix):
+                continue
+            suffix = key[len(prefix):]
+            if suffix.endswith(streamed_weight_suffixes):
+                continue
+            new_key = layer_prefix + suffix
+            if new_key not in state_dict:
+                state_dict[new_key] = state_dict[key]
 
     def forward(self, *inp, **kw):
         self.tokens.clear()

@@ -237,37 +237,14 @@ if __name__ == "__main__":
     tokenizer = get_tokenizer()
 
     # ── Build model ──
-    # NOTE: get_model() auto-injects the *training* MemRift hooks via
-    # inject_memrift_if_configured() when memrift_enable is set. For forward-only
-    # inference we want the inference-specific inject instead, so build the model
-    # with memrift_enable temporarily off to avoid a double-inject (which would
-    # load a second copy of the sign matrices and waste ~half the model in VRAM).
-    _memrift_enable_saved = getattr(args, "memrift_enable", False)
-    args.memrift_enable = False
     model_list = get_model(
         partial(model_provider, gpt_builder),
         ModelType.encoder_or_decoder,
         wrap_with_ddp=False,
     )
-    args.memrift_enable = _memrift_enable_saved
     model = model_list[0]
     model.eval()
 
-    # ── Inject MemRift inference hooks ──
-    if getattr(args, "memrift_enable", False):
-        from flagscale.compress.memrift.train_hooks import inject_memrift_for_inference
-        inject_memrift_for_inference(model, args)
-    else:
-        print_rank_0("[generate] MemRift disabled — running with full model in GPU")
-
-    # ── 8-bit KV cache (int8 KIVI-style) ──
-    if getattr(args, "kv_quant_8bit", False):
-        from flagscale.compress.memrift.kv_quant import install_int8_kv_cache
-        install_int8_kv_cache(print_debug=True)
-
-    # Reset peak AFTER inject so the reported peak reflects steady-state memory:
-    #   - MemRift : base weights freed -> peak = streamed layer + KV cache + activations
-    #   - Baseline: full weights resident -> peak includes them
     torch.cuda.empty_cache()
     torch.cuda.reset_peak_memory_stats()
 

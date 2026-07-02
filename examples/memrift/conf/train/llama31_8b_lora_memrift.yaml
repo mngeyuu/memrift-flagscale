@@ -1,6 +1,6 @@
-# Llama-3.1-8B LoRA + MemRift Training Configuration
+# Llama-3.1-8B LoRA + MemRift metric training configuration
 #
-# Demonstrates MemRift memory-efficient training on a large model:
+# Used by scripts/metrics/llama8b for the MemRift acceptance metrics:
 # - Frozen base weights loaded from compressed format
 # - LoRA adapters for fine-tuning
 # - On-demand weight materialization to save GPU memory
@@ -18,7 +18,8 @@
 #        --outdir ./memrift_weights/llama31_8b_level18 \
 #        --level 18
 #
-# 3. Update paths below
+# 3. Alpaca indexed dataset exists at the default data_path below, or override it
+#    from scripts/metrics with ALPACA_DATA_PATH.
 
 system:
   # ============================================
@@ -105,10 +106,11 @@ model:
   lora_dropout: 0.0
 
 data:
-  data_path: /path/to/data
+  data_path: /share/project/mengyc/data/alpaca_megatron/alpaca_text_document
+  mock_data: false
   split: 949,50,1
   micro_batch_size: 1
-  global_batch_size: 8
+  global_batch_size: 1
 
 trainer:
   train_iters: 1000

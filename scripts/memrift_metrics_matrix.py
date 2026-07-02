@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""MemRift metrics matrix: LoRA PPL/BoolQ/load + disk ratio -> JSONL. See examples/memrift/METRICS.md."""
+"""MemRift metrics matrix: LoRA PPL/BoolQ + disk ratio -> JSONL. See examples/memrift/METRICS.md."""
 from __future__ import annotations
-import argparse, gc, json, math, sys, time
+import argparse, gc, json, math, sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -53,30 +53,6 @@ def build_peft_model(hf_path, lora_r, lora_alpha, device, trust_remote_code=True
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
     return model, tok
-
-def measure_load_time_peft(hf_path, lora_r, lora_alpha, device, trust_remote_code=True):
-    import torch
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
-        torch.cuda.reset_peak_memory_stats()
-    t0 = time.perf_counter()
-    model, _ = build_peft_model(hf_path, lora_r, lora_alpha, device, trust_remote_code)
-    if torch.cuda.is_available() and str(device).startswith("cuda"):
-        torch.cuda.synchronize()
-    dev = next(model.parameters()).device
-    v = getattr(model.config, "vocab_size", 32000)
-    ids = torch.randint(0, min(v, 50000), (1, 32), device=dev, dtype=torch.long)
-    with torch.no_grad():
-        model(ids)
-    if torch.cuda.is_available() and str(device).startswith("cuda"):
-        torch.cuda.synchronize()
-    t1 = time.perf_counter()
-    peak = torch.cuda.max_memory_allocated() / (1024**3) if torch.cuda.is_available() else None
-    del model, _
-    gc.collect()
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
-    return {"load_to_first_forward_s": t1 - t0, "peak_mem_gb_during_load": peak}
 
 def ppl_wikitext(model, tokenizer, device, max_length, max_samples):
     try:
@@ -145,17 +121,11 @@ def run_one(spec, args, outp):
         f.write(json.dumps({**rb, "branch": "disk", "compressed_dir": str(spec.comp_dir), "compressed_bytes": cb, "bf16_meta_bytes": bf, "r_compressed_over_bf16": r, "comp_dir_has_index": (spec.comp_dir / "index.json").is_file()}, ensure_ascii=False) + "\n")
     if args.skip_lora_eval:
         return
-    try:
-        lt = measure_load_time_peft(spec.hf_path, args.lora_r, args.lora_alpha, device, args.trust_remote_code)
-    except Exception as e:
-        with outp.open("a", encoding="utf-8") as f:
-            f.write(json.dumps({**rb, "branch": "lora", "error": str(e)}, ensure_ascii=False) + "\n")
-        return
     model, tok = build_peft_model(spec.hf_path, args.lora_r, args.lora_alpha, device, args.trust_remote_code)
     ppl = ppl_wikitext(model, tok, device, args.ppl_max_length, args.ppl_max_samples) if not args.skip_ppl else None
     bq = boolq_accuracy(model, tok, device, args.boolq_max_samples) if not args.skip_boolq else None
     with outp.open("a", encoding="utf-8") as f:
-        f.write(json.dumps({**rb, "branch": "lora", **lt, "ppl_wikitext2": ppl, "boolq_acc": bq, "ppl_dataset": "wikitext-2-raw-v1", "ppl_max_samples": args.ppl_max_samples, "ppl_max_length": args.ppl_max_length}, ensure_ascii=False) + "\n")
+        f.write(json.dumps({**rb, "branch": "lora", "ppl_wikitext2": ppl, "boolq_acc": bq, "ppl_dataset": "wikitext-2-raw-v1", "ppl_max_samples": args.ppl_max_samples, "ppl_max_length": args.ppl_max_length}, ensure_ascii=False) + "\n")
     del model, tok
     gc.collect()
     if torch.cuda.is_available():

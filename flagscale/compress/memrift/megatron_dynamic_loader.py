@@ -278,7 +278,7 @@ class MergedWeightGroup:
     Group of CompressedParams that need to be merged into one Megatron weight.
     
     For TP=1:
-    - qkv: concat(q, k, v) along dim 0
+    - qkv: grouped Megatron order, e.g. q_head(s), k, v per query group
     - fc1: concat(gate, up) along dim 0
     """
     megatron_target: str  # e.g., 'self_attention.linear_qkv'
@@ -287,6 +287,11 @@ class MergedWeightGroup:
     target_module: Optional[nn.Module] = None
     target_attr: str = "weight"
     target_shape: Optional[Tuple[int, ...]] = None
+    num_attention_heads: Optional[int] = None
+    num_query_groups: Optional[int] = None
+    hidden_size: Optional[int] = None
+    kv_channels: Optional[int] = None
+    group_query_attention: bool = False
     
     def is_complete(self) -> bool:
         """Check if all components are present."""
@@ -312,12 +317,100 @@ class MergedWeightGroup:
         else:
             # Single weight
             cp = list(self.components.values())[0]
-            return cp.orig_shape
+        return cp.orig_shape
 
 
 def get_group_by_tensor_ptr(ptr: int) -> Optional[MergedWeightGroup]:
     """Lookup merged weight group by currently materialized tensor ptr."""
     return _PTR2GROUP.get(int(ptr))
+
+
+def _expand_qkv_to_target_rows(
+    q: torch.Tensor,
+    k: torch.Tensor,
+    v: torch.Tensor,
+    target_rows: Optional[int],
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Expand K/V rows when the Megatron target is dense QKV but HF stores GQA K/V."""
+    if target_rows is None:
+        return q, k, v
+
+    merged_rows = int(q.shape[0] + k.shape[0] + v.shape[0])
+    if merged_rows == target_rows:
+        return q, k, v
+
+    q_rows = int(q.shape[0])
+    kv_rows_total = target_rows - q_rows
+    if kv_rows_total <= 0 or kv_rows_total % 2 != 0:
+        raise RuntimeError(
+            f"QKV row mismatch cannot be adapted: target_rows={target_rows}, "
+            f"q={q.shape[0]}, k={k.shape[0]}, v={v.shape[0]}"
+        )
+
+    expect_k_rows = kv_rows_total // 2
+    expect_v_rows = kv_rows_total // 2
+    rk_ok = (expect_k_rows % int(k.shape[0]) == 0)
+    rv_ok = (expect_v_rows % int(v.shape[0]) == 0)
+    if not (rk_ok and rv_ok):
+        raise RuntimeError(
+            f"QKV row mismatch cannot be adapted: target_rows={target_rows}, "
+            f"q={q.shape[0]}, k={k.shape[0]}, v={v.shape[0]}"
+        )
+
+    rk = expect_k_rows // int(k.shape[0])
+    rv = expect_v_rows // int(v.shape[0])
+    if rk > 1:
+        k = k.repeat_interleave(rk, dim=0)
+    if rv > 1:
+        v = v.repeat_interleave(rv, dim=0)
+    return q, k, v
+
+
+def _materialize_qkv_megatron_order(
+    group: MergedWeightGroup,
+    q: torch.Tensor,
+    k: torch.Tensor,
+    v: torch.Tensor,
+) -> torch.Tensor:
+    """Assemble HF q/k/v tensors into Megatron-Core linear_qkv row order."""
+    hidden_size = int(group.hidden_size or q.shape[1])
+    num_attention_heads = int(group.num_attention_heads or 0)
+    if num_attention_heads <= 0:
+        raise RuntimeError(
+            "MemRift QKV materialization needs num_attention_heads to match Megatron order"
+        )
+
+    kv_channels = int(group.kv_channels or (hidden_size // num_attention_heads))
+    if kv_channels <= 0:
+        raise RuntimeError(
+            f"Invalid kv_channels={kv_channels} for hidden_size={hidden_size}, "
+            f"num_attention_heads={num_attention_heads}"
+        )
+
+    configured_query_groups = int(group.num_query_groups or num_attention_heads)
+    effective_gqa = bool(group.group_query_attention) or (
+        configured_query_groups != num_attention_heads
+    )
+    num_query_groups = configured_query_groups if effective_gqa else num_attention_heads
+
+    target_rows = None
+    if group.target_shape is not None and len(group.target_shape) >= 1:
+        target_rows = int(group.target_shape[0])
+    q, k, v = _expand_qkv_to_target_rows(q, k, v, target_rows)
+
+    try:
+        q = q.reshape((num_query_groups, -1, kv_channels, hidden_size))
+        k = k.reshape((num_query_groups, -1, kv_channels, hidden_size))
+        v = v.reshape((num_query_groups, -1, kv_channels, hidden_size))
+    except RuntimeError as exc:
+        raise RuntimeError(
+            "Failed to reshape QKV into Megatron grouped order: "
+            f"ng={num_query_groups}, nh={num_attention_heads}, "
+            f"kv_channels={kv_channels}, hidden_size={hidden_size}, "
+            f"q={tuple(q.shape)}, k={tuple(k.shape)}, v={tuple(v.shape)}"
+        ) from exc
+
+    return torch.cat([q, k, v], dim=1).reshape((-1, hidden_size))
 
 
 def _materialize_group_tensor(group: MergedWeightGroup, sync: bool = True) -> torch.Tensor:
@@ -341,11 +434,6 @@ def _materialize_group_tensor(group: MergedWeightGroup, sync: bool = True) -> to
             return _param.data
 
     if "linear_qkv" in group.megatron_target:
-        # Shard mode: QKV already merged into a single tensor.
-        single_cp = group.components.get("single")
-        if single_cp is not None:
-            return single_cp.materialize(sync=sync)
-
         q_cp = group.components.get("q")
         k_cp = group.components.get("k")
         v_cp = group.components.get("v")
@@ -365,36 +453,7 @@ def _materialize_group_tensor(group: MergedWeightGroup, sync: bool = True) -> to
             for _cp in (q_cp, k_cp, v_cp):
                 if _cp._CtoD_evt is not None:
                     cur.wait_event(_cp._CtoD_evt)
-        # Some HF checkpoints use GQA-style QKV shapes (e.g. q=H, k=v=H/8),
-        # while Megatron target may expect dense-style (q=k=v=H) when
-        # group_query_attention is disabled. If target shape is known and rows
-        # mismatch, expand K/V rows to match target before concatenation.
-        target_rows = None
-        if group.target_shape is not None and len(group.target_shape) >= 1:
-            target_rows = int(group.target_shape[0])
-        if target_rows is not None:
-            merged_rows = int(q.shape[0] + k.shape[0] + v.shape[0])
-            if merged_rows != target_rows:
-                q_rows = int(q.shape[0])
-                kv_rows_total = target_rows - q_rows
-                if kv_rows_total > 0 and kv_rows_total % 2 == 0:
-                    expect_k_rows = kv_rows_total // 2
-                    expect_v_rows = kv_rows_total // 2
-                    rk_ok = (expect_k_rows % int(k.shape[0]) == 0)
-                    rv_ok = (expect_v_rows % int(v.shape[0]) == 0)
-                    if rk_ok and rv_ok:
-                        rk = expect_k_rows // int(k.shape[0])
-                        rv = expect_v_rows // int(v.shape[0])
-                        if rk > 1:
-                            k = k.repeat_interleave(rk, dim=0)
-                        if rv > 1:
-                            v = v.repeat_interleave(rv, dim=0)
-                    else:
-                        raise RuntimeError(
-                            f"QKV row mismatch cannot be adapted: target_rows={target_rows}, "
-                            f"q={q.shape[0]}, k={k.shape[0]}, v={v.shape[0]}"
-                        )
-        merged = torch.cat([q, k, v], dim=0)
+        merged = _materialize_qkv_megatron_order(group, q, k, v)
         # Release component tensors immediately to avoid 2x peak memory.
         q_cp.release()
         k_cp.release()
@@ -402,11 +461,6 @@ def _materialize_group_tensor(group: MergedWeightGroup, sync: bool = True) -> to
         return merged
 
     if "linear_fc1" in group.megatron_target:
-        # Shard mode: gate+up already merged into a single tensor.
-        single_cp = group.components.get("single")
-        if single_cp is not None:
-            return single_cp.materialize(sync=sync)
-
         gate_cp = group.components.get("gate")
         up_cp = group.components.get("up")
         if gate_cp is None or up_cp is None:
@@ -534,7 +588,7 @@ def unpack_weight_for_backward(group: "MergedWeightGroup") -> torch.Tensor:
 
 class MegatronDynamicLoader:
     """
-    Dynamic weight loader for Megatron models (TP=1 only).
+    Dynamic weight loader for single-GPU Megatron training.
 
     Key features:
     1. HF -> Megatron name mapping
@@ -613,60 +667,42 @@ class MegatronDynamicLoader:
         model: nn.Module,
         comp_dir: str,
         device: torch.device,
-        tp_rank: int = 0,
-        tp_size: int = 1,
-        pp_rank: int = 0,
-        pp_size: int = 1,
-        total_layers: Optional[int] = None,
         prefetch_layers: int = 1,
         print_debug: bool = False,
         allowed_targets: Optional[Set[str]] = None,
+        num_attention_heads: Optional[int] = None,
+        num_query_groups: Optional[int] = None,
+        hidden_size: Optional[int] = None,
+        kv_channels: Optional[int] = None,
+        group_query_attention: bool = False,
     ):
         """
         Initialize the loader.
 
         Args:
             model: Megatron model (unwrapped, should be the decoder/GPTModel)
-            comp_dir: Base path to compressed weights directory.
-                      For multi-GPU: comp_dir/tp{N}_pp{M}/ is used when it exists.
-                      Falls back to comp_dir/tp{N}/ then comp_dir/ (single-GPU legacy).
+            comp_dir: Path to a single-GPU compressed weights directory.
             device: Target CUDA device
-            tp_rank: Tensor parallel rank of this process
-            tp_size: Tensor parallel world size
-            pp_rank: Pipeline parallel rank of this process
-            pp_size: Pipeline parallel world size
-            total_layers: Total number of transformer layers in the full model
-                          (used to compute PP layer offset).  Required when pp_size > 1.
             prefetch_layers: Number of layers to prefetch ahead
             print_debug: Print debug messages
             allowed_targets: Optional Megatron target filter.
+            num_attention_heads/num_query_groups/hidden_size/kv_channels:
+                Model shape metadata needed to materialize HF Q/K/V tensors in
+                Megatron-Core linear_qkv order.
         """
         self.model = model
         self.comp_dir = comp_dir
         self.device = device
-        self.tp_rank = tp_rank
-        self.tp_size = tp_size
-        self.pp_rank = pp_rank
-        self.pp_size = pp_size
-        self.total_layers = total_layers
         self.prefetch_layers = prefetch_layers
         self.print_debug = print_debug
         self.allowed_targets = allowed_targets
+        self.num_attention_heads = num_attention_heads
+        self.num_query_groups = num_query_groups
+        self.hidden_size = hidden_size
+        self.kv_channels = kv_channels
+        self.group_query_attention = group_query_attention
 
-        # PP layer offset: local layer i on this rank = global layer (pp_offset + i)
-        if pp_size > 1 and total_layers is not None:
-            self.pp_layer_offset = pp_rank * (total_layers // pp_size)
-        else:
-            self.pp_layer_offset = 0
-
-        # Resolve effective compressed-weight directory for this TP/PP rank
-        from flagscale.compress.memrift.parallel_state_utils import resolve_comp_dir
-        self._effective_comp_dir = resolve_comp_dir(comp_dir, tp_rank, pp_rank)
-
-        # Detect shard mode: index uses Megatron-format names (already merged & sharded)
-        from flagscale.compress.memrift.parallel_state_utils import is_shard_index
-        _idx_path = os.path.join(self._effective_comp_dir, "index.json")
-        self._shard_mode: bool = is_shard_index(_idx_path)
+        _idx_path = os.path.join(comp_dir, "index.json")
 
         # Relax hook-side hard sync to reduce main-thread stalls.
         strict_sync = os.environ.get("MEMRIFT_WEIGHT_SYNC", "0") == "1"
@@ -679,12 +715,7 @@ class MegatronDynamicLoader:
             self.index = json.load(f)
 
         if print_debug:
-            mode = "shard" if self._shard_mode else "HF"
-            print(
-                f"[MemRift] Init: tp={tp_rank}/{tp_size} pp={pp_rank}/{pp_size} "
-                f"offset={self.pp_layer_offset} mode={mode} "
-                f"dir={self._effective_comp_dir}"
-            )
+            print(f"[MemRift] Init: single_gpu mode=HF dir={comp_dir}")
 
         # Data structures
         self.num_layers = 0
@@ -749,28 +780,13 @@ class MegatronDynamicLoader:
         """
         Load compressed weights from disk and organize into MergedWeightGroups.
 
-        Shard mode  (comp_dir/tp{N}_pp{M}/index.json):
-          - Names are Megatron-format: "decoder.layers.{i}.self_attention.linear_qkv.weight"
-          - Weights are already merged (QKV cat'd, FC1 gate+up cat'd) and TP-sharded.
-          - Layer indices are LOCAL to this PP rank (0 … L/PP-1).
-          - No HF→Megatron mapping needed.
-
-        HF mode (legacy, comp_dir/index.json):
-          - Names are HuggingFace-format: "model.layers.{i}.self_attn.q_proj.weight"
-          - QKV and FC1 components loaded separately and merged at materialize time.
-          - TP=1, PP=1 only.
+        The compressed directory uses HuggingFace-format names:
+        "model.layers.{i}.self_attn.q_proj.weight". QKV and FC1 components are
+        loaded separately and merged at materialize time.
         """
         if self.print_debug:
-            print(f"[MemRift] Loading weights from {self._effective_comp_dir} "
-                  f"(shard_mode={self._shard_mode})")
+            print(f"[MemRift] Loading weights from {self.comp_dir}")
 
-        if self._shard_mode:
-            self._load_weights_shard_mode()
-        else:
-            self._load_weights_hf_mode()
-
-    def _load_weights_hf_mode(self):
-        """HF-mode loading: legacy single-GPU path with HF→Megatron name mapping."""
         # First pass: count layers
         for entry in self.index:
             layer_idx = self._get_layer_idx(entry["name"])
@@ -790,7 +806,7 @@ class MegatronDynamicLoader:
             layer_idx = self._get_layer_idx(hf_name)
             megatron_target, merge_key = self._map_hf_to_megatron(hf_name)
 
-            file_path = os.path.join(self._effective_comp_dir, entry["file"])
+            file_path = os.path.join(self.comp_dir, entry["file"])
             cp = self._read_compressed_file(file_path, entry)
             cp.hf_name = hf_name
             cp.megatron_target = megatron_target or ""
@@ -804,6 +820,11 @@ class MegatronDynamicLoader:
                     self.merged_groups[layer_idx][megatron_target] = MergedWeightGroup(
                         megatron_target=megatron_target,
                         layer_idx=layer_idx,
+                        num_attention_heads=self.num_attention_heads,
+                        num_query_groups=self.num_query_groups,
+                        hidden_size=self.hidden_size,
+                        kv_channels=self.kv_channels,
+                        group_query_attention=self.group_query_attention,
                     )
                 group = self.merged_groups[layer_idx][megatron_target]
                 group.components[merge_key if merge_key else "single"] = cp
@@ -826,77 +847,7 @@ class MegatronDynamicLoader:
                           f"/ {target}, missing: {missing}")
 
         if self.print_debug:
-            print(f"[MemRift] Loaded {len(self.all_cps)} compressed params (HF mode)")
-
-    def _load_weights_shard_mode(self):
-        """
-        Shard-mode loading: Megatron-format names, weights already merged & TP-sharded.
-
-        Name format: "decoder.layers.{local_i}.{megatron_target}.weight"
-        e.g.  "decoder.layers.0.self_attention.linear_qkv.weight"
-              "decoder.layers.0.mlp.linear_fc1.weight"
-
-        Each entry is a single 'single'-component MergedWeightGroup — no merging needed.
-        """
-        # First pass: count local layers on this PP rank
-        for entry in self.index:
-            layer_idx = self._get_layer_idx(entry["name"])
-            if layer_idx is not None:
-                self.num_layers = max(self.num_layers, layer_idx + 1)
-
-        self.layer_names = [f"decoder.layers.{i}" for i in range(self.num_layers)]
-
-        if self.print_debug:
-            print(f"[MemRift] Shard mode: {self.num_layers} local layers "
-                  f"(global offset {self.pp_layer_offset})")
-
-        for entry in self.index:
-            if entry["scheme"] != "split_zstd":
-                continue
-
-            param_name = entry["name"]  # Megatron-format
-            layer_idx = self._get_layer_idx(param_name)
-
-            file_path = os.path.join(self._effective_comp_dir, entry["file"])
-            cp = self._read_compressed_file(file_path, entry)
-            cp.hf_name = param_name   # reuse hf_name field for storage
-            cp.layer_idx = layer_idx if layer_idx is not None else -1
-
-            self.all_cps.append(cp)
-
-            if layer_idx is not None:
-                # Extract megatron_target: everything between "decoder.layers.{i}."
-                # and ".weight" (or end of string)
-                prefix = f"decoder.layers.{layer_idx}."
-                if param_name.startswith(prefix):
-                    remainder = param_name[len(prefix):]
-                    # Strip trailing ".weight" or ".bias"
-                    for suffix in (".weight", ".bias"):
-                        if remainder.endswith(suffix):
-                            remainder = remainder[: -len(suffix)]
-                            break
-                    megatron_target = remainder
-                else:
-                    megatron_target = param_name
-
-                cp.megatron_target = megatron_target
-                cp.merge_key = None
-
-                if megatron_target not in self.merged_groups[layer_idx]:
-                    self.merged_groups[layer_idx][megatron_target] = MergedWeightGroup(
-                        megatron_target=megatron_target,
-                        layer_idx=layer_idx,
-                    )
-                self.merged_groups[layer_idx][megatron_target].components["single"] = cp
-
-                if self.print_debug:
-                    print(f"[MemRift] Shard {param_name} → layer {layer_idx} / {megatron_target}")
-            else:
-                # Non-layer param (embed, norm, lm_head)
-                self.non_layer_cps.append(cp)
-
-        if self.print_debug:
-            print(f"[MemRift] Loaded {len(self.all_cps)} compressed params (shard mode)")
+            print(f"[MemRift] Loaded {len(self.all_cps)} compressed params")
 
     def _read_compressed_file(self, file_path: str, entry: dict) -> "CompressedParam":
         """Read one split_zstd file and return an unbound CompressedParam."""
@@ -913,12 +864,7 @@ class MegatronDynamicLoader:
         """
         Build mapping from MergedWeightGroup to actual model parameters.
 
-        In shard mode the index uses LOCAL layer indices (0 … L/PP-1) which map
-        directly to decoder_layers[i] on this PP rank.  No offset translation
-        is needed inside this method — the index was generated against the same
-        local model.
-
-        In HF mode (TP=1, PP=1) behaviour is identical to the original.
+        Layer indices are single-GPU HF indices and map directly to decoder_layers.
         """
         if self.print_debug:
             print("[MemRift] Building param mapping...")
@@ -929,8 +875,10 @@ class MegatronDynamicLoader:
             if hasattr(module, "layers") and isinstance(module.layers, nn.ModuleList):
                 decoder_layers = module.layers
                 if self.print_debug:
-                    print(f"[MemRift] Found decoder layers at: {name}.layers "
-                          f"({len(decoder_layers)} layers on this PP rank)")
+                    print(
+                        f"[MemRift] Found decoder layers at: {name}.layers "
+                        f"({len(decoder_layers)} layers)"
+                    )
                 break
 
         if decoder_layers is None:
@@ -1521,99 +1469,6 @@ class MegatronDynamicLoader:
         
         if self.print_debug:
             print(f"[MemRift] Installed hooks for {len(self.layer_names)} layers")
-
-    def install_inference_hooks(self, async_compressor=None):
-        """
-        Forward-only hooks for inference (no backward pass, no activation compression).
-
-        Weight lifecycle per token:
-          forward_pre  → decompress current layer (consumes prefetch future or sync),
-                         write to param.data, submit prefetch for next layer
-          forward_post → release current layer (GPU memory freed immediately)
-
-        GPU peak: ~1 layer resident at a time (~400 MB for Mistral-7B), identical
-        to the training forward pattern but without backward re-materialization.
-        """
-        self.async_compressor = async_compressor
-
-        # ── find layer modules (same logic as install_hooks) ──
-        name2layer = {}
-        for name, module in self.model.named_modules():
-            name2layer[name] = module
-
-        decoder_layers = None
-        if hasattr(self.model, "decoder") and hasattr(self.model.decoder, "layers"):
-            decoder_layers = self.model.decoder.layers
-        elif hasattr(self.model, "language_model") and hasattr(self.model.language_model, "decoder"):
-            decoder_layers = self.model.language_model.decoder.layers
-
-        if decoder_layers is not None:
-            for i, layer in enumerate(decoder_layers):
-                name2layer[f"decoder.layers.{i}"] = layer
-
-        if self.print_debug:
-            found = [n for n in self.layer_names if n in name2layer]
-            print(f"[MemRift] install_inference_hooks: found {len(found)}/{len(self.layer_names)} layers")
-
-        # ── forward hooks only (no backward hooks) ──
-        for i in range(len(self.layer_names)):
-            cur = self.layer_names[i]
-            span = 1
-            nxt_names = self.layer_names[i + 1 : min(len(self.layer_names), i + 1 + span)]
-
-            if cur not in name2layer:
-                continue
-
-            layer_module = name2layer[cur]
-            cur_groups = self.layer2groups.get(cur, [])
-            nxt_groups_list = [self.layer2groups.get(nm, []) for nm in nxt_names]
-
-            def make_fwd_pre_infer(cur_groups, nxt_groups_list, cur_name, async_comp):
-                def _hook(mod, inp):
-                    t0 = time.perf_counter()
-                    _trace(f"infer fwd_pre: layer={cur_name}")
-
-                    # 1) Submit prefetch for next layer before materializing current,
-                    #    so CPU decompression overlaps with GPU compute.
-                    if async_comp and nxt_groups_list:
-                        for nxt_groups in nxt_groups_list:
-                            for group in nxt_groups:
-                                for cp in group.components.values():
-                                    if cp._bf16 is None and cp._prefetch_future is None:
-                                        cp._prefetch_future = async_comp.materialize_async(
-                                            cp.exp_mv, cp._sm_gpu, cp.orig_shape, cp._dtype
-                                        )
-
-                    # 2) Materialize current layer (consume prefetch or sync decompress).
-                    for group in cur_groups:
-                        weight = self._materialize_group(
-                            group, sync=self._hook_materialize_sync
-                        )
-                        self._set_param(group, weight)
-
-                    hook_ms = (time.perf_counter() - t0) * 1000.0
-                    if hook_ms > self._hook_warn_ms:
-                        _trace(f"WARN infer fwd_pre: slow {hook_ms:.1f} ms (layer={cur_name})")
-                return _hook
-
-            def make_fwd_post_infer(cur_groups):
-                def _hook(mod, inp, out):
-                    # Release current layer immediately — next token's forward_pre
-                    # will re-materialize (or consume the prefetch future).
-                    for group in cur_groups:
-                        self._clear_param(group)
-                return _hook
-
-            layer_module.register_forward_pre_hook(
-                make_fwd_pre_infer(cur_groups, nxt_groups_list, cur, async_compressor)
-            )
-            layer_module.register_forward_hook(
-                make_fwd_post_infer(cur_groups)
-            )
-            # No backward hooks registered.
-
-        if self.print_debug:
-            print(f"[MemRift] Installed inference-only hooks for {len(self.layer_names)} layers")
 
     def reset(self):
         if self.async_compressor is not None:

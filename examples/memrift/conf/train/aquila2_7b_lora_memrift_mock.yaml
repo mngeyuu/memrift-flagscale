@@ -1,15 +1,20 @@
-# Aquila2-7B + MemRift mock data (no real data_path)
+# Aquila2-7B + MemRift metric defaults.
+# Metrics override this file to use Alpaca, single GPU, and async weight+activation
+# compression. Kept under the historical *_mock config name for compatibility with
+# scripts/metrics/aquila/model_env.sh.
 
 defaults:
   - aquila2_7b_lora_memrift
+  - _self_
 
 data:
-  data_path: null
-  mock_data: true
+  data_path: /share/project/mengyc/data/alpaca_megatron/alpaca_text_document
+  mock_data: false
   split: 1,0,0
   micro_batch_size: 1
-  global_batch_size: 8
+  global_batch_size: 1
 
 trainer:
   train_iters: 5
+  eval_iters: 0
   lr_warmup_iters: 0

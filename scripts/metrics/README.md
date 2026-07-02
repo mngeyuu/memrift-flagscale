@@ -13,7 +13,7 @@ Each model directory has the same four scripts:
 - `accuracy_loss.sh`: checks MemRift+LoRA loss degradation against pure LoRA.
 - `compression_ratio.sh`: checks compressed weight size against BF16 reference size.
 - `train_context_gain.sh`: checks training context length gain against pure LoRA.
-- `load_time_reduction.sh`: checks inference model-load time reduction.
+- `load_time_reduction.sh`: checks inference weight disk-read time reduction.
 
 All training scripts are single-GPU and use MemRift weight + activation async mode:
 
@@ -51,7 +51,7 @@ ALPACA_DATA_PATH=/path/to/alpaca_text_document bash scripts/metrics/llama8b/accu
 LLaMA 8B defaults:
 
 ```bash
-MODEL_PATH=/share/project/mengyc/models/Meta-Llama-3-8B-Instruct
+MODEL_PATH=/share/project/mengyc/models/Llama-3.1-8B
 MEMRIFT_WEIGHT_DIR=/share/project/mengyc/code/memrift-flagscale/memrift_weights/llama31_8b_level18
 CONFIG_NAME=train_llama31_8b_mock
 ```
@@ -66,12 +66,50 @@ CONFIG_NAME=train_aquila2_7b_mock
 
 Override any of these as environment variables.
 
+If `MEMRIFT_WEIGHT_DIR/index.json` is missing, the LLaMA 8B metric scripts prepare
+compressed weights automatically into:
+
+```bash
+/share/project/mengyc/code/memrift-flagscale/memrift_weights/llama31_8b_level18
+```
+
+The command used by the scripts is:
+
+```bash
+python3 -m flagscale.compress.memrift.offline_comp.prepare_weight \
+  --model "$MODEL_PATH" \
+  --outdir "$MEMRIFT_WEIGHT_DIR" \
+  --level "${MEMRIFT_PREPARE_LEVEL:-18}"
+```
+
+Set `PREPARE_MEMRIFT_WEIGHTS=0` to fail instead of preparing weights. The default
+LLaMA 8B model path is:
+
+```bash
+/share/project/mengyc/models/Llama-3.1-8B
+```
+
 ## Run
 
 Run LLaMA 8B metrics:
 
 ```bash
 cd /share/project/mengyc/code/memrift-flagscale
+CUDA_VISIBLE_DEVICES=0 bash scripts/metrics/llama8b/run_all_metrics.sh
+```
+
+For the context-length metric, the default search cap is `8192`. If both pure LoRA
+and MemRift reach that cap, the result is cap-limited and does not prove the real
+maximum context boundary. Raise the cap to test the `>= 20%` gain criterion:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 CONTEXT_SEARCH_CAP=12288 \
+  bash scripts/metrics/llama8b/train_context_gain.sh
+```
+
+Or run them individually:
+
+```bash
 CUDA_VISIBLE_DEVICES=0 bash scripts/metrics/llama8b/accuracy_loss.sh
 CUDA_VISIBLE_DEVICES=0 bash scripts/metrics/llama8b/compression_ratio.sh
 CUDA_VISIBLE_DEVICES=0 bash scripts/metrics/llama8b/train_context_gain.sh
@@ -126,6 +164,8 @@ The current pass/fail criteria are:
 - Accuracy loss: relative final-loss degradation `<= 1%`.
 - Compression ratio: storage saving `>= 30%` versus BF16 reference bytes.
 - Training context gain: MemRift context length `>= 20%` longer than pure LoRA baseline.
-- Load-time reduction: MemRift compressed-weight load time `>= 30%` lower than baseline model load-to-first-forward time.
+- Load-time reduction: MemRift compressed-weight disk read time `>= 30%`
+  lower than baseline raw model weight disk read time. This script reads weight
+  files only; it does not instantiate the model or run first forward.
 
 These criteria map directly to `zhibiao.md`.

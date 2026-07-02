@@ -10,6 +10,8 @@ setup_common_env
 # shellcheck source=model_env.sh
 source "$SCRIPT_DIR/model_env.sh"
 
+ensure_memrift_weights "$MODEL_PATH" "$MEMRIFT_WEIGHT_DIR" "$MEMRIFT_PREPARE_LEVEL"
+
 METRIC_DIR="$OUT_ROOT/accuracy_loss"
 BASE_DIR="$METRIC_DIR/pure_lora"
 MEM_DIR="$METRIC_DIR/memrift_weight_act_async"

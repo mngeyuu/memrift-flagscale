@@ -1,9 +1,12 @@
-# Aquila2-7B LoRA + MemRift Training Configuration
-# MemRift v1 只支持 TP=1
+# Aquila2-7B LoRA + MemRift metric training configuration.
+# Used by scripts/metrics/aquila for the MemRift acceptance metrics.
+# MemRift only supports single-GPU training in this tree.
 #
 # Prerequisites:
 # 1. 模型路径: /share/project/mengyc/models/Aquila2-7B
 # 2. 压缩权重: ./memrift_weights/aquila2_7b_level18
+# 3. Alpaca indexed dataset exists at the default data_path below, or override it
+#    from scripts/metrics with ALPACA_DATA_PATH.
 
 system:
   tensor_model_parallel_size: 1
@@ -48,7 +51,7 @@ model:
   num_attention_heads: 32
   num_query_groups: 32
   seq_length: 2048
-  max_position_embeddings: 4096
+  max_position_embeddings: 8192
 
   tokenizer_type: HuggingFaceTokenizer
   tokenizer_path: /share/project/mengyc/models/Aquila2-7B
@@ -57,7 +60,7 @@ model:
 
   norm_init_weight: 1.0
   use_rotary_position_embeddings: true
-  rotary_base: 10000
+  rotary_base: 1000000
   no_position_embedding: true
   normalization: RMSNorm
   norm_epsilon: 1e-5
@@ -81,10 +84,11 @@ model:
   lora_dropout: 0.0
 
 data:
-  data_path: /path/to/data
+  data_path: /share/project/mengyc/data/alpaca_megatron/alpaca_text_document
+  mock_data: false
   split: 949,50,1
   micro_batch_size: 1
-  global_batch_size: 8
+  global_batch_size: 1
 
 trainer:
   train_iters: 5

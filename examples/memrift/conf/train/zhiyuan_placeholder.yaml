@@ -1,4 +1,0 @@
-# Placeholder for Zhiyuan self-developed models (same pattern as other memrift train/*.yaml).
-# zhiyuan_model_1:
-#   hf_path: /path/to/checkpoint
-#   memrift_compressed_weight_dir: ./memrift_weights/zhiyuan_1_level18

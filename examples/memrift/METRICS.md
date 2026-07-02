@@ -1,6 +1,16 @@
-# MemRift 四模型评测指标定义（执行用）
+# MemRift 指标评测配置说明
 
-本文档与计划「MemRift 四模型指标评测」对齐，作为验收口径与跑数说明。
+本文档说明 `examples/memrift` 下保留的 YAML 配置如何服务
+`scripts/metrics` 中的验收指标脚本。
+
+当前仅保留两个模型的单卡训练配置：
+
+- LLaMA-3.1-8B：`conf/train_llama31_8b_mock.yaml`
+- Aquila2-7B：`conf/train_aquila2_7b_mock.yaml`
+
+历史 demo、推理、TP、Guanaco、TinyLlama、Mistral、Llama-3.2、MLP-only、
+占位配置均已移除。指标脚本会通过 Hydra 覆盖默认配置，统一使用 Alpaca
+Megatron indexed dataset、单卡、MemRift 权重+激活异步。
 
 ## 1. 全局基线：一律 LoRA
 
@@ -30,20 +40,19 @@
 
 - 设当前训练配置中的基线长度为 `L0`（如 yaml 中 `seq_length`），目标 `L1 = ceil(1.2 * L0)` 或 `round(1.2 * L0)`（需在结果中写死所用取整方式）。
 - **仅训练场景**：在 MemRift+LoRA 下用 Hydra 覆盖 `train.model.seq_length`（及数据管线一致配置），验证可跑通、OOM 情况，并报告 PPL/任务相对纯 LoRA 是否仍满足 1% 门控。
-- 辅助脚本：[scripts/run_train_context_plus20.sh](/share/project/mengyc/code/memrift-flagscale/scripts/run_train_context_plus20.sh)。
+- 对应脚本：
+  - [scripts/metrics/llama8b/train_context_gain.sh](/share/project/mengyc/code/memrift-flagscale/scripts/metrics/llama8b/train_context_gain.sh)
+  - [scripts/metrics/aquila/train_context_gain.sh](/share/project/mengyc/code/memrift-flagscale/scripts/metrics/aquila/train_context_gain.sh)
 
-## 6. 推理上下文 +20% 与载入时间 ?30%（阶段二）
+## 6. 推理权重读盘时间
 
-- **不列入阶段一必做**；后续在 METRICS 中补跑。
-- **载入时间**：从「开始加载权重」到「完成首次 forward」的 wall time；基线 = 同模型同 LoRA、非 MemRift；对比 = MemRift 压缩底座 + LoRA 等价路径。
+- baseline 读取原始模型目录中的权重文件，如 `*.safetensors`、`*.bin`。
+- MemRift 分支读取压缩权重目录中的 `index.json` 与压缩 payload 文件。
+- 该指标只测推理载入阶段的磁盘读取耗时，不实例化模型，不跑首个 forward。
+- **门控**：`(read_time_baseline - read_time_memrift) / read_time_baseline >= 0.30`。
 
 ## 7. 自动化采集
 
 - 驱动脚本：[scripts/memrift_metrics_matrix.py](/share/project/mengyc/code/memrift-flagscale/scripts/memrift_metrics_matrix.py)  
   输出 **JSONL**，每行一条记录，便于合并与画图。
 - 显存/步时对比可继续用：[scripts/benchmark_lora_vs_memrift.py](/share/project/mengyc/code/memrift-flagscale/scripts/benchmark_lora_vs_memrift.py)（需将其中硬编码 `sys.path` 改为本仓库根目录）。
-
-## 8. 智源自研模型（占位）
-
-- 配置占位：[examples/memrift/conf/train/zhiyuan_placeholder.yaml](/share/project/mengyc/code/memrift-flagscale/examples/memrift/conf/train/zhiyuan_placeholder.yaml)  
-  填入 HF id 或本地路径后，与四模型共用同一套 `memrift_metrics_matrix.py` 与 `run.py` 流程。

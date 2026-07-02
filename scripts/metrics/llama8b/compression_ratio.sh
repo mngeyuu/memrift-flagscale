@@ -8,6 +8,8 @@ activate_env
 setup_common_env
 source "$SCRIPT_DIR/model_env.sh"
 
+ensure_memrift_weights "$MODEL_PATH" "$MEMRIFT_WEIGHT_DIR" "$MEMRIFT_PREPARE_LEVEL"
+
 python3 "$REPO_ROOT/scripts/metrics/common_compression.py" \
   --model-path "$MODEL_PATH" \
   --compressed-dir "$MEMRIFT_WEIGHT_DIR" \

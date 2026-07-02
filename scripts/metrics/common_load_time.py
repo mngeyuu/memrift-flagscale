@@ -1,96 +1,92 @@
 #!/usr/bin/env python3
-"""Compare baseline model load time with MemRift compressed-weight load time."""
+"""Compare baseline and MemRift weight read time from disk."""
 from __future__ import annotations
 
 import argparse
 import json
-import os
-import struct
 import time
 from pathlib import Path
+from typing import Iterable
 
 
-def load_memrift_dir(comp_dir: Path, pin_memory: bool = False) -> dict:
-    import torch
+BASELINE_WEIGHT_SUFFIXES = {
+    ".safetensors",
+    ".bin",
+    ".pt",
+    ".pth",
+    ".ckpt",
+}
 
+
+def collect_baseline_weight_files(model_path: Path) -> list[Path]:
+    if model_path.is_file():
+        return [model_path]
+    if not model_path.is_dir():
+        raise FileNotFoundError(f"model path not found: {model_path}")
+
+    files = [
+        path
+        for path in model_path.rglob("*")
+        if path.is_file() and path.suffix in BASELINE_WEIGHT_SUFFIXES
+    ]
+    if not files:
+        raise FileNotFoundError(f"no baseline weight files found under: {model_path}")
+    return sorted(files)
+
+
+def collect_memrift_files(comp_dir: Path) -> list[Path]:
+    if not comp_dir.is_dir():
+        raise FileNotFoundError(f"MemRift compressed directory not found: {comp_dir}")
     index_file = comp_dir / "index.json"
     if not index_file.is_file():
         raise FileNotFoundError(f"missing MemRift index: {index_file}")
-    index = json.loads(index_file.read_text(encoding="utf-8"))
+
+    files = [path for path in comp_dir.rglob("*") if path.is_file()]
+    if not files:
+        raise FileNotFoundError(f"no MemRift files found under: {comp_dir}")
+    return sorted(files)
+
+
+def read_files_once(files: Iterable[Path], chunk_size: int) -> tuple[int, int]:
     total_bytes = 0
-    t0 = time.perf_counter()
-    loaded = []
-    for entry in index:
-        fpath = comp_dir / entry["file"]
-        with fpath.open("rb") as f:
-            raw = f.read()
-        total_bytes += len(raw)
-        if len(raw) >= 8:
-            numel = struct.unpack("<Q", raw[:8])[0]
-            sm_size = numel if entry.get("dtype") == "bfloat16" else numel * 3
-            sm = bytearray(raw[8 : 8 + sm_size])
-            exp = raw[8 + sm_size :]
-            if pin_memory and torch.cuda.is_available():
-                t = torch.empty(len(sm), dtype=torch.uint8, pin_memory=True)
-                t.copy_(torch.frombuffer(sm, dtype=torch.uint8))
-                loaded.append((t, exp))
-            else:
-                loaded.append((sm, exp))
-        else:
-            loaded.append(raw)
-    elapsed = time.perf_counter() - t0
-    del loaded
+    checksum = 0
+    for path in files:
+        with path.open("rb", buffering=0) as f:
+            while True:
+                chunk = f.read(chunk_size)
+                if not chunk:
+                    break
+                total_bytes += len(chunk)
+                checksum = (checksum + chunk[0] + chunk[-1]) & 0xFFFFFFFF
+    return total_bytes, checksum
+
+
+def measure_read(label: str, root: Path, files: list[Path], repeat: int, chunk_size: int) -> dict:
+    samples = []
+    total_bytes = 0
+    checksum = 0
+
+    for _ in range(repeat):
+        t0 = time.perf_counter()
+        total_bytes, checksum = read_files_once(files, chunk_size)
+        elapsed = time.perf_counter() - t0
+        samples.append(elapsed)
+
+    best = min(samples)
+    mean = sum(samples) / len(samples)
     return {
-        "kind": "memrift_compressed_dir",
-        "path": str(comp_dir),
-        "num_entries": len(index),
+        "kind": label,
+        "root": str(root),
+        "num_files": len(files),
         "bytes_read": total_bytes,
-        "load_seconds": elapsed,
-    }
-
-
-def load_baseline_model(model_path: str, device: str, first_forward_tokens: int) -> dict:
-    import torch
-    from transformers import AutoModelForCausalLM, AutoTokenizer
-
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
-        torch.cuda.reset_peak_memory_stats()
-        torch.cuda.synchronize()
-    t0 = time.perf_counter()
-    tokenizer = AutoTokenizer.from_pretrained(
-        model_path,
-        trust_remote_code=True,
-        local_files_only=Path(model_path).exists(),
-    )
-    model = AutoModelForCausalLM.from_pretrained(
-        model_path,
-        torch_dtype=torch.bfloat16,
-        device_map=device,
-        trust_remote_code=True,
-        local_files_only=Path(model_path).exists(),
-    )
-    if torch.cuda.is_available() and device.startswith("cuda"):
-        torch.cuda.synchronize()
-    t_loaded = time.perf_counter()
-    vocab = getattr(model.config, "vocab_size", 32000)
-    ids = torch.randint(0, min(vocab, 50000), (1, first_forward_tokens), device=next(model.parameters()).device)
-    with torch.no_grad():
-        model(ids)
-    if torch.cuda.is_available() and device.startswith("cuda"):
-        torch.cuda.synchronize()
-    t_ready = time.perf_counter()
-    peak = torch.cuda.max_memory_allocated() if torch.cuda.is_available() else None
-    del model, tokenizer
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
-    return {
-        "kind": "baseline_hf_model",
-        "path": model_path,
-        "load_seconds": t_loaded - t0,
-        "load_to_first_forward_seconds": t_ready - t0,
-        "first_forward_tokens": first_forward_tokens,
-        "peak_allocated_bytes": peak,
+        "gib_read": total_bytes / (1024**3),
+        "read_seconds": best,
+        "read_seconds_mean": mean,
+        "read_seconds_samples": samples,
+        "repeat": repeat,
+        "chunk_size_bytes": chunk_size,
+        "checksum_guard": checksum,
+        "files": [str(path) for path in files],
     }
 
 
@@ -99,35 +95,74 @@ def main() -> int:
     ap.add_argument("--model-path", required=True)
     ap.add_argument("--compressed-dir", required=True)
     ap.add_argument("--out", required=True)
-    ap.add_argument("--device", default="cuda:0")
-    ap.add_argument("--first-forward-tokens", type=int, default=8)
-    ap.add_argument("--skip-baseline", action="store_true")
+    ap.add_argument("--model-key", required=True)
+    ap.add_argument("--model-name", required=True)
     ap.add_argument("--target-reduction", type=float, default=0.30)
+    ap.add_argument("--repeat", type=int, default=1)
+    ap.add_argument("--chunk-size", type=int, default=64 * 1024 * 1024)
     args = ap.parse_args()
 
-    if args.device.startswith("cuda"):
-        os.environ.setdefault("CUDA_VISIBLE_DEVICES", "0")
+    if args.repeat < 1:
+        raise ValueError("--repeat must be >= 1")
+    if args.chunk_size < 1:
+        raise ValueError("--chunk-size must be >= 1")
 
-    baseline = None if args.skip_baseline else load_baseline_model(
-        args.model_path, args.device, args.first_forward_tokens
+    model_path = Path(args.model_path)
+    comp_dir = Path(args.compressed_dir)
+
+    baseline_files = collect_baseline_weight_files(model_path)
+    memrift_files = collect_memrift_files(comp_dir)
+
+    baseline = measure_read(
+        "baseline_model_weights_disk_read",
+        model_path,
+        baseline_files,
+        args.repeat,
+        args.chunk_size,
     )
-    memrift = load_memrift_dir(Path(args.compressed_dir))
-    baseline_time = baseline["load_to_first_forward_seconds"] if baseline else None
-    memrift_time = memrift["load_seconds"]
+    memrift = measure_read(
+        "memrift_compressed_weights_disk_read",
+        comp_dir,
+        memrift_files,
+        args.repeat,
+        args.chunk_size,
+    )
+
+    baseline_time = baseline["read_seconds"]
+    memrift_time = memrift["read_seconds"]
     reduction = (
         (baseline_time - memrift_time) / baseline_time
-        if baseline_time and baseline_time > 0
+        if baseline_time > 0
         else None
     )
+
     data = {
-        "baseline": baseline,
-        "memrift": memrift,
-        "comparison_time_field": "baseline.load_to_first_forward_seconds vs memrift.load_seconds",
+        "metric": "load_time_reduction",
+        "model_key": args.model_key,
+        "model_name": args.model_name,
+        "criterion": "MemRift compressed-weight disk read time >= 30% lower than baseline model weight disk read time",
+        "measurement": (
+            "This metric measures inference-time model weight loading as disk read time only. "
+            "Baseline reads raw model weight files from MODEL_PATH; MemRift reads files from "
+            "MEMRIFT_WEIGHT_DIR, including index.json and compressed payload files. It does not "
+            "instantiate the model and does not run first forward."
+        ),
+        "comparison_time_field": (
+            "baseline_model_weights.read_seconds vs "
+            "memrift_compressed_weights.read_seconds"
+        ),
+        "baseline_model_weights": baseline,
+        "memrift_compressed_weights": memrift,
         "reduction_fraction": reduction,
         "reduction_percent": reduction * 100.0 if reduction is not None else None,
         "target_reduction_fraction": args.target_reduction,
         "pass": bool(reduction is not None and reduction >= args.target_reduction),
+        "cache_note": (
+            "The measured time can be affected by the OS page cache. For cold-cache results, "
+            "run on a clean machine or clear page cache according to the host policy before each branch."
+        ),
     }
+
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

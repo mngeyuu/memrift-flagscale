@@ -115,7 +115,7 @@ class AsyncCompressor:
         # concurrency_limit 允许环境变量覆盖:默认沿用调用方传入值(通常4,保守,控解压显存峰值);
         # 真实场景显存吃紧时保持小值,显存富余时可调大 MEMRIFT_DECODE_CONCURRENCY 提高解压并发。
         concurrency_limit = int(os.getenv("MEMRIFT_DECODE_CONCURRENCY", str(concurrency_limit)))
-        self.act_split_path = os.getenv("MEMRIFT_ACT_SPLIT_PATH", "mapped").strip().lower()
+        self.act_split_path = os.getenv("MEMRIFT_ACT_SPLIT_PATH", "copy").strip().lower()
         if self.act_split_path not in {"mapped", "copy"}:
             raise ValueError(
                 "MEMRIFT_ACT_SPLIT_PATH must be 'mapped' or 'copy', "
@@ -132,6 +132,7 @@ class AsyncCompressor:
             self.compress_pool = fut.ThreadPoolExecutor(compress_workers)
             self.decode_pool = fut.ThreadPoolExecutor(decode_workers)
             self.decomp_semaphore = threading.Semaphore(value=concurrency_limit)
+            self._h2d_lock = threading.Lock()
         else:
             self.cctx = zstd.ZstdCompressor(level=zstd_level, write_checksum=False)
             self.dctx = zstd.ZstdDecompressor()
@@ -154,6 +155,7 @@ class AsyncCompressor:
             self.decode_pool = fut.ThreadPoolExecutor(self._decode_workers)
             # 重建信号量(原 _build 漏建,reset 后解压并发控制会失效)
             self.decomp_semaphore = threading.Semaphore(value=self._concurrency_limit)
+            self._h2d_lock = threading.Lock()
         self.d2h_stream = torch.cuda.Stream()
         self.h2d_stream = torch.cuda.Stream()
     
@@ -338,6 +340,7 @@ class AsyncCompressor:
         fs_sp = self._fs_sp
         h2d_stream = self.h2d_stream
         semaphore = self.decomp_semaphore
+        h2d_lock = self._h2d_lock
         
         def _decode(tok, future):
             semaphore.acquire()
@@ -353,19 +356,19 @@ class AsyncCompressor:
                     nread = reader.readinto(view)
                     assert nread == numel, "decompress size mismatch"
                 
-                with torch.cuda.stream(h2d_stream):
-                    rst = fs_sp.merge(
-                        cpu_exp, tok.sm_bits,
-                        list(tok.shape), list(tok.stride), tok.offset,
-                        tok.dtype, h2d_stream.cuda_stream
-                    )
-                    tok.sm_bits.record_stream(h2d_stream)
-                
-                evt = h2d_stream.record_event()
+                with h2d_lock:
+                    with torch.cuda.stream(h2d_stream):
+                        rst = fs_sp.merge(
+                            cpu_exp, tok.sm_bits,
+                            list(tok.shape), list(tok.stride), tok.offset,
+                            tok.dtype, h2d_stream.cuda_stream
+                        )
+                        tok.sm_bits.record_stream(h2d_stream)
+                    evt = h2d_stream.record_event()
                 evt.synchronize()
                 tok.CtoD_copy_evt = evt
-                tok.ready_evt.set()
                 tok.decomped_data = rst
+                tok.ready_evt.set()
                 
             finally:
                 semaphore.release()
