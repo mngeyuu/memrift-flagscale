@@ -1,7 +1,6 @@
 # === prepare_compressed_weights.py =================================================
 import torch, zstandard as zstd, numpy as np, struct, json, os, argparse
 from transformers import AutoModelForCausalLM
-from peft import LoraConfig, get_peft_model
 import time
 
 from flagscale.compress.float_split_stride_pin import float_split_stride_pin as fs_sp

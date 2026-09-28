@@ -25,7 +25,7 @@ import torch.nn as nn
 # external probes (e.g. train.py memory probes) to introspect loader state.
 _LOADERS: list = []
 
-
+# 检查扩展是否可用
 def _check_cuda_extension():
     """Check if CUDA extension is available and raise clear error if not."""
     try:
@@ -122,6 +122,7 @@ def inject_memrift_if_configured(
     decode_workers = getattr(args, "memrift_decode_pool_workers", 16)
     compress_workers = getattr(args, "memrift_compress_pool_workers", 8)
     print_debug = getattr(args, "memrift_print_debug", False)
+    keep_weights_resident = os.environ.get("MEMRIFT_KEEP_WEIGHTS_RESIDENT", "0") == "1"
     
     # Check dependencies first
     _check_zstandard()
@@ -153,7 +154,7 @@ def inject_memrift_if_configured(
             "(tensor_model_parallel_size=1 and pipeline_model_parallel_size=1)."
         )
     
-    # Convert model to list if needed
+    # Convert model to list if needed 因为megatron更新后model会多包裹一层
     if not isinstance(model, list):
         model_chunks = [model]
     else:
@@ -210,7 +211,7 @@ def inject_memrift_if_configured(
     # activation compression, so saved_tensors_hooks can intercept autograd-saved
     # weights and replace them with WeightPlaceholder; otherwise materialized bf16
     # weights are pinned in the autograd graph and ~15 GB of decoder weights leak.
-    if activation_enable or weight_enable:
+    if activation_enable or (weight_enable and not keep_weights_resident):
         _inject_activation_compression(
             model_chunks=model_chunks,
             async_compressor=async_compressor,
@@ -318,8 +319,56 @@ def _inject_weight_compression(
             # Step 2: Build param mapping (cp -> target module/attr)
             loader.build_param_mapping()
 
+            # Global parameters and per-layer norm parameters are not handled by
+            # the dynamic forward hooks. Materialize them before releasing the
+            # model's original tensors so Qwen3 q_norm/k_norm and the embedding,
+            # final norm, and lm_head weights come from the compressed checkpoint.
+            loader.materialize_non_layer_weights()
+
             # Step 3: Release original weights to free GPU memory
             loader.release_original_weights()
+
+            # Accuracy validation mode: reconstruct the full model from the
+            # compressed files, then keep the recovered weights resident. This
+            # isolates the loss impact of the lossless weight format from the
+            # independent dynamic streaming/activation-memory mechanisms.
+            if os.environ.get("MEMRIFT_KEEP_WEIGHTS_RESIDENT", "0") == "1":
+                for layer_name in loader.layer_names:
+                    loader._materialize_and_set_layer(layer_name)
+                torch.cuda.synchronize(device)
+                reference_ckpt = os.environ.get("MEMRIFT_VALIDATE_RESIDENT_CKPT", "")
+                if reference_ckpt:
+                    reference = torch.load(
+                        reference_ckpt, map_location="cpu", weights_only=False
+                    )["model"]
+                    current = unwrapped.state_dict()
+                    compared = 0
+                    mismatches = []
+                    for name, expected in reference.items():
+                        if not isinstance(expected, torch.Tensor) or name.endswith("._extra_state"):
+                            continue
+                        actual = current.get(name)
+                        if actual is None:
+                            mismatches.append(f"missing:{name}")
+                            continue
+                        actual_cpu = actual.detach().cpu()
+                        if actual_cpu.shape != expected.shape or not torch.equal(actual_cpu, expected):
+                            mismatches.append(
+                                f"different:{name}:{tuple(actual_cpu.shape)}!={tuple(expected.shape)}"
+                            )
+                        compared += 1
+                    print(
+                        f"[MemRift] resident checkpoint validation: compared={compared} "
+                        f"mismatches={len(mismatches)} sample={mismatches[:20]}",
+                        flush=True,
+                    )
+                    del current, reference
+                for cp in loader.all_cps:
+                    cp.release()
+                    cp.release_compressed()
+                if print_debug and rank == 0:
+                    print("[MemRift] All decompressed weights kept resident for accuracy validation")
+                continue
             
             # Step 4: Install forward/backward hooks
             loader.install_hooks(async_compressor=async_compressor)
@@ -344,7 +393,7 @@ def _inject_weight_compression(
                 import traceback
                 traceback.print_exc()
 
-
+# 几种Megatron包装结构找 decoder.layers
 def _get_decoder_layers(module: nn.Module):
     """Return the decoder ModuleList (same pattern as megatron_dynamic_loader)."""
     for _name, m in module.named_modules():
@@ -442,7 +491,7 @@ def _inject_activation_compression(
     # _get_memrift_activation_context(model) and must get a valid context.
     def _noop_context():
         return nullcontext()
-
+# 没用了已经
     for chunk in model_chunks:
         chunk._memrift_activation_context = _noop_context
 

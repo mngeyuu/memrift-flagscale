@@ -21,6 +21,7 @@ _REQUIRED_SYMBOLS = (
     "split",
     "split_copy",
     "merge",
+    "merge_copy",
     "acquire_pin",
     "release_pin",
     "release_cuda",
@@ -130,7 +131,17 @@ def merge(exp, sm, size, stride, offset, dtype, stream_ptr):
     """
     if not _AVAILABLE:
         raise RuntimeError("float_split_stride_pin CUDA extension not available")
-    return _ext.merge(exp, sm, size, stride, offset, dtype, stream_ptr)
+    merge_path = os.getenv("MEMRIFT_MERGE_PATH", "mapped").strip().lower()
+    if merge_path == "mapped":
+        return _ext.merge(exp, sm, size, stride, offset, dtype, stream_ptr)
+    if merge_path == "copy":
+        out, staging_exp = _ext.merge_copy(exp, sm, size, stride, offset, dtype, stream_ptr)
+        out._memrift_merge_staging_exp = staging_exp
+        return out
+    raise ValueError(
+        "MEMRIFT_MERGE_PATH must be 'mapped' or 'copy', "
+        f"got {merge_path!r}"
+    )
 
 
 def acquire_pin(numel, dtype):

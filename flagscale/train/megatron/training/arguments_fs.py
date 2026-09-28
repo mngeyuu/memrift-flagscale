@@ -15,6 +15,7 @@ except:
     )
 from megatron.plugin.hetero.parallel_context import RankMapper
 from megatron.plugin.platform import get_platform
+from megatron.core.utils import is_torch_min_version
 
 cur_platform = get_platform()
 
@@ -65,6 +66,19 @@ class FSTrainArguments:
                 "rank": args.rank,
                 "timeout": timedelta(minutes=args.distributed_timeout_minutes),
             }
+            # Keep the early FlagScale rank-mapper initialization consistent
+            # with Megatron's fake process-group mode.  Without this branch,
+            # pre-validation creates a real Gloo group before the main
+            # initializer can install the fake group, which makes single-GPU
+            # training attempt CUDA all-reduces through Gloo.
+            if args.fake_process_group:
+                assert is_torch_min_version("2.3.0"), (
+                    "Fake process group is only supported with PyTorch 2.3.0 and above."
+                )
+                from torch.testing._internal.distributed.fake_pg import FakeStore
+
+                init_process_group_kwargs["backend"] = "fake"
+                init_process_group_kwargs["store"] = FakeStore()
             if args.distributed_backend == "flagcx":
                 init_process_group_kwargs["backend"] = "cpu:gloo,cuda:flagcx"
             # for communication based cpu

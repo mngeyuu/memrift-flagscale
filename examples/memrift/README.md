@@ -9,7 +9,7 @@ The supported metric models are:
 
 The metric scripts live under `scripts/metrics/` and run four checks:
 
-- accuracy loss
+- GSM8K CoT and HellaSwag relative accuracy loss versus pure LoRA
 - compression ratio
 - training context gain
 - inference weight disk-read time reduction

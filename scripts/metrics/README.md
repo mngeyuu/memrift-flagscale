@@ -3,14 +3,19 @@
 This directory contains a reproducible metric-test suite for the assessment items in
 `zhibiao.md`.
 
+The consolidated Chinese terminal-output and acceptance guide is available at
+[`docs/MemRift_四项指标终端验收输出.md`](../../docs/MemRift_四项指标终端验收输出.md).
+
 The suite is organized by model:
 
 - `llama8b/`: industry-mainstream model, defaulting to LLaMA-3.1-8B.
 - `aquila/`: Zhiyuan/self-developed model, defaulting to Aquila2-7B.
+- `qwen3_8b/`: Qwen3-8B acceptance suite.
 
 Each model directory has the same four scripts:
 
-- `accuracy_loss.sh`: checks MemRift+LoRA loss degradation against pure LoRA.
+- `accuracy_loss.sh`: compares the final training `lm loss` of Pure LoRA and
+  MemRift+LoRA; relative loss degradation must be at most 1%.
 - `compression_ratio.sh`: checks compressed weight size against BF16 reference size.
 - `train_context_gain.sh`: checks training context length gain against pure LoRA.
 - `load_time_reduction.sh`: checks inference weight disk-read time reduction.
@@ -116,14 +121,52 @@ CUDA_VISIBLE_DEVICES=0 bash scripts/metrics/llama8b/train_context_gain.sh
 CUDA_VISIBLE_DEVICES=0 bash scripts/metrics/llama8b/load_time_reduction.sh
 ```
 
+Every individual metric script prints its own final one-item table with the
+measured value, criterion, and `METRIC RESULT: PASS/FAIL`. If the test exits
+before producing a fresh `result.json`, the final table reports `MISSING`
+instead of silently displaying an older result.
+
+The final block also prints the baseline value, MemRift value, four-decimal
+benefit calculation, and the explicit threshold comparison, for example:
+
+```text
+(26.7783s - 17.8519s) / 26.7783s × 100% = 33.3346%;
+33.3346% >= 30.00% => 符合指标 (PASS)
+```
+
+The terminal header follows the acceptance-table terminology: software name,
+model category (`业界主流模型` or `智源自研模型`), test scenario, measurement
+scope, measured values, acceptance relation, and final decision. The relations
+shown are storage saving `>= 30%`, relative final `lm loss` degradation `<= 1%`,
+`L1 >= 1.2 * L0` for context length, and `T1 <= 0.7 * T0` for load time.
+
+The current context script measures the training-side maximum runnable length;
+it does not yet test the inference-side maximum context. The current load-time
+script measures weight-file disk-read time and excludes model instantiation and
+first forward. Both scope limitations are printed in the terminal result so the
+display does not overstate what was measured.
+
 Run Aquila metrics:
 
 ```bash
 cd /share/project/mengyc/code/memrift-flagscale
+CUDA_VISIBLE_DEVICES=0 bash scripts/metrics/aquila/run_all_metrics.sh
+```
+
+Or run them individually:
+
+```bash
 CUDA_VISIBLE_DEVICES=0 bash scripts/metrics/aquila/accuracy_loss.sh
 CUDA_VISIBLE_DEVICES=0 bash scripts/metrics/aquila/compression_ratio.sh
 CUDA_VISIBLE_DEVICES=0 bash scripts/metrics/aquila/train_context_gain.sh
 CUDA_VISIBLE_DEVICES=0 bash scripts/metrics/aquila/load_time_reduction.sh
+```
+
+Run Qwen3-8B metrics:
+
+```bash
+cd /share/project/mengyc/code/memrift-flagscale
+CUDA_VISIBLE_DEVICES=0 bash scripts/metrics/qwen3_8b/run_all_metrics.sh
 ```
 
 ## Fast Smoke Runs
@@ -157,11 +200,28 @@ output/metrics/llama8b/accuracy_loss/result.json
 output/metrics/aquila/compression_ratio/result.json
 ```
 
+Each `run_all_metrics.sh` always ends with a compact acceptance table showing the
+measured values, thresholds, per-item `PASS`/`FAIL`, the overall result, and the
+path to `summary.json`. It continues to the remaining metrics after one metric
+fails, then exits nonzero if any criterion failed or a fresh result is missing.
+This makes the final terminal frame suitable for an acceptance recording.
+
+To display a summary again from existing result files without rerunning GPU jobs:
+
+```bash
+python3 scripts/metrics/metrics_summary.py \
+  --model-key qwen3_8b \
+  --model-name Qwen3-8B \
+  --summary-out output/metrics/qwen3_8b/summary.json \
+  output/metrics/qwen3_8b/{compression_ratio,load_time_reduction,accuracy_loss,train_context_gain}/result.json
+```
+
 ## Criteria
 
 The current pass/fail criteria are:
 
-- Accuracy loss: relative final-loss degradation `<= 1%`.
+- Loss degradation: `(memrift_final_lm_loss - pure_lora_final_lm_loss) /
+  pure_lora_final_lm_loss <= 1%`.
 - Compression ratio: storage saving `>= 30%` versus BF16 reference bytes.
 - Training context gain: MemRift context length `>= 20%` longer than pure LoRA baseline.
 - Load-time reduction: MemRift compressed-weight disk read time `>= 30%`

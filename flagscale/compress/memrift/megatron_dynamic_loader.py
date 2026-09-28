@@ -67,6 +67,60 @@ def _trace(msg: str):
     print(f"[MemRiftTrace][weights] {msg}", flush=True)
 
 
+def _probe_live_tensor_ptr(group: "MergedWeightGroup", old_ptr: int, tag: str) -> None:
+    """Env-gated diagnostic for references that keep a cleared weight alive."""
+    if os.environ.get("MEMRIFT_FORWARD_PIN_PROBE", "0") != "1":
+        return
+    if old_ptr < 0:
+        return
+
+    try:
+        import gc
+
+        gc.collect()
+        live = []
+        for obj in gc.get_objects():
+            try:
+                if not isinstance(obj, torch.Tensor):
+                    continue
+                if not obj.is_cuda or obj.numel() == 0:
+                    continue
+                if int(obj.data_ptr()) != int(old_ptr):
+                    continue
+                live.append(
+                    (
+                        tuple(obj.shape),
+                        tuple(obj.stride()),
+                        str(obj.dtype),
+                        bool(obj.requires_grad),
+                        bool(obj.is_leaf),
+                        type(obj).__name__,
+                    )
+                )
+            except Exception:
+                continue
+
+        try:
+            alloc_mb = torch.cuda.memory_allocated() / 1024**2
+        except Exception:
+            alloc_mb = -1.0
+        sample = live[:4]
+        print(
+            "[MEMRIFT_FORWARD_PIN_PROBE] "
+            f"{tag} layer={group.layer_idx} target={group.megatron_target} "
+            f"ptr={old_ptr} live_tensors={len(live)} sample={sample} "
+            f"ptr_in_registry={old_ptr in _PTR2GROUP} allocated={alloc_mb:.1f}MB",
+            flush=True,
+        )
+    except Exception as exc:
+        print(
+            "[MEMRIFT_FORWARD_PIN_PROBE] "
+            f"{tag} layer={getattr(group, 'layer_idx', '?')} "
+            f"target={getattr(group, 'megatron_target', '?')} failed={exc}",
+            flush=True,
+        )
+
+
 def _env_float(name: str, default: float) -> float:
     try:
         return float(os.environ.get(name, str(default)))
@@ -534,6 +588,7 @@ def _clear_param_group(group: "MergedWeightGroup") -> None:
             with torch.no_grad():
                 param.data = torch.empty(0, dtype=param.dtype, device=param.device)
             _PTR2GROUP.pop(old_ptr, None)
+            _probe_live_tensor_ptr(group, old_ptr, "after_clear_param_group")
     for cp in group.components.values():
         cp.release()
 
@@ -659,6 +714,17 @@ class MegatronDynamicLoader:
         "post_attention_layernorm.weight": [
             "mlp.linear_fc1.layer_norm_weight",               # TE fused
             "post_attention_layernorm.weight",                 # non-TE
+        ],
+        # Qwen3 stores per-head Q/K RMSNorm weights as q_norm/k_norm in HF.
+        # Megatron-Core/Transformer Engine exposes them directly on the
+        # self-attention module as q_layernorm and k_layernorm.
+        "q_norm.weight": [
+            "self_attention.q_layernorm.weight",
+            "q_layernorm.weight",
+        ],
+        "k_norm.weight": [
+            "self_attention.k_layernorm.weight",
+            "k_layernorm.weight",
         ],
     }
     
@@ -1069,6 +1135,7 @@ class MegatronDynamicLoader:
                     param.data = torch.empty(0, dtype=dtype, device=device)
                 if old_ptr >= 0:
                     _PTR2GROUP.pop(old_ptr, None)
+                    _probe_live_tensor_ptr(group, old_ptr, "after_clear_param")
                 if self.print_debug:
                     print(f"[MemRift] clear_param: layer {group.layer_idx} / {group.megatron_target}")
         
@@ -1153,7 +1220,34 @@ class MegatronDynamicLoader:
                     if target is not None and isinstance(target, torch.Tensor):
                         weight = cp.materialize(sync=True)
                         with torch.no_grad():
-                            target.data = weight.to(device=target.device, dtype=target.dtype)
+                            source = weight.to(device=target.device, dtype=target.dtype)
+                            if target.shape == source.shape:
+                                # Copy into model-owned storage. Assigning
+                                # target.data = source would leave the model
+                                # pointing at cp._bf16, which cp.release()
+                                # immediately returns to the CUDA buffer pool.
+                                target.copy_(source)
+                            elif (
+                                target.ndim == source.ndim == 2
+                                and target.shape[0] >= source.shape[0]
+                                and target.shape[1:] == source.shape[1:]
+                            ):
+                                # Megatron pads vocabulary matrices to a
+                                # divisibility boundary by repeating the final
+                                # real vocabulary row. Match checkpoint
+                                # conversion semantics exactly.
+                                target[: source.shape[0]].copy_(source)
+                                if target.shape[0] > source.shape[0]:
+                                    target[source.shape[0] :].copy_(source[-1])
+                            else:
+                                raise RuntimeError(
+                                    f"Cannot copy {hf_name} shape {tuple(source.shape)} "
+                                    f"into Megatron shape {tuple(target.shape)}"
+                                )
+                        # cp.release() returns source to MemRift's custom CUDA
+                        # pool. Ensure the model-owned copy has completed before
+                        # that storage can be reused by the next tensor.
+                        torch.cuda.current_stream(target.device).synchronize()
                         cp.release()
                         written += 1
                         written_this = True
@@ -1175,12 +1269,30 @@ class MegatronDynamicLoader:
                             if mod is None:
                                 continue
                             target = getattr(mod, attr, None)
+                            # LoRA wraps TE linears in AdapterWrapper. Fused
+                            # layernorm parameters live on the wrapped linear,
+                            # not on the wrapper itself.
+                            if not isinstance(target, torch.Tensor):
+                                for unwrap_attr in ("to_wrap", "base_layer", "module"):
+                                    inner = getattr(mod, unwrap_attr, None)
+                                    inner_target = getattr(inner, attr, None)
+                                    if isinstance(inner_target, torch.Tensor):
+                                        mod = inner
+                                        target = inner_target
+                                        break
                             if isinstance(target, torch.Tensor):
                                 weight = cp.materialize(sync=True)
                                 with torch.no_grad():
-                                    target.data = weight.to(
+                                    source = weight.to(
                                         device=target.device, dtype=target.dtype
                                     )
+                                    if target.shape != source.shape:
+                                        raise RuntimeError(
+                                            f"Cannot copy {hf_name} shape {tuple(source.shape)} "
+                                            f"into Megatron shape {tuple(target.shape)}"
+                                        )
+                                    target.copy_(source)
+                                torch.cuda.current_stream(target.device).synchronize()
                                 cp.release()
                                 written += 1
                                 written_this = True

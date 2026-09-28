@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Metric 1.1 accuracy gate: MemRift+LoRA loss degradation <= 1% vs pure LoRA.
+# Metric 1.1: final lm loss degradation <= 1%, Pure LoRA vs MemRift weight-compressed LoRA.
 
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -12,40 +12,37 @@ source "$SCRIPT_DIR/model_env.sh"
 
 METRIC_DIR="$OUT_ROOT/accuracy_loss"
 BASE_DIR="$METRIC_DIR/pure_lora"
-MEM_DIR="$METRIC_DIR/memrift_weight_act_async"
+MEM_DIR="$METRIC_DIR/memrift_weight_only"
 RESULT="$METRIC_DIR/result.json"
+BASE_TRAIN_METRICS="$BASE_DIR/train_metrics.json"
+MEM_TRAIN_METRICS="$MEM_DIR/train_metrics.json"
 
-run_yaml_train pure_lora "$BASE_DIR" lora "$BASE_SEQ_LEN" "$TRAIN_ITERS" "$MAX_POSITION_EMBEDDINGS"
-run_yaml_train memrift_weight_act_async "$MEM_DIR" memrift_async "$BASE_SEQ_LEN" "$TRAIN_ITERS" "$MAX_POSITION_EMBEDDINGS"
+start_metric_result_display "$RESULT"
+trap 'finish_metric_result_display "$?" accuracy_loss "$RESULT" "$METRIC_FRESHNESS_MARKER"' EXIT
 
-BASE_LOG="$(host_log_for "$BASE_DIR")"
-MEM_LOG="$(host_log_for "$MEM_DIR")"
-parse_train_log_json "$BASE_LOG" "$BASE_DIR/metrics.json" >/dev/null
-parse_train_log_json "$MEM_LOG" "$MEM_DIR/metrics.json" >/dev/null
+ensure_memrift_weights "$MODEL_PATH" "$MEMRIFT_WEIGHT_DIR" "${MEMRIFT_PREPARE_LEVEL:-18}"
 
-python3 - "$BASE_DIR/metrics.json" "$MEM_DIR/metrics.json" "$RESULT" "$MODEL_KEY" "$MODEL_NAME" <<'PY'
-import json
-import sys
-from pathlib import Path
+if [ ! -f "$MEGATRON_CKPT_DIR/latest_checkpointed_iteration.txt" ]; then
+  echo "[metrics] missing Aquila Megatron checkpoint: $MEGATRON_CKPT_DIR" >&2
+  echo "[metrics] run scripts/metrics/aquila/convert_hf_to_mcore_tp1.sh first" >&2
+  exit 2
+fi
 
-base = json.loads(Path(sys.argv[1]).read_text())
-mem = json.loads(Path(sys.argv[2]).read_text())
-out = Path(sys.argv[3])
-base_loss = base.get("final_lm_loss")
-mem_loss = mem.get("final_lm_loss")
-degradation = ((mem_loss - base_loss) / base_loss) if base_loss and mem_loss is not None else None
-data = {
-    "metric": "accuracy_loss",
-    "model_key": sys.argv[4],
-    "model_name": sys.argv[5],
-    "criterion": "relative loss degradation <= 1%",
-    "baseline_pure_lora": base,
-    "memrift_weight_act_async": mem,
-    "relative_loss_degradation": degradation,
-    "relative_loss_degradation_percent": degradation * 100 if degradation is not None else None,
-    "pass": bool(degradation is not None and degradation <= 0.01 and not mem.get("failed_pattern_found")),
-}
-out.parent.mkdir(parents=True, exist_ok=True)
-out.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-print(json.dumps(data, indent=2, ensure_ascii=False))
-PY
+# FlagScale host logs are append-only. Use clean directories so stale failures
+# and loss samples from earlier runs cannot affect this result.
+rm -rf "$BASE_DIR" "$MEM_DIR"
+
+DISABLE_TRAIN_CHECKPOINT=true MEMRIFT_DISABLE_FINAL_CHECKPOINT=1 \
+  run_yaml_train pure_lora "$BASE_DIR" lora "$BASE_SEQ_LEN" "$TRAIN_ITERS" "$MAX_POSITION_EMBEDDINGS"
+DISABLE_TRAIN_CHECKPOINT=true MEMRIFT_DISABLE_FINAL_CHECKPOINT=1 \
+  MEMRIFT_ACTIVATION_ENABLE=false \
+  MEMRIFT_KEEP_WEIGHTS_RESIDENT=1 \
+  run_yaml_train memrift_weight_only "$MEM_DIR" memrift_async "$BASE_SEQ_LEN" "$TRAIN_ITERS" "$MAX_POSITION_EMBEDDINGS"
+
+parse_train_log_json "$(host_log_for "$BASE_DIR")" "$BASE_TRAIN_METRICS" >/dev/null
+parse_train_log_json "$(host_log_for "$MEM_DIR")" "$MEM_TRAIN_METRICS" >/dev/null
+
+python3 scripts/metrics/common_accuracy_loss.py \
+  --baseline "$BASE_TRAIN_METRICS" --candidate "$MEM_TRAIN_METRICS" --output "$RESULT" \
+  --model-key "$MODEL_KEY" --model-name "$MODEL_NAME" \
+  --threshold "${ACCURACY_THRESHOLD:-0.01}"

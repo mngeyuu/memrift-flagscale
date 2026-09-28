@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run all LLaMA-3.1-8B MemRift metrics.
+# Run all Qwen3-8B MemRift metrics.
 
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

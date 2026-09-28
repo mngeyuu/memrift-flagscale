@@ -21,7 +21,12 @@ activate_env() {
 
 setup_common_env() {
   cd "$REPO_ROOT"
-  export PYTHONPATH="$REPO_ROOT:$REPO_ROOT/flagscale:$REPO_ROOT/flagscale/train:$REPO_ROOT/flagscale/train/megatron:${PYTHONPATH:-}"
+  local runtime_deps="${METRICS_RUNTIME_DEPS:-$REPO_ROOT/output/runtime_deps/hf_compat}"
+  if [ -d "$runtime_deps" ]; then
+    export PYTHONPATH="$runtime_deps:$REPO_ROOT:$REPO_ROOT/flagscale:$REPO_ROOT/flagscale/train:$REPO_ROOT/flagscale/train/megatron:${PYTHONPATH:-}"
+  else
+    export PYTHONPATH="$REPO_ROOT:$REPO_ROOT/flagscale:$REPO_ROOT/flagscale/train:$REPO_ROOT/flagscale/train/megatron:${PYTHONPATH:-}"
+  fi
   export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
   export TORCH_DEVICE_BACKEND_AUTOLOAD="${TORCH_DEVICE_BACKEND_AUTOLOAD:-0}"
   export WANDB_MODE="${WANDB_MODE:-offline}"
@@ -86,6 +91,7 @@ run_yaml_train() {
   local seq_len="$4"
   local train_iters="$5"
   local max_pos="${6:-$seq_len}"
+  local save_dir="${7:-}"
 
   mkdir -p "$exp_dir"
 
@@ -101,6 +107,7 @@ run_yaml_train() {
     "experiment.runner.nproc_per_node=1"
     "++experiment.envs.CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}"
     "++experiment.envs.TORCH_DEVICE_BACKEND_AUTOLOAD=0"
+    "++experiment.envs.MEMRIFT_DISABLE_FINAL_CHECKPOINT=${MEMRIFT_DISABLE_FINAL_CHECKPOINT:-0}"
     "++train.system.run_foreground=false"
     "train.system.tensor_model_parallel_size=1"
     "train.system.pipeline_model_parallel_size=1"
@@ -128,7 +135,10 @@ run_yaml_train() {
     "train.system.logging.log_interval=1"
   )
 
-  if [ -n "${MEGATRON_CKPT_DIR:-}" ]; then
+  # The uncompressed LoRA baseline must start from the same pretrained model
+  # as the MemRift candidate. The candidate obtains those weights from
+  # MEMRIFT_WEIGHT_DIR, so load the converted checkpoint for the baseline only.
+  if [ "$mode" = "lora" ] && [ -n "${MEGATRON_CKPT_DIR:-}" ]; then
     common_args+=(
       "+train.system.checkpoint.load=$MEGATRON_CKPT_DIR"
       "+train.system.checkpoint.ckpt_format=torch"
@@ -137,6 +147,21 @@ run_yaml_train() {
       "+train.system.no_load_rng=true"
       "+train.system.finetune=true"
     )
+  fi
+
+  if [ -n "$save_dir" ]; then
+    common_args+=(
+      "+train.system.checkpoint.save=$save_dir"
+      "train.system.checkpoint.save_interval=$train_iters"
+    )
+  elif [ "${DISABLE_TRAIN_CHECKPOINT:-false}" = "true" ]; then
+    common_args+=(
+      "+train.system.checkpoint.save=null"
+      "train.system.checkpoint.save_interval=1000000000"
+    )
+    if [ "$mode" != "lora" ] || [ -z "${MEGATRON_CKPT_DIR:-}" ]; then
+      common_args+=("+train.system.checkpoint.load=null")
+    fi
   fi
 
   local mode_args=()
@@ -154,7 +179,7 @@ run_yaml_train() {
         "train.system.memrift_enable=true"
         "train.system.memrift_weight_enable=true"
         "train.system.memrift_activation_enable=${MEMRIFT_ACTIVATION_ENABLE:-true}"
-        "train.system.memrift_weight_async=true"
+        "train.system.memrift_weight_async=${MEMRIFT_WEIGHT_ASYNC:-true}"
         "train.system.memrift_act_async=${MEMRIFT_ACT_ASYNC:-true}"
         "train.system.memrift_compressed_weight_dir=$MEMRIFT_WEIGHT_DIR"
       )
@@ -192,6 +217,65 @@ PY
   return "$rc"
 }
 
+run_benchmark_accuracy() {
+  local variant="$1"
+  local exp_dir="$2"
+  local mode="$3"
+  local checkpoint_dir="$4"
+  local output_file="$5"
+
+  mkdir -p "$exp_dir" "$(dirname "$output_file")"
+  local common_args=(
+    "--config-path=examples/memrift/conf"
+    "--config-name=$CONFIG_NAME"
+    "action=${ACTION:-test}"
+    "experiment.exp_name=${MODEL_KEY}_${variant}_benchmark"
+    "experiment.exp_dir=$exp_dir"
+    "experiment.task.entrypoint=scripts/metrics/benchmark_accuracy.py"
+    "experiment.runner.type=ssh"
+    "experiment.runner.nnodes=1"
+    "experiment.runner.nproc_per_node=1"
+    "++experiment.envs.CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}"
+    "++experiment.envs.TORCH_DEVICE_BACKEND_AUTOLOAD=0"
+    "++experiment.envs.BENCHMARK_VARIANT=$variant"
+    "++experiment.envs.BENCHMARK_MODE=$mode"
+    "++experiment.envs.BENCHMARK_CHECKPOINT=$checkpoint_dir"
+    "++experiment.envs.BENCHMARK_OUTPUT=$output_file"
+    "++experiment.envs.GSM8K_LIMIT=${GSM8K_LIMIT:-}"
+    "++experiment.envs.HELLASWAG_LIMIT=${HELLASWAG_LIMIT:-}"
+    "++experiment.envs.GSM8K_MAX_NEW_TOKENS=${GSM8K_MAX_NEW_TOKENS:-64}"
+    "train.system.tensor_model_parallel_size=1"
+    "train.system.pipeline_model_parallel_size=1"
+    "train.system.context_parallel_size=1"
+    "train.model.tokenizer_path=$MODEL_PATH"
+    "train.model.tokenizer_model=$MODEL_PATH"
+    "+train.system.checkpoint.load=$checkpoint_dir"
+    "+train.system.checkpoint.ckpt_format=torch"
+    "+train.system.no_load_optim=true"
+    "+train.system.no_load_rng=true"
+  )
+
+  if [ "$mode" = "lora" ] || [ "$mode" = "lora_adapter_only" ]; then
+    common_args+=(
+      "train.system.memrift_enable=false"
+      "train.system.memrift_weight_enable=false"
+      "train.system.memrift_activation_enable=false"
+      "+train.system.init_model_with_meta_device=false"
+    )
+  else
+    common_args+=(
+      "train.system.memrift_enable=true"
+      "train.system.memrift_weight_enable=true"
+      "train.system.memrift_activation_enable=${MEMRIFT_ACTIVATION_ENABLE:-true}"
+      "train.system.memrift_weight_async=true"
+      "train.system.memrift_act_async=${MEMRIFT_ACT_ASYNC:-true}"
+      "train.system.memrift_compressed_weight_dir=$MEMRIFT_WEIGHT_DIR"
+    )
+  fi
+
+  python run.py "${common_args[@]}" 2>&1 | tee "$exp_dir/stdout.log"
+}
+
 run_context_probe() {
   local label="$1"
   local mode="$2"
@@ -200,23 +284,29 @@ run_context_probe() {
   local exp_dir="$5"
 
   rm -rf "$exp_dir"
-  run_yaml_train "$label" "$exp_dir" "$mode" "$seq_len" "$train_iters" "$seq_len" || true
+  DISABLE_TRAIN_CHECKPOINT=true MEMRIFT_DISABLE_FINAL_CHECKPOINT=1 run_yaml_train "$label" "$exp_dir" "$mode" "$seq_len" "$train_iters" "$seq_len" || true
 
   local log_file metrics_file
   log_file="$(host_log_for "$exp_dir")"
   metrics_file="$exp_dir/metrics.json"
   parse_train_log_json "$log_file" "$metrics_file" >/dev/null || true
-  python3 - "$metrics_file" <<'PY'
+  local wall_time_file="$exp_dir/wall_time.json"
+  python3 - "$metrics_file" "$wall_time_file" <<'PY'
 import json
 import sys
 from pathlib import Path
 
 path = Path(sys.argv[1])
+wall_time_path = Path(sys.argv[2])
 if not path.is_file():
     raise SystemExit(1)
 data = json.loads(path.read_text(encoding="utf-8"))
+wall_time = json.loads(wall_time_path.read_text(encoding="utf-8")) if wall_time_path.is_file() else {}
+data["launcher_return_code"] = wall_time.get("launcher_return_code")
+path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 ok = (
     data.get("log_exists")
+    and data.get("launcher_return_code") == 0
     and not data.get("failed_pattern_found")
     and data.get("final_lm_loss") is not None
 )
@@ -233,30 +323,35 @@ find_max_context_len() {
   local step_len="$6"
   local train_iters="$7"
   local result_file="${8:-}"
+  local fine_step_len="${CONTEXT_SEARCH_FINE_STEP:-128}"
 
   mkdir -p "$out_dir"
   local attempts_jsonl="$out_dir/attempts.jsonl"
   : > "$attempts_jsonl"
 
-  local best=0
-  local first_fail=0
-  local seq="$start_len"
-
-  while [ "$seq" -le "$cap_len" ]; do
-    local exp_dir="$out_dir/${prefix}_L${seq}"
-    echo "[$MODEL_KEY][$prefix] probing seq=$seq cap=$cap_len mode=$mode" >&2
-    local ok=0
-    if run_context_probe "${prefix}_L${seq}" "$mode" "$seq" "$train_iters" "$exp_dir"; then
-      ok=1
-      best="$seq"
-    elif [ "$first_fail" -eq 0 ]; then
-      first_fail="$seq"
-    fi
-
+  record_context_attempt() {
+    local phase="$1"
+    local seq="$2"
+    local ok="$3"
+    local exp_dir="$4"
     local log_file
     log_file="$(host_log_for "$exp_dir")"
     parse_train_log_json "$log_file" "$exp_dir/metrics.json" >/dev/null || true
-    python3 - "$attempts_jsonl" "$seq" "$ok" "$exp_dir/metrics.json" <<'PY'
+    local wall_time_file="$exp_dir/wall_time.json"
+    python3 - "$exp_dir/metrics.json" "$wall_time_file" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+metrics_file = Path(sys.argv[1])
+wall_time_file = Path(sys.argv[2])
+if metrics_file.is_file() and wall_time_file.is_file():
+    metrics = json.loads(metrics_file.read_text(encoding="utf-8"))
+    wall_time = json.loads(wall_time_file.read_text(encoding="utf-8"))
+    metrics["launcher_return_code"] = wall_time.get("launcher_return_code")
+    metrics_file.write_text(json.dumps(metrics, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+PY
+    python3 - "$attempts_jsonl" "$seq" "$ok" "$phase" "$exp_dir/metrics.json" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -264,16 +359,33 @@ from pathlib import Path
 out = Path(sys.argv[1])
 seq = int(sys.argv[2])
 ok = bool(int(sys.argv[3]))
-metrics_file = Path(sys.argv[4])
+phase = sys.argv[4]
+metrics_file = Path(sys.argv[5])
 metrics = json.loads(metrics_file.read_text()) if metrics_file.is_file() else {}
 with out.open("a", encoding="utf-8") as f:
-    f.write(json.dumps({"seq_len": seq, "ok": ok, "metrics": metrics}, ensure_ascii=False) + "\n")
+    f.write(json.dumps({"phase": phase, "seq_len": seq, "ok": ok, "metrics": metrics}, ensure_ascii=False) + "\n")
 PY
+  }
 
+  local best=0
+  local first_fail=0
+  local seq="$start_len"
+
+  while [ "$seq" -le "$cap_len" ]; do
+    local exp_dir="$out_dir/${prefix}_L${seq}"
+    echo "[$MODEL_KEY][$prefix] coarse linear probing seq=$seq cap=$cap_len step=$step_len mode=$mode" >&2
+    local ok=0
+    if run_context_probe "${prefix}_L${seq}" "$mode" "$seq" "$train_iters" "$exp_dir"; then
+      ok=1
+      best="$seq"
+    else
+      first_fail="$seq"
+    fi
+    record_context_attempt "coarse" "$seq" "$ok" "$exp_dir"
     if [ "$ok" -eq 0 ]; then
       break
     fi
-    seq=$((seq + step_len))
+    seq="$((seq + step_len))"
   done
 
   if [ "$best" -eq 0 ]; then
@@ -294,39 +406,24 @@ PY
     return 0
   fi
 
-  local low="$best"
-  local high="$((first_fail - 1))"
-  local mid=0
-  while [ $((high - low)) -gt 1 ]; do
-    mid=$((((low + high + 1) / 2)))
-    local exp_dir="$out_dir/${prefix}_L${mid}"
-    echo "[$MODEL_KEY][$prefix] binary probing seq=$mid low=$low high=$high mode=$mode" >&2
+  local fine_low=0
+  local fine_high="$(((first_fail - best) / fine_step_len))"
+  while [ $((fine_high - fine_low)) -gt 1 ]; do
+    local fine_index="$(((fine_low + fine_high) / 2))"
+    local seq="$((best + fine_index * fine_step_len))"
+    local exp_dir="$out_dir/${prefix}_L${seq}"
+    echo "[$MODEL_KEY][$prefix] fine probing seq=$seq fine_index=$fine_index low=$fine_low high=$fine_high mode=$mode" >&2
     local ok=0
-    if run_context_probe "${prefix}_L${mid}" "$mode" "$mid" "$train_iters" "$exp_dir"; then
+    if run_context_probe "${prefix}_L${seq}" "$mode" "$seq" "$train_iters" "$exp_dir"; then
       ok=1
-      low="$mid"
+      fine_low="$fine_index"
     else
-      high="$((mid - 1))"
+      fine_high="$fine_index"
     fi
-
-    local log_file
-    log_file="$(host_log_for "$exp_dir")"
-    parse_train_log_json "$log_file" "$exp_dir/metrics.json" >/dev/null || true
-    python3 - "$attempts_jsonl" "$mid" "$ok" "$exp_dir/metrics.json" <<'PY'
-import json
-import sys
-from pathlib import Path
-
-out = Path(sys.argv[1])
-seq = int(sys.argv[2])
-ok = bool(int(sys.argv[3]))
-metrics_file = Path(sys.argv[4])
-metrics = json.loads(metrics_file.read_text()) if metrics_file.is_file() else {}
-with out.open("a", encoding="utf-8") as f:
-    f.write(json.dumps({"seq_len": seq, "ok": ok, "metrics": metrics}, ensure_ascii=False) + "\n")
-PY
+    record_context_attempt "fine" "$seq" "$ok" "$exp_dir"
   done
 
+  local low="$((best + fine_low * fine_step_len))"
   if [ -n "$result_file" ]; then
     printf '%s\n' "$low" > "$result_file"
   else
@@ -353,7 +450,20 @@ max_alloc = None
 for m in re.finditer(r"max allocated:\s*([0-9.]+)", text):
     max_alloc = float(m.group(1))
 
-failed = bool(re.search(r"(Traceback|FAILED|error:|OutOfMemory|out of memory|CUDA out of memory|NCCL error|DistBackendError|ncclUnhandledCudaError)", text, re.I))
+fatal_patterns = (
+    r"Traceback \(most recent call last\):",
+    r"\bFAILED\b",
+    r"\bRuntimeError:",
+    r"\bValueError:",
+    r"\bAssertionError:",
+    r"OutOfMemory",
+    r"out of memory",
+    r"CUDA out of memory",
+    r"NCCL error",
+    r"DistBackendError",
+    r"ncclUnhandledCudaError",
+)
+failed = any(re.search(pattern, text) for pattern in fatal_patterns)
 data = {
     "source_log": str(log),
     "log_exists": log.is_file(),
@@ -392,4 +502,95 @@ out.parent.mkdir(parents=True, exist_ok=True)
 out.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 print(out)
 PY
+}
+
+start_metric_result_display() {
+  local result_file="$1"
+  METRIC_FRESHNESS_MARKER=""
+  if [ "${METRICS_SUPPRESS_SINGLE_SUMMARY:-0}" = "1" ]; then
+    return 0
+  fi
+  mkdir -p "$(dirname "$result_file")"
+  METRIC_FRESHNESS_MARKER="$(mktemp "$(dirname "$result_file")/.metric_run.XXXXXX")"
+}
+
+finish_metric_result_display() {
+  local command_rc="$1"
+  local metric="$2"
+  local result_file="$3"
+  local freshness_marker="$4"
+  trap - EXIT
+
+  if [ "${METRICS_SUPPRESS_SINGLE_SUMMARY:-0}" = "1" ]; then
+    exit "$command_rc"
+  fi
+
+  local summary_rc=0
+  python3 "$REPO_ROOT/scripts/metrics/metrics_summary.py" \
+    --model-key "$MODEL_KEY" \
+    --model-name "$MODEL_NAME" \
+    --only "$metric" \
+    --freshness-marker "$freshness_marker" \
+    "$result_file" || summary_rc=$?
+  rm -f -- "$freshness_marker"
+
+  if [ "$command_rc" -ne 0 ] || [ "$summary_rc" -ne 0 ]; then
+    exit 1
+  fi
+  exit 0
+}
+
+run_all_metric_suite() {
+  local model_script_dir="$1"
+  local -a metric_names=(
+    compression_ratio
+    load_time_reduction
+    accuracy_loss
+    train_context_gain
+  )
+  local -a result_paths=()
+  local metric
+
+  mkdir -p "$OUT_ROOT"
+  local freshness_marker
+  freshness_marker="$(mktemp "$OUT_ROOT/.acceptance_run.XXXXXX")"
+  for metric in "${metric_names[@]}"; do
+    result_paths+=("$OUT_ROOT/$metric/result.json")
+  done
+
+  local suite_rc=0
+  if ensure_memrift_weights "$MODEL_PATH" "$MEMRIFT_WEIGHT_DIR" "${MEMRIFT_PREPARE_LEVEL:-18}"; then
+    for metric in "${metric_names[@]}"; do
+      echo
+      echo "======================================================================"
+      echo "[acceptance] running $metric"
+      echo "======================================================================"
+      if METRICS_SUPPRESS_SINGLE_SUMMARY=1 bash "$model_script_dir/$metric.sh"; then
+        echo "[acceptance] $metric script completed"
+      else
+        local metric_rc=$?
+        echo "[acceptance] $metric script exited with code $metric_rc" >&2
+        suite_rc=1
+      fi
+    done
+  else
+    local prepare_rc=$?
+    echo "[acceptance] compressed-weight preparation failed with code $prepare_rc" >&2
+    echo "[acceptance] metric runs skipped; the final table will show missing results" >&2
+    suite_rc=1
+  fi
+
+  local summary_rc=0
+  python3 "$REPO_ROOT/scripts/metrics/metrics_summary.py" \
+    --model-key "$MODEL_KEY" \
+    --model-name "$MODEL_NAME" \
+    --summary-out "$OUT_ROOT/summary.json" \
+    --freshness-marker "$freshness_marker" \
+    "${result_paths[@]}" || summary_rc=$?
+  rm -f -- "$freshness_marker"
+
+  if [ "$summary_rc" -ne 0 ]; then
+    suite_rc=1
+  fi
+  return "$suite_rc"
 }

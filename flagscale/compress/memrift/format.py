@@ -116,7 +116,7 @@ def write_compressed_weight(
         # Write compressed exponent
         f.write(exp_compressed)
 
-
+# 以下用来校验
 def decompress_exponent(
     exp_bytes: bytes,
     numel: int,

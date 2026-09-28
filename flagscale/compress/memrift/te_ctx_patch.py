@@ -30,6 +30,49 @@ import os
 
 _PATCHED = False
 _TRACE = os.environ.get("MEMRIFT_TE_PATCH_TRACE", "0") == "1"
+_CTX_PROBE = os.environ.get("MEMRIFT_TE_CTX_PROBE", "0") == "1"
+
+
+def _describe_ctx_attrs(ctx, attrs, name):
+    if not _CTX_PROBE:
+        return
+    parts = []
+    for a in attrs:
+        if not hasattr(ctx, a):
+            continue
+        try:
+            obj = getattr(ctx, a)
+        except Exception as exc:
+            parts.append(f"{a}=<read_error:{exc}>")
+            continue
+
+        try:
+            import torch
+
+            if isinstance(obj, torch.Tensor):
+                ptr = int(obj.data_ptr()) if obj.is_cuda and obj.numel() > 0 else -1
+                nbytes = obj.numel() * obj.element_size()
+                parts.append(
+                    f"{a}=Tensor(shape={tuple(obj.shape)}, dtype={obj.dtype}, "
+                    f"cuda={obj.is_cuda}, ptr={ptr}, MB={nbytes/1024**2:.1f}, "
+                    f"requires_grad={obj.requires_grad})"
+                )
+            elif isinstance(obj, (list, tuple)):
+                tensors = []
+                for idx, item in enumerate(obj):
+                    if isinstance(item, torch.Tensor):
+                        ptr = int(item.data_ptr()) if item.is_cuda and item.numel() > 0 else -1
+                        tensors.append(
+                            f"{idx}:shape={tuple(item.shape)},dtype={item.dtype},"
+                            f"cuda={item.is_cuda},ptr={ptr}"
+                        )
+                parts.append(f"{a}={type(obj).__name__}(len={len(obj)}, tensors={tensors[:8]})")
+            else:
+                parts.append(f"{a}={type(obj).__name__}")
+        except Exception as exc:
+            parts.append(f"{a}=<describe_error:{exc}>")
+    if parts:
+        print(f"[MEMRIFT_TE_CTX_PROBE] {name}.ctx " + " | ".join(parts), flush=True)
 
 
 def _clear_ctx_attrs(ctx, attrs):
@@ -52,6 +95,7 @@ def _wrap_backward(cls, attrs_to_clear, name):
         try:
             out = orig_backward(ctx, *grad_outputs)
         finally:
+            _describe_ctx_attrs(ctx, attrs_to_clear + ("tensor_objects",), name)
             _clear_ctx_attrs(ctx, attrs_to_clear)
             # tensor_objects holds Python wrappers around saved tensors; clear too.
             _clear_ctx_attrs(ctx, ("tensor_objects",))

@@ -1,0 +1,118 @@
+# Qwen3-8B single-GPU LoRA + MemRift training configuration.
+# The base weights are read from a MemRift compressed directory and materialized
+# on demand; LoRA parameters remain trainable.
+
+system:
+  tensor_model_parallel_size: 1
+  pipeline_model_parallel_size: 1
+  context_parallel_size: 1
+  disable_bias_linear: true
+  use_flash_attn: true
+  sequence_parallel: false
+  use_distributed_optimizer: false
+  distributed_backend: gloo
+  fake_process_group: true
+
+  precision:
+    fp16: false
+    bf16: true
+
+  logging:
+    log_interval: 1
+    tensorboard_log_interval: 10
+    wandb_mode: disabled
+
+  checkpoint:
+    save_interval: 1000
+  ckpt_format: torch
+
+  memrift_enable: true
+  memrift_weight_enable: true
+  memrift_compressed_weight_dir: /share/project/mengyc/code/memrift-flagscale/memrift_weights/qwen3_8b_level3
+  memrift_zstd_level: 3
+  memrift_prefetch_layers: 4
+  memrift_weight_async: true
+  memrift_activation_enable: true
+  memrift_act_async: true
+  memrift_decode_pool_workers: 48
+  memrift_compress_pool_workers: 8
+  memrift_print_debug: true
+
+model:
+  num_layers: 36
+  hidden_size: 4096
+  ffn_hidden_size: 12288
+  kv_channels: 128
+  num_attention_heads: 32
+  group_query_attention: true
+  num_query_groups: 8
+  seq_length: 4096
+  max_position_embeddings: 40960
+  norm_epsilon: 1.0e-6
+  use_rotary_position_embeddings: true
+  rotary_base: 1000000
+  swiglu: true
+  qk_layernorm: true
+  normalization: RMSNorm
+  init_method_std: 0.02
+  attention_dropout: 0.0
+  hidden_dropout: 0.0
+  position_embedding_type: rope
+  untie_embeddings_and_output_weights: true
+  no_position_embedding: true
+  no_rope_fusion: true
+  transformer_impl: transformer_engine
+
+  seed: 42
+  train_iters: 1000
+  eval_iters: 0
+  eval_interval: 1000
+  lr: 2.0e-4
+  min_lr: 2.0e-5
+  lr_warmup_iters: 50
+  lr_decay_style: cosine
+  weight_decay: 0.1
+  clip_grad: 1.0
+  adam_beta1: 0.9
+  adam_beta2: 0.95
+  adam_eps: 1.0e-8
+
+  tokenizer_type: HuggingFaceTokenizer
+  tokenizer_path: /share/project/mengyc/models/Qwen3-8B
+  tokenizer_model: /share/project/mengyc/models/Qwen3-8B
+  vocab_size: 151936
+  # The HF tokenizer exposes 151669 entries while the released Qwen3-8B
+  # embedding/output matrices contain 151936 rows.  Using the model vocabulary
+  # as the padding multiple preserves the checkpoint's exact tensor shapes.
+  make_vocab_size_divisible_by: 151936
+
+  peft_type: lora
+  lora_target_modules:
+    - linear_qkv
+    - linear_proj
+    - linear_fc1
+    - linear_fc2
+  lora_dim: 16
+  lora_alpha: 32
+  lora_dropout: 0.0
+
+data:
+  data_path: /share/project/mengyc/data/alpaca_megatron/alpaca_text_document
+  mock_data: false
+  split: 949,50,1
+  micro_batch_size: 1
+  global_batch_size: 1
+
+trainer:
+  train_iters: 1000
+  eval_iters: 0
+  eval_interval: 1000
+  lr: 2.0e-4
+  min_lr: 2.0e-5
+  lr_warmup_iters: 50
+  lr_decay_style: cosine
+  weight_decay: 0.1
+  clip_grad: 1.0
+  adam_beta1: 0.9
+  adam_beta2: 0.95
+  adam_eps: 1.0e-8

@@ -1306,7 +1306,7 @@ def pretrain(
 
         print_datetime('after training is done')
 
-        if not args.auto_tune: ########## FlagScale Add ##########
+        if not args.auto_tune and os.environ.get("MEMRIFT_DISABLE_FINAL_CHECKPOINT") != "1": ########## FlagScale Add ##########
             if not args.skip_train and args.save and iteration != 0 and iteration % args.save_interval != 0:
                 save_checkpoint(
                     iteration,

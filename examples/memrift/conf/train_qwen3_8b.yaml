@@ -1,0 +1,37 @@
+# Qwen3-8B full single-GPU MemRift training entry.
+
+defaults:
+  - train/qwen3_8b_lora_memrift
+  - _self_
+
+experiment:
+  exp_name: qwen3_8b_memrift_full
+  exp_dir: /share/project/mengyc/code/memrift-flagscale/output/qwen3_8b_memrift_full
+  seed: 42
+  save_steps: 1000
+  load: null
+  ckpt_format: torch
+  task:
+    type: train
+    backend: megatron
+    entrypoint: flagscale/train/megatron/train_gpt.py
+  runner:
+    type: ssh
+    nnodes: 1
+    nproc_per_node: 1
+    rdzv_backend: static
+    rdzv_endpoint: localhost:29501
+    per_node_task: false
+    no_shared_fs: false
+  envs:
+    TORCH_DEVICE_BACKEND_AUTOLOAD: "0"
+    CUDA_DEVICE_MAX_CONNECTIONS: "1"
+    WANDB_MODE: offline
+    MASTER_ADDR: localhost
+    MASTER_PORT: "29501"
+
+action: run
+
+hydra:
+  run:
+    dir: ${experiment.exp_dir}/hydra

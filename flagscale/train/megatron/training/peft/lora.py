@@ -124,19 +124,14 @@ class LoRA(PEFT, peft_type='lora'):
             unexpected_keys: List[str],
             errors: List[Any],
         ):
-            if HAVE_GROUP and any(isinstance(module.to_wrap, te_group) for te_group in TEGROUP):
-                old_keys = []
-                new_keys = []
-                for gemm_id in range(module.to_wrap.num_gemms):
-                    old_keys.append(prefix + f"weight{gemm_id}")
-                    new_keys.append(prefix + f"to_wrap.weight{gemm_id}")
-                    old_keys.append(prefix + f"bias{gemm_id}")
-                    new_keys.append(prefix + f"to_wrap.bias{gemm_id}")
-            else:
-                old_keys = [prefix + "weight", prefix + "bias"]
-                new_keys = [prefix + "to_wrap.weight", prefix + "to_wrap.bias"]
-
-            for old_key, new_key in zip(old_keys, new_keys):
+            # AdapterWrapper keeps base-module keys flattened when saving, but
+            # PyTorch's recursive loader expects them below ``to_wrap``.  Map
+            # every base state entry, including TE ``_extra_state`` and fused
+            # layernorm parameters, rather than only weight and bias.
+            base_keys = module.to_wrap.state_dict().keys()
+            for key in base_keys:
+                old_key = prefix + key
+                new_key = prefix + "to_wrap." + key
                 if old_key in state_dict.keys():
                     if new_key not in state_dict.keys():
                         state_dict[new_key] = state_dict.pop(old_key)

@@ -115,7 +115,7 @@ class AsyncCompressor:
         # concurrency_limit 允许环境变量覆盖:默认沿用调用方传入值(通常4,保守,控解压显存峰值);
         # 真实场景显存吃紧时保持小值,显存富余时可调大 MEMRIFT_DECODE_CONCURRENCY 提高解压并发。
         concurrency_limit = int(os.getenv("MEMRIFT_DECODE_CONCURRENCY", str(concurrency_limit)))
-        self.act_split_path = os.getenv("MEMRIFT_ACT_SPLIT_PATH", "copy").strip().lower()
+        self.act_split_path = os.getenv("MEMRIFT_ACT_SPLIT_PATH", "mapped").strip().lower()
         if self.act_split_path not in {"mapped", "copy"}:
             raise ValueError(
                 "MEMRIFT_ACT_SPLIT_PATH must be 'mapped' or 'copy', "

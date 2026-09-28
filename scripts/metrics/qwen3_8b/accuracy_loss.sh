@@ -1,18 +1,16 @@
 #!/usr/bin/env bash
-# Metric 1.1: final lm loss degradation <= 1%, Pure LoRA vs MemRift weight-compressed LoRA.
+# Metric 1.1: final lm loss degradation <= 1%, Pure LoRA vs MemRift+LoRA.
 
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=../common.sh
 source "$SCRIPT_DIR/../common.sh"
 activate_env
 setup_common_env
-# shellcheck source=model_env.sh
 source "$SCRIPT_DIR/model_env.sh"
 
 METRIC_DIR="$OUT_ROOT/accuracy_loss"
 BASE_DIR="$METRIC_DIR/pure_lora"
-MEM_DIR="$METRIC_DIR/memrift_weight_only"
+MEM_DIR="$METRIC_DIR/memrift_weight_act_async"
 RESULT="$METRIC_DIR/result.json"
 BASE_TRAIN_METRICS="$BASE_DIR/train_metrics.json"
 MEM_TRAIN_METRICS="$MEM_DIR/train_metrics.json"
@@ -22,22 +20,10 @@ trap 'finish_metric_result_display "$?" accuracy_loss "$RESULT" "$METRIC_FRESHNE
 
 ensure_memrift_weights "$MODEL_PATH" "$MEMRIFT_WEIGHT_DIR" "$MEMRIFT_PREPARE_LEVEL"
 
-if [ ! -f "$MEGATRON_CKPT_DIR/latest_checkpointed_iteration.txt" ]; then
-  echo "[metrics] missing LLaMA Megatron checkpoint: $MEGATRON_CKPT_DIR" >&2
-  echo "[metrics] run scripts/metrics/llama8b/convert_hf_to_mcore_tp1.sh first" >&2
-  exit 2
-fi
-
-# FlagScale host logs are append-only. Use clean directories so stale failures
-# and loss samples from earlier runs cannot affect this result.
-rm -rf "$BASE_DIR" "$MEM_DIR"
-
 DISABLE_TRAIN_CHECKPOINT=true MEMRIFT_DISABLE_FINAL_CHECKPOINT=1 \
   run_yaml_train pure_lora "$BASE_DIR" lora "$BASE_SEQ_LEN" "$TRAIN_ITERS" "$MAX_POSITION_EMBEDDINGS"
 DISABLE_TRAIN_CHECKPOINT=true MEMRIFT_DISABLE_FINAL_CHECKPOINT=1 \
-  MEMRIFT_ACTIVATION_ENABLE=false \
-  MEMRIFT_KEEP_WEIGHTS_RESIDENT=1 \
-  run_yaml_train memrift_weight_only "$MEM_DIR" memrift_async "$BASE_SEQ_LEN" "$TRAIN_ITERS" "$MAX_POSITION_EMBEDDINGS"
+  run_yaml_train memrift_weight_act_async "$MEM_DIR" memrift_async "$BASE_SEQ_LEN" "$TRAIN_ITERS" "$MAX_POSITION_EMBEDDINGS"
 
 parse_train_log_json "$(host_log_for "$BASE_DIR")" "$BASE_TRAIN_METRICS" >/dev/null
 parse_train_log_json "$(host_log_for "$MEM_DIR")" "$MEM_TRAIN_METRICS" >/dev/null

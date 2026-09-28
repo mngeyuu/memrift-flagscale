@@ -8,10 +8,13 @@ activate_env
 setup_common_env
 source "$SCRIPT_DIR/model_env.sh"
 
-ensure_memrift_weights "$MODEL_PATH" "$MEMRIFT_WEIGHT_DIR" "$MEMRIFT_PREPARE_LEVEL"
-
 METRIC_DIR="$OUT_ROOT/load_time_reduction"
 RESULT="$METRIC_DIR/result.json"
+
+start_metric_result_display "$RESULT"
+trap 'finish_metric_result_display "$?" load_time_reduction "$RESULT" "$METRIC_FRESHNESS_MARKER"' EXIT
+
+ensure_memrift_weights "$MODEL_PATH" "$MEMRIFT_WEIGHT_DIR" "$MEMRIFT_PREPARE_LEVEL"
 
 python3 "$REPO_ROOT/scripts/metrics/common_load_time.py" \
   --model-path "$MODEL_PATH" \

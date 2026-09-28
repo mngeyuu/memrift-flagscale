@@ -206,7 +206,7 @@ class DecoderLayerWrapper(nn.Module):
         self.tokens.clear()
         self.futures.clear()
 
-
+# 原来的方法
 @contextmanager
 def activation_compression_context(
     compressor: Optional[AsyncCompressor] = None,

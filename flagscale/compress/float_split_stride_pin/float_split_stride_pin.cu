@@ -535,6 +535,47 @@ at::Tensor unpack_tensor(at::Tensor exp,
     return out;
 }
 
+std::vector<at::Tensor> unpack_tensor_copy(at::Tensor exp,
+                         at::Tensor sm,
+                         std::vector<int64_t> sizes,
+                         std::vector<int64_t> strides,
+                         int64_t storage_offset,
+                         c10::ScalarType dtype,
+                         unsigned long long stream_ptr) {
+
+    TORCH_CHECK(sm.is_cuda(), "sm must be CUDA uint8");
+    TORCH_CHECK(dtype == at::kFloat || dtype == at::kBFloat16, "dtype mismatch");
+
+    int dev_idx = sm.device().index();
+    TORCH_CHECK(dev_idx >= 0, "sm must be on CUDA");
+    cudaStream_t raw = reinterpret_cast<cudaStream_t>(stream_ptr);
+    c10::cuda::CUDAStream s = c10::cuda::getStreamFromExternal(raw, dev_idx);
+    c10::cuda::CUDAStreamGuard guard{s};
+
+    at::Tensor exp_gpu;
+    if (exp.is_cuda()) {
+        exp_gpu = exp;
+    } else {
+        TORCH_CHECK(exp.is_pinned(),
+                    "exp on CPU must be pinned for async H2D copy");
+        exp_gpu = Pool::inst().get(exp.numel(), at::kByte, dev_idx, false, raw);
+        cudaError_t err = cudaMemcpyAsync(
+            exp_gpu.data_ptr<uint8_t>(),
+            exp.data_ptr<uint8_t>(),
+            static_cast<size_t>(exp.numel()),
+            cudaMemcpyHostToDevice,
+            raw);
+        TORCH_CHECK(err == cudaSuccess, "cudaMemcpyAsync H2D failed: ",
+                    cudaGetErrorString(err));
+    }
+
+    at::Tensor out = unpack_tensor(
+        exp_gpu, sm, std::move(sizes), std::move(strides),
+        storage_offset, dtype, stream_ptr);
+    exp_gpu.record_stream(s);
+    return {out, exp_gpu};
+}
+
 //----------------------------------------------------------------------------
 //  pybind
 //----------------------------------------------------------------------------
@@ -545,6 +586,11 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
           "pack tensor using GPU exp staging + cudaMemcpyAsync D2H -> (exp_host, sm, exp_gpu)");
     m.def("merge", &unpack_tensor,
           "unpack (exp,sm,sizes,strides,offset,dtype,stream) -> tensor",
+          py::arg("exp"), py::arg("sm"),
+          py::arg("sizes"), py::arg("strides"), py::arg("storage_offset"),
+          py::arg("dtype"), py::arg("stream_ptr"));
+    m.def("merge_copy", &unpack_tensor_copy,
+          "unpack using GPU exponent staging + cudaMemcpyAsync H2D -> (tensor, exp_gpu)",
           py::arg("exp"), py::arg("sm"),
           py::arg("sizes"), py::arg("strides"), py::arg("storage_offset"),
           py::arg("dtype"), py::arg("stream_ptr"));
