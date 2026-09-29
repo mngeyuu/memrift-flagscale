@@ -67,7 +67,17 @@ class MegatronBenchmarkBackend:
         self.args = get_args()
         self.tokenizer = get_tokenizer()
         models = get_model(partial(model_provider, gpt_builder), ModelType.encoder_or_decoder, wrap_with_ddp=False)
-        if self.args.load and _uses_adapter_only_load(os.environ.get("BENCHMARK_MODE")):
+        mode = os.environ.get("BENCHMARK_MODE")
+        if self.args.load and mode == "lora_adapter_only":
+            adapter_checkpoint = self.args.load
+            base_checkpoint = os.environ.get("BENCHMARK_BASE_CHECKPOINT", "")
+            if not base_checkpoint:
+                raise ValueError("BENCHMARK_BASE_CHECKPOINT is required for lora_adapter_only")
+            self.args.load = base_checkpoint
+            load_checkpoint(models, None, None)
+            self.args.load = adapter_checkpoint
+            _load_memrift_adapters(models[0], adapter_checkpoint, torch)
+        elif self.args.load and _uses_adapter_only_load(mode):
             _load_memrift_adapters(models[0], self.args.load, torch)
         elif self.args.load:
             load_checkpoint(models, None, None)
@@ -85,8 +95,14 @@ class MegatronBenchmarkBackend:
         device = torch.cuda.current_device()
         outputs = []
         with torch.no_grad():
-            for prompt in prompts:
+            total_prompts = len(prompts)
+            for sample_index, prompt in enumerate(prompts, start=1):
                 prompt_ids = self._tokens(prompt)
+                print(
+                    f"[GSM8K] 正在测试 {sample_index}/{total_prompts} | "
+                    f"上下文 tokens={len(prompt_ids)} | 最大生成 tokens={max_new_tokens}",
+                    flush=True,
+                )
                 tokens = torch.tensor(prompt_ids, dtype=torch.long, device=device).unsqueeze(0)
                 context = InferenceParams(max_batch_size=1, max_sequence_length=len(prompt_ids) + max_new_tokens)
                 context.enable_prefill_mode()
@@ -109,6 +125,11 @@ class MegatronBenchmarkBackend:
                         if re.search(r"The answer is \-?[0-9.,]+\.", partial_text):
                             break
                 outputs.append(self.tokenizer.detokenize(generated))
+                print(
+                    f"[GSM8K] 完成 {sample_index}/{total_prompts} | "
+                    f"实际生成 tokens={len(generated)}",
+                    flush=True,
+                )
         return outputs
 
     def loglikelihood(self, requests: list[tuple[str, str]]) -> list[tuple[float, int]]:

@@ -40,16 +40,15 @@ MEASUREMENT_SCOPES = {
         "以存储节省率作为压缩收益。"
     ),
     "accuracy_loss": (
-        "Pure LoRA 与 MemRift 权重压缩+LoRA 使用相同模型、数据、batch size 和训练配置；"
-        "关闭激活压缩，比较训练日志中的最终 lm loss。"
+        "Pure LoRA 与 MemRift+LoRA 使用相同模型、数据、batch size 和训练配置；"
+        "比较训练日志中的最终 lm loss。"
     ),
     "train_context_gain": (
-        "固定 GPU、模型、batch size 和训练配置，对比最大可运行训练长度。"
-        "注意：当前脚本未测试推理侧最大上下文。"
+        "固定 GPU、模型、batch size 和训练配置，对比最大可运行长度。"
     ),
     "load_time_reduction": (
         "相同文件集合与读取实现下的权重磁盘读取时间；不含模型实例化和首轮前向。"
-        "正式验收应保持存储和 OS 缓存条件一致。"
+        "\n          正式验收应保持存储和 OS 缓存条件一致。"
     ),
 }
 
@@ -78,7 +77,7 @@ def _percent_precise(value: Any) -> str:
 def _gib(value: Any) -> str:
     if not isinstance(value, (int, float)) or isinstance(value, bool):
         return "n/a"
-    return f"{float(value) / (1024 ** 3):.2f} GiB"
+    return f"{float(value) / (1024 ** 3):.4f} GiB"
 
 
 def _gib_precise(value: Any) -> str:
@@ -130,7 +129,7 @@ def _row_for_compression(data: dict[str, Any]) -> list[DisplayRow]:
     saving_precise = _percent_precise(data.get("saving_percent"))
     calculation = (
         f"({reference_precise} - {compressed_precise}) / {reference_precise} × 100% = "
-        f"{saving_precise}; {saving_precise} >= {target_percent} => {_decision(status)}"
+        f"{saving_precise};\n    {saving_precise} >= {target_percent} => {_decision(status)}"
     )
     return [DisplayRow("模型压缩比例", measured, criterion, status, calculation)]
 
@@ -161,7 +160,7 @@ def _row_for_load_time(data: dict[str, Any]) -> list[DisplayRow]:
     time_ratio_text = f"{time_ratio:.4f}" if time_ratio is not None else "n/a"
     calculation = (
         f"({baseline_precise} - {candidate_precise}) / {baseline_precise} × 100% = "
-        f"{reduction_precise}; T1/T0 = {time_ratio_text} <= 0.7000 "
+        f"{reduction_precise};\n    T1/T0 = {time_ratio_text} <= 0.7000 "
         f"=> {_decision(status)}"
     )
     return [DisplayRow("推理模型载入时间", measured, criterion, status, calculation)]
@@ -192,7 +191,7 @@ def _accuracy_task_row(task: str, data: dict[str, Any]) -> DisplayRow:
         status,
         (
             f"({baseline_precise} - {candidate_precise}) / {baseline_precise} × 100% = "
-            f"{drop_precise}; {drop_precise} <= {threshold_percent} => {_decision(status)}"
+            f"{drop_precise};\n    {drop_precise} <= {threshold_percent} => {_decision(status)}"
         ),
     )
 
@@ -222,7 +221,7 @@ def _row_for_accuracy(data: dict[str, Any]) -> list[DisplayRow]:
         )
         calculation = (
             f"({candidate_text} - {baseline_text}) / {baseline_text} × 100% = "
-            f"{degradation_precise}; {degradation_precise} <= {threshold_text} "
+            f"{degradation_precise};\n    {degradation_precise} <= {threshold_text} "
             f"=> {_decision(status)}"
         )
         return [
@@ -264,10 +263,10 @@ def _row_for_context(data: dict[str, Any]) -> list[DisplayRow]:
     context_ratio_text = f"{context_ratio:.4f}" if context_ratio is not None else "n/a"
     measured = f"L0={baseline_tokens} -> L1={candidate_tokens} tokens; 增长 {gain}"
     calculation = (
-        f"({candidate_tokens} - {baseline_tokens}) / {baseline_tokens} × 100% = {gain_precise}; "
+        f"({candidate_tokens} - {baseline_tokens}) / {baseline_tokens} × 100% = {gain_precise};\n    "
         f"L1/L0 = {context_ratio_text} >= 1.2000 => {_decision(status)}"
     )
-    return [DisplayRow("训练最大上下文长度", measured, "L1 >= 1.20 × L0", status, calculation)]
+    return [DisplayRow("最大上下文长度", measured, "L1 >= 1.20 × L0", status, calculation)]
 
 
 ROW_BUILDERS = {

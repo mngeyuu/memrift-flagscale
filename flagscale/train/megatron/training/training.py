@@ -322,6 +322,45 @@ def _memrift_profiler_on_iter_end():
             profiler.on_iter_end()
     except Exception:
         pass
+
+
+def _save_memrift_adapter_checkpoint(model, iteration: int) -> None:
+    """Save only LoRA tensors for metric evaluation, avoiding full-model checkpoint I/O."""
+    save_root = os.environ.get("MEMRIFT_ADAPTER_SAVE_DIR", "").strip()
+    if not save_root:
+        return
+    if torch.distributed.is_initialized() and torch.distributed.get_rank() != 0:
+        torch.distributed.barrier()
+        return
+
+    unwrapped = unwrap_model(model)
+    chunks = unwrapped if isinstance(unwrapped, list) else [unwrapped]
+    adapters = {}
+    for chunk in chunks:
+        for name, value in chunk.state_dict().items():
+            if ".adapter." not in name or not isinstance(value, torch.Tensor):
+                continue
+            if name in adapters:
+                raise RuntimeError(f"duplicate LoRA adapter key while saving: {name}")
+            adapters[name] = value.detach().cpu().clone()
+    if not adapters:
+        raise RuntimeError("no LoRA adapter tensors found for adapter-only checkpoint")
+
+    root = Path(save_root)
+    checkpoint = root / f"iter_{iteration:07d}" / "mp_rank_00" / "model_optim_rng.pt"
+    checkpoint.parent.mkdir(parents=True, exist_ok=True)
+    temporary = checkpoint.with_suffix(checkpoint.suffix + ".tmp")
+    torch.save({"model": adapters, "iteration": iteration}, temporary)
+    temporary.replace(checkpoint)
+    tracker = root / "latest_checkpointed_iteration.txt"
+    tracker.write_text(f"{iteration}\n", encoding="utf-8")
+    print(
+        f"[MemRift] adapter-only checkpoint saved: {checkpoint} "
+        f"({len(adapters)} tensors)",
+        flush=True,
+    )
+    if torch.distributed.is_initialized():
+        torch.distributed.barrier()
     # Per-iteration cleanup (every rank, every iter): free any residual materialized
     # base weights — notably the lowest backward layer, which the _unpack release-lag
     # never frees — and reset backward tracking state. The MEM_PROBE H2 path only runs
@@ -1306,6 +1345,8 @@ def pretrain(
 
         print_datetime('after training is done')
 
+        _save_memrift_adapter_checkpoint(model, iteration)
+
         if not args.auto_tune and os.environ.get("MEMRIFT_DISABLE_FINAL_CHECKPOINT") != "1": ########## FlagScale Add ##########
             if not args.skip_train and args.save and iteration != 0 and iteration % args.save_interval != 0:
                 save_checkpoint(
@@ -1586,7 +1627,7 @@ def get_model(model_provider_func, model_type=ModelType.encoder_or_decoder, wrap
     ######## FLAGSCALE MEMRIFT END   ########
 
     # MEMORY PROBE: after MemRift inject, before TP attrs / cuda() / Float16Module / DDP
-    if args.rank == 0:
+    if args.rank == 0 and os.environ.get("MEMRIFT_MEMORY_PROBE", "0") == "1":
         import torch as _t
         print(f"[MEM_PROBE] A. after MemRift inject: {_t.cuda.memory_allocated()/1024**2:.1f} MB", flush=True)
 
@@ -1624,7 +1665,7 @@ def get_model(model_provider_func, model_type=ModelType.encoder_or_decoder, wrap
             model_module.to(cur_platform.current_device())
 
     # MEMORY PROBE: before Float16Module wrap
-    if args.rank == 0:
+    if args.rank == 0 and os.environ.get("MEMRIFT_MEMORY_PROBE", "0") == "1":
         import torch as _t
         print(f"[MEM_PROBE] B. before Float16Module: {_t.cuda.memory_allocated()/1024**2:.1f} MB", flush=True)
 
@@ -1634,7 +1675,7 @@ def get_model(model_provider_func, model_type=ModelType.encoder_or_decoder, wrap
         model = [Float16Module(config, model_module) for model_module in model]
 
     # MEMORY PROBE: after Float16Module wrap
-    if args.rank == 0:
+    if args.rank == 0 and os.environ.get("MEMRIFT_MEMORY_PROBE", "0") == "1":
         import torch as _t
         print(f"[MEM_PROBE] C. after Float16Module: {_t.cuda.memory_allocated()/1024**2:.1f} MB", flush=True)
 
@@ -1706,7 +1747,7 @@ def get_model(model_provider_func, model_type=ModelType.encoder_or_decoder, wrap
                 ddp_config.bucket_size = None
 
         # MEMORY PROBE: before DDP wrap
-        if args.rank == 0:
+        if args.rank == 0 and os.environ.get("MEMRIFT_MEMORY_PROBE", "0") == "1":
             import torch as _t
             print(f"[MEM_PROBE] D. before DDP wrap: {_t.cuda.memory_allocated()/1024**2:.1f} MB", flush=True)
 
@@ -1859,7 +1900,7 @@ def setup_model_and_optimizer(
     unwrapped_model = unwrap_model(model)
 
     # MEMORY PROBE: after get_model (DDP wrap done), before optimizer
-    if args.rank == 0:
+    if args.rank == 0 and os.environ.get("MEMRIFT_MEMORY_PROBE", "0") == "1":
         import torch as _t
         print(f"[MEM_PROBE] E. after get_model (DDP done), before optimizer: {_t.cuda.memory_allocated()/1024**2:.1f} MB", flush=True)
 
@@ -1915,7 +1956,7 @@ def setup_model_and_optimizer(
         opt_param_scheduler = get_optimizer_param_scheduler(optimizer)
 
     # MEMORY PROBE: after optimizer setup
-    if args.rank == 0:
+    if args.rank == 0 and os.environ.get("MEMRIFT_MEMORY_PROBE", "0") == "1":
         import torch as _t
         print(f"[MEM_PROBE] F. after optimizer setup: {_t.cuda.memory_allocated()/1024**2:.1f} MB", flush=True)
 
@@ -2099,7 +2140,11 @@ def train_step(forward_step_func, data_iterator, model, optimizer, opt_param_sch
         _memrift_profiler_on_iter_start()
 
         # MEM_PROBE: before forward+backward
-        if args.rank == 0 and getattr(args, 'curr_iteration', 0) == 0:
+        if (
+            args.rank == 0
+            and getattr(args, 'curr_iteration', 0) == 0
+            and os.environ.get("MEMRIFT_MEMORY_PROBE", "0") == "1"
+        ):
             import torch as _t
             _t.cuda.synchronize()
             _t.cuda.reset_peak_memory_stats()
@@ -2130,7 +2175,11 @@ def train_step(forward_step_func, data_iterator, model, optimizer, opt_param_sch
             model_chunk.force_all_reduce = False
 
         # MEM_PROBE: after forward+backward, before optimizer
-        if args.rank == 0 and getattr(args, 'curr_iteration', 0) == 0:
+        if (
+            args.rank == 0
+            and getattr(args, 'curr_iteration', 0) == 0
+            and os.environ.get("MEMRIFT_MEMORY_PROBE", "0") == "1"
+        ):
             import torch as _t
             _t.cuda.synchronize()
             print(f"[MEM_PROBE] H. after fwd+bwd, before optimizer: allocated={_t.cuda.memory_allocated()/1024**2:.1f} MB", flush=True)
@@ -2274,7 +2323,11 @@ def train_step(forward_step_func, data_iterator, model, optimizer, opt_param_sch
     _memrift_trace("train_step: optimizer.step end")
 
     # MEM_PROBE: after optimizer step
-    if args.rank == 0 and getattr(args, 'curr_iteration', 0) == 0:
+    if (
+        args.rank == 0
+        and getattr(args, 'curr_iteration', 0) == 0
+        and os.environ.get("MEMRIFT_MEMORY_PROBE", "0") == "1"
+    ):
         import torch as _t
         _t.cuda.synchronize()
         print(f"[MEM_PROBE] I. after optimizer.step (iter 0): allocated={_t.cuda.memory_allocated()/1024**2:.1f} MB", flush=True)

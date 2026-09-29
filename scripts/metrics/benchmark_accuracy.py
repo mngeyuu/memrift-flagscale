@@ -87,6 +87,19 @@ def _enabled_tasks() -> list[tuple[str, int | None]]:
     return enabled
 
 
+def _shard_examples(examples: list[BenchmarkExample]) -> tuple[list[BenchmarkExample], int, int]:
+    shard_count = int(os.environ.get("BENCHMARK_SHARD_COUNT", "1"))
+    shard_index = int(os.environ.get("BENCHMARK_SHARD_INDEX", "0"))
+    if shard_count <= 0:
+        raise ValueError("BENCHMARK_SHARD_COUNT must be positive")
+    if not 0 <= shard_index < shard_count:
+        raise ValueError("BENCHMARK_SHARD_INDEX must be in [0, BENCHMARK_SHARD_COUNT)")
+    sharded = examples[shard_index::shard_count]
+    if not sharded:
+        raise ValueError(f"benchmark shard {shard_index}/{shard_count} has no examples")
+    return sharded, shard_index, shard_count
+
+
 def main() -> int:
     from scripts.metrics.megatron_benchmark_backend import MegatronBenchmarkBackend
 
@@ -97,6 +110,12 @@ def main() -> int:
     enabled_tasks = _enabled_tasks()
     for task, limit in enabled_tasks:
         examples = load_task_examples(task, limit)
+        examples, shard_index, shard_count = _shard_examples(examples)
+        print(
+            f"[benchmark] task={task} shard={shard_index + 1}/{shard_count} "
+            f"samples={len(examples)}",
+            flush=True,
+        )
         tasks[task] = evaluate_examples(
             task,
             examples,
@@ -113,6 +132,8 @@ def main() -> int:
             "gsm8k_limit": _optional_limit("GSM8K_LIMIT"),
             "hellaswag_limit": _optional_limit("HELLASWAG_LIMIT"),
             "gsm8k_max_new_tokens": int(os.environ.get("GSM8K_MAX_NEW_TOKENS", "64")),
+            "shard_index": int(os.environ.get("BENCHMARK_SHARD_INDEX", "0")),
+            "shard_count": int(os.environ.get("BENCHMARK_SHARD_COUNT", "1")),
             "task_definition": "lm_eval_tasks/gsm8k_cot_local.yaml and hellaswag_local.yaml compatible",
         },
     )

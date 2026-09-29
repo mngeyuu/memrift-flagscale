@@ -135,6 +135,12 @@ run_yaml_train() {
     "train.system.logging.log_interval=1"
   )
 
+  if [ -n "${MEMRIFT_ADAPTER_SAVE_DIR:-}" ]; then
+    common_args+=(
+      "++experiment.envs.MEMRIFT_ADAPTER_SAVE_DIR=$MEMRIFT_ADAPTER_SAVE_DIR"
+    )
+  fi
+
   # The uncompressed LoRA baseline must start from the same pretrained model
   # as the MemRift candidate. The candidate obtains those weights from
   # MEMRIFT_WEIGHT_DIR, so load the converted checkpoint for the baseline only.
@@ -240,10 +246,13 @@ run_benchmark_accuracy() {
     "++experiment.envs.BENCHMARK_VARIANT=$variant"
     "++experiment.envs.BENCHMARK_MODE=$mode"
     "++experiment.envs.BENCHMARK_CHECKPOINT=$checkpoint_dir"
+    "++experiment.envs.BENCHMARK_BASE_CHECKPOINT=${BENCHMARK_BASE_CHECKPOINT:-$MEGATRON_CKPT_DIR}"
     "++experiment.envs.BENCHMARK_OUTPUT=$output_file"
     "++experiment.envs.GSM8K_LIMIT=${GSM8K_LIMIT:-}"
     "++experiment.envs.HELLASWAG_LIMIT=${HELLASWAG_LIMIT:-}"
     "++experiment.envs.GSM8K_MAX_NEW_TOKENS=${GSM8K_MAX_NEW_TOKENS:-64}"
+    "++experiment.envs.BENCHMARK_SHARD_INDEX=${BENCHMARK_SHARD_INDEX:-0}"
+    "++experiment.envs.BENCHMARK_SHARD_COUNT=${BENCHMARK_SHARD_COUNT:-1}"
     "train.system.tensor_model_parallel_size=1"
     "train.system.pipeline_model_parallel_size=1"
     "train.system.context_parallel_size=1"
@@ -264,6 +273,7 @@ run_benchmark_accuracy() {
     )
   else
     common_args+=(
+      "++experiment.envs.MEMRIFT_KEEP_WEIGHTS_RESIDENT=${MEMRIFT_KEEP_WEIGHTS_RESIDENT:-0}"
       "train.system.memrift_enable=true"
       "train.system.memrift_weight_enable=true"
       "train.system.memrift_activation_enable=${MEMRIFT_ACTIVATION_ENABLE:-true}"
